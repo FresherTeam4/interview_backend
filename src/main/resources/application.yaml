@@ -1,10 +1,10 @@
 spring:
   application:
-    name: MyEventHub
+    name: BaseProject
   datasource:
-    url: ${DB_URL}
-    username: ${DB_USERNAME}
-    password: ${DB_PASSWORD}
+    url: ${DB_URL:jdbc:mysql://localhost:3306/event_hub_db?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC}
+    username: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD:123456}
     driver-class-name: com.mysql.cj.jdbc.Driver
   jpa:
     hibernate:
@@ -16,5 +16,5 @@ spring:
         format_sql: true
 app:
   jwt:
-    secret: ${JWT_SECRET}
-    expiration-ms: ${JWT_EXPIRATION_MS}
+    secret: ${JWT_SECRET:eventhub-dev-only-secret-key-2026-doi-truoc-khi-deploy}
+    expiration-ms: ${JWT_EXPIRATION_MS:86400000}
