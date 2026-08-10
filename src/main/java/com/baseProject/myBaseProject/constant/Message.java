@@ -11,4 +11,5 @@ public final class Message {
     public static final String ENDPOINT_NOT_FOUND = "No endpoint found for this request";
     public static final String INTERNAL_ERROR = "Internal server error";
     public static final String EMAIL_NOT_FOUND = "Email not found";
+    public static final String MISSING_REFRESH_TOKEN = "Refresh token cookie is missing";
 }

@@ -1,6 +1,7 @@
 package com.baseProject.myBaseProject.service.impl;
 
 import com.baseProject.myBaseProject.dto.auth.AuthResponse;
+import com.baseProject.myBaseProject.dto.auth.AuthResult;
 import com.baseProject.myBaseProject.dto.auth.LoginRequest;
 import com.baseProject.myBaseProject.dto.auth.RegisterRequest;
 import com.baseProject.myBaseProject.enums.UserRole;
@@ -10,6 +11,7 @@ import com.baseProject.myBaseProject.repository.UserAccountRepository;
 import com.baseProject.myBaseProject.security.CustomUserDetails;
 import com.baseProject.myBaseProject.service.AuthService;
 import com.baseProject.myBaseProject.service.JwtService;
+import com.baseProject.myBaseProject.service.RefreshTokenService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -26,11 +28,12 @@ public class AuthServiceImpl implements AuthService {
     private final UserAccountRepository userAccountRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
+    private final RefreshTokenService refreshTokenService;
     private final AuthenticationManager authenticationManager;
     private final Clock clock;
 
     @Transactional
-    public AuthResponse register(RegisterRequest request) {
+    public AuthResult register(RegisterRequest request) {
         String email = request.email().trim().toLowerCase();
 
         if (userAccountRepository.existsByEmail(email)) {
@@ -46,14 +49,11 @@ public class AuthServiceImpl implements AuthService {
                 .build();
         account = userAccountRepository.save(account);
 
-        CustomUserDetails userDetails = new CustomUserDetails(account);
-        String token = jwtService.generateToken(userDetails);
-
-        return new AuthResponse(token, account.getId(), account.getEmail(), account.getRole());
+        return issueTokens(new CustomUserDetails(account), account);
     }
 
-    @Transactional(readOnly = true)
-    public AuthResponse login(LoginRequest request) {
+    @Transactional
+    public AuthResult login(LoginRequest request) {
         String email = request.email().trim().toLowerCase();
 
         Authentication authentication = authenticationManager.authenticate(
@@ -61,8 +61,48 @@ public class AuthServiceImpl implements AuthService {
         );
 
         CustomUserDetails userDetails = (CustomUserDetails) authentication.getPrincipal();
-        String token = jwtService.generateToken(userDetails);
 
-        return new AuthResponse(token, userDetails.getId(), userDetails.getEmail(), userDetails.getRole());
+        // create a userAccout only id has value to create a foreign key
+        UserAccount accountRef = userAccountRepository.getReferenceById(userDetails.getId());
+
+        return issueTokens(userDetails, accountRef);
+    }
+
+    @Transactional
+    public AuthResult refresh(String refreshToken) {
+        RefreshTokenService.RotationResult rotation = refreshTokenService.rotate(refreshToken);
+
+        CustomUserDetails userDetails = new CustomUserDetails(rotation.user());
+        String accessToken = jwtService.generateAccessToken(userDetails);
+
+        return toResult(accessToken, rotation.refreshToken(), userDetails);
+    }
+
+    @Transactional
+    public void logout(String refreshToken) {
+        refreshTokenService.revoke(refreshToken);
+    }
+
+    @Transactional
+    public int logoutAll(Long userId) {
+        return refreshTokenService.revokeAllForUser(userId);
+    }
+
+    //create token and response
+    private AuthResult issueTokens(CustomUserDetails userDetails, UserAccount accountRef) {
+        String accessToken = jwtService.generateAccessToken(userDetails);
+        String refreshToken = refreshTokenService.issue(accountRef);
+
+        return toResult(accessToken, refreshToken, userDetails);
+    }
+
+    private AuthResult toResult(String accessToken, String refreshToken, CustomUserDetails userDetails) {
+        AuthResponse body = new AuthResponse(
+                accessToken,
+                userDetails.getId(),
+                userDetails.getEmail(),
+                userDetails.getRole()
+        );
+        return new AuthResult(body, refreshToken);
     }
 }
