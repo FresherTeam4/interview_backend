@@ -7,7 +7,6 @@ import com.baseProject.myBaseProject.exception.InvalidRefreshTokenException;
 import com.baseProject.myBaseProject.repository.RefreshTokenRepository;
 import com.baseProject.myBaseProject.service.RefreshTokenService;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 

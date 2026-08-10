@@ -1,5 +1,6 @@
 package com.baseProject.myBaseProject.controller;
 
+import com.baseProject.myBaseProject.config.OpenApiConfig;
 import com.baseProject.myBaseProject.dto.auth.AuthResponse;
 import com.baseProject.myBaseProject.dto.auth.AuthResult;
 import com.baseProject.myBaseProject.dto.auth.LoginRequest;
@@ -12,6 +13,9 @@ import com.baseProject.myBaseProject.security.RefreshTokenCookieFactory;
 import com.baseProject.myBaseProject.security.SecurityUtils;
 import com.baseProject.myBaseProject.security.authorization.IsAuthenticated;
 import com.baseProject.myBaseProject.service.AuthService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -29,22 +33,36 @@ import java.time.Clock;
 @RestController
 @RequestMapping("/api/auth")
 @RequiredArgsConstructor
+@Tag(name = "Auth", description = "Đăng ký, đăng nhập, làm mới token và đăng xuất")
 public class AuthController {
     private final AuthService authService;
     private final RefreshTokenCookieFactory cookieFactory;
     private final Clock clock;
 
     @PostMapping("/register")
+    @Operation(
+            summary = "Đăng ký tài khoản mới",
+            description = "Tạo tài khoản, trả về access token và đặt refresh token vào cookie HttpOnly."
+    )
     public ResponseEntity<AuthResponse> register(@Valid @RequestBody RegisterRequest request) {
         return withRefreshCookie(HttpStatus.CREATED, authService.register(request));
     }
 
     @PostMapping("/login")
+    @Operation(
+            summary = "Đăng nhập",
+            description = "Trả về access token và đặt refresh token vào cookie HttpOnly."
+    )
     public ResponseEntity<AuthResponse> login(@Valid @RequestBody LoginRequest request) {
         return withRefreshCookie(HttpStatus.OK, authService.login(request));
     }
 
     @PostMapping("/refresh")
+    @Operation(
+            summary = "Làm mới access token",
+            description = "Đọc refresh token từ cookie HttpOnly, xoay vòng token và trả về access token mới. "
+                    + "Không cần header Authorization."
+    )
     public ResponseEntity<AuthResponse> refresh(HttpServletRequest request) {
         String refreshToken = cookieFactory.read(request)
                 .orElseThrow(MissingRefreshTokenException::new);
@@ -53,6 +71,10 @@ public class AuthController {
     }
 
     @PostMapping("/logout")
+    @Operation(
+            summary = "Đăng xuất thiết bị hiện tại",
+            description = "Thu hồi refresh token trong cookie và xoá cookie đó."
+    )
     public ResponseEntity<Void> logout(HttpServletRequest request) {
         cookieFactory.read(request).ifPresent(authService::logout);
 
@@ -63,6 +85,11 @@ public class AuthController {
 
     @PostMapping("/logout-all")
     @IsAuthenticated
+    @SecurityRequirement(name = OpenApiConfig.BEARER_AUTH)
+    @Operation(
+            summary = "Đăng xuất mọi thiết bị",
+            description = "Thu hồi toàn bộ refresh token của người dùng đang đăng nhập. Yêu cầu access token."
+    )
     public ResponseEntity<Void> logoutAll() {
         SecurityUtils.currentUserId().ifPresent(authService::logoutAll);
 
