@@ -30,12 +30,12 @@ public class OpenApiConfig {
     public OpenAPI baseProjectOpenAPI() {
         return new OpenAPI()
                 .info(new Info()
-                        .title("BaseProject API")
+                        .title("interview API")
                         .version("v1")
-                        .description("Base ")
-                        .contact(new Contact().name("BaseProject"))
+                        .description("interview ")
+                        .contact(new Contact().name("interview"))
                         .license(new License().name("Apache 2.0").url("https://www.apache.org/licenses/LICENSE-2.0")))
-                .servers(List.of(new Server().url("/").description("Server hiện tại")))
+                .servers(List.of(new Server().url("/").description("current server")))
                 .components(new Components());
     }
 }
