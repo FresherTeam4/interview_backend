@@ -1,0 +1,25 @@
+databaseChangeLog:
+  
+  - include:
+      file: 001-create-user-accounts.sql
+      relativeToChangelogFile: true
+  - include:
+      file: 002-create-refresh-tokens.sql
+      relativeToChangelogFile: true
+
+  
+  - include:
+      file: 010-create-tech-stacks.sql
+      relativeToChangelogFile: true
+  - include:
+      file: 011-create-questions.sql
+      relativeToChangelogFile: true
+  - include:
+      file: 012-create-interview-sessions.sql
+      relativeToChangelogFile: true
+  - include:
+      file: 013-create-reports.sql
+      relativeToChangelogFile: true
+  - include:
+      file: 014-seed-sample-questions.sql
+      relativeToChangelogFile: true
