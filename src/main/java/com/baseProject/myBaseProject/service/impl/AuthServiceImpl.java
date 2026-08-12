@@ -1,18 +1,7 @@
 package com.baseProject.myBaseProject.service.impl;
 
-import com.baseProject.myBaseProject.dto.auth.AuthResponse;
-import com.baseProject.myBaseProject.dto.auth.AuthResult;
-import com.baseProject.myBaseProject.dto.auth.LoginRequest;
-import com.baseProject.myBaseProject.dto.auth.RegisterRequest;
-import com.baseProject.myBaseProject.enums.UserRole;
-import com.baseProject.myBaseProject.exception.DuplicateEmailException;
-import com.baseProject.myBaseProject.entity.UserAccount;
-import com.baseProject.myBaseProject.repository.UserAccountRepository;
-import com.baseProject.myBaseProject.security.CustomUserDetails;
-import com.baseProject.myBaseProject.service.AuthService;
-import com.baseProject.myBaseProject.service.JwtService;
-import com.baseProject.myBaseProject.service.RefreshTokenService;
-import lombok.RequiredArgsConstructor;
+import java.time.Clock;
+
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
@@ -20,7 +9,20 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.Clock;
+import com.baseProject.myBaseProject.dto.auth.AuthResponse;
+import com.baseProject.myBaseProject.dto.auth.AuthResult;
+import com.baseProject.myBaseProject.dto.auth.LoginRequest;
+import com.baseProject.myBaseProject.dto.auth.RegisterRequest;
+import com.baseProject.myBaseProject.entity.UserAccount;
+import com.baseProject.myBaseProject.enums.UserRole;
+import com.baseProject.myBaseProject.exception.DuplicateEmailException;
+import com.baseProject.myBaseProject.repository.UserAccountRepository;
+import com.baseProject.myBaseProject.security.CustomUserDetails;
+import com.baseProject.myBaseProject.service.AuthService;
+import com.baseProject.myBaseProject.service.JwtService;
+import com.baseProject.myBaseProject.service.RefreshTokenService;
+
+import lombok.RequiredArgsConstructor;
 
 @Service
 @RequiredArgsConstructor
@@ -41,6 +43,7 @@ public class AuthServiceImpl implements AuthService {
         }
 
         UserAccount account = UserAccount.builder()
+                .fullName(request.fullName().trim())
                 .email(email)
                 .passwordHash(passwordEncoder.encode(request.password()))
                 .role(UserRole.PARTICIPANT)
