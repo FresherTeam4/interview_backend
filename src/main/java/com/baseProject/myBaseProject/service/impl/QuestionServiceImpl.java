@@ -5,6 +5,7 @@ import java.util.List;
 import com.baseProject.myBaseProject.constant.PaginationConstant;
 import com.baseProject.myBaseProject.dto.common.PageResponse;
 import com.baseProject.myBaseProject.dto.question.QuestionCreateRequest;
+import com.baseProject.myBaseProject.dto.question.QuestionFilter;
 import com.baseProject.myBaseProject.dto.question.QuestionResponse;
 import com.baseProject.myBaseProject.dto.question.QuestionUpdateRequest;
 import com.baseProject.myBaseProject.dto.question.TechStackSummaryResponse;
@@ -19,6 +20,7 @@ import com.baseProject.myBaseProject.mapper.QuestionMapper;
 import com.baseProject.myBaseProject.repository.QuestionRepository;
 import com.baseProject.myBaseProject.repository.TechStackRepository;
 import com.baseProject.myBaseProject.repository.UserAccountRepository;
+import com.baseProject.myBaseProject.repository.specification.QuestionSpecifications;
 import com.baseProject.myBaseProject.service.QuestionService;
 import jakarta.persistence.EntityManager;
 import lombok.RequiredArgsConstructor;
@@ -33,6 +35,7 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class QuestionServiceImpl implements QuestionService {
+    private static final int MAX_KEYWORD_LENGTH = 200;
     private static final Sort DEFAULT_SORT = Sort.by(
             Sort.Order.desc("updatedAt"),
             Sort.Order.desc("id")
@@ -75,9 +78,18 @@ public class QuestionServiceImpl implements QuestionService {
 
     @Override
     public PageResponse<QuestionResponse> getAll(int page, int size) {
+        return search(QuestionFilter.empty(), page, size);
+    }
+
+    @Override
+    public PageResponse<QuestionResponse> search(QuestionFilter filter, int page, int size) {
         validatePage(page, size);
+        validateFilter(filter);
         Page<QuestionResponse> result = questionRepository
-                .findAll(PageRequest.of(page, size, DEFAULT_SORT))
+                .findAll(
+                        QuestionSpecifications.withFilter(filter),
+                        PageRequest.of(page, size, DEFAULT_SORT)
+                )
                 .map(QuestionMapper::toResponse);
         return PageResponse.from(result);
     }
@@ -157,6 +169,25 @@ public class QuestionServiceImpl implements QuestionService {
         if (size < 1 || size > PaginationConstant.MAX_PAGE_SIZE) {
             throw new InvalidQuestionException(
                     "Page size must be between 1 and %d".formatted(PaginationConstant.MAX_PAGE_SIZE)
+            );
+        }
+    }
+
+    private static void validateFilter(QuestionFilter filter) {
+        if (filter == null) {
+            throw new InvalidQuestionException("Question filter is required");
+        }
+        if (filter.techStackId() != null && filter.techStackId() < 1) {
+            throw new InvalidQuestionException("Tech stack id must be positive");
+        }
+        if (filter.techStackId() != null && Boolean.TRUE.equals(filter.unclassified())) {
+            throw new InvalidQuestionException(
+                    "Tech stack id and unclassified=true cannot be used together"
+            );
+        }
+        if (filter.keyword() != null && filter.keyword().trim().length() > MAX_KEYWORD_LENGTH) {
+            throw new InvalidQuestionException(
+                    "Keyword must not exceed %d characters".formatted(MAX_KEYWORD_LENGTH)
             );
         }
     }

@@ -5,8 +5,12 @@ import java.net.URI;
 import com.baseProject.myBaseProject.config.OpenApiConfig;
 import com.baseProject.myBaseProject.dto.common.PageResponse;
 import com.baseProject.myBaseProject.dto.question.QuestionCreateRequest;
+import com.baseProject.myBaseProject.dto.question.QuestionFilter;
 import com.baseProject.myBaseProject.dto.question.QuestionResponse;
 import com.baseProject.myBaseProject.dto.question.QuestionUpdateRequest;
+import com.baseProject.myBaseProject.enums.QuestionDifficulty;
+import com.baseProject.myBaseProject.enums.QuestionLevel;
+import com.baseProject.myBaseProject.enums.QuestionType;
 import com.baseProject.myBaseProject.security.CustomUserDetails;
 import com.baseProject.myBaseProject.security.authorization.CurrentUser;
 import com.baseProject.myBaseProject.security.authorization.IsEventAdmin;
@@ -60,10 +64,26 @@ public class QuestionAdminController {
     @GetMapping
     @Operation(summary = "Get a paginated question list")
     public PageResponse<QuestionResponse> getAll(
+            @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) Boolean active,
+            @RequestParam(required = false) Integer techStackId,
+            @RequestParam(required = false) Boolean unclassified,
+            @RequestParam(required = false) QuestionLevel level,
+            @RequestParam(required = false) QuestionType questionType,
+            @RequestParam(required = false) QuestionDifficulty difficulty,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size
     ) {
-        return questionService.getAll(page, size);
+        QuestionFilter filter = new QuestionFilter(
+                keyword,
+                active,
+                techStackId,
+                unclassified,
+                level,
+                questionType,
+                difficulty
+        );
+        return questionService.search(filter, page, size);
     }
 
     @PutMapping("/{id}")

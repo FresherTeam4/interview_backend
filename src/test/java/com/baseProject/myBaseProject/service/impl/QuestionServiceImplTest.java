@@ -9,7 +9,9 @@ import static org.mockito.Mockito.when;
 
 import java.util.Optional;
 
+import com.baseProject.myBaseProject.dto.common.PageResponse;
 import com.baseProject.myBaseProject.dto.question.QuestionCreateRequest;
+import com.baseProject.myBaseProject.dto.question.QuestionFilter;
 import com.baseProject.myBaseProject.dto.question.QuestionResponse;
 import com.baseProject.myBaseProject.dto.question.QuestionUpdateRequest;
 import com.baseProject.myBaseProject.entity.Question;
@@ -30,6 +32,10 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.jpa.domain.Specification;
 
 @ExtendWith(MockitoExtension.class)
 class QuestionServiceImplTest {
@@ -167,5 +173,54 @@ class QuestionServiceImplTest {
         assertThatThrownBy(() -> service.getAll(0, 51))
                 .isInstanceOf(InvalidQuestionException.class)
                 .hasMessage("Page size must be between 1 and 50");
+    }
+
+    @Test
+    void searchUsesSpecificationAndKeepsPaginationMetadata() {
+        QuestionFilter filter = new QuestionFilter(
+                "spring",
+                true,
+                2,
+                false,
+                QuestionLevel.JUNIOR,
+                QuestionType.TECHNICAL,
+                QuestionDifficulty.MEDIUM
+        );
+        when(questionRepository.findAll(
+                any(Specification.class),
+                any(Pageable.class)
+        )).thenReturn(Page.empty(PageRequest.of(0, 20)));
+
+        PageResponse<QuestionResponse> result = service.search(filter, 0, 20);
+
+        assertThat(result.content()).isEmpty();
+        assertThat(result.page()).isZero();
+        assertThat(result.size()).isEqualTo(20);
+        verify(questionRepository).findAll(
+                any(Specification.class),
+                any(Pageable.class)
+        );
+    }
+
+    @Test
+    void searchRejectsConflictingTechStackFilters() {
+        QuestionFilter filter = new QuestionFilter(
+                null,
+                null,
+                2,
+                true,
+                null,
+                null,
+                null
+        );
+
+        assertThatThrownBy(() -> service.search(filter, 0, 20))
+                .isInstanceOf(InvalidQuestionException.class)
+                .hasMessage("Tech stack id and unclassified=true cannot be used together");
+
+        verify(questionRepository, never()).findAll(
+                any(Specification.class),
+                any(Pageable.class)
+        );
     }
 }

@@ -13,8 +13,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.time.Instant;
+import java.util.List;
 
+import com.baseProject.myBaseProject.dto.common.PageResponse;
 import com.baseProject.myBaseProject.dto.question.QuestionCreateRequest;
+import com.baseProject.myBaseProject.dto.question.QuestionFilter;
 import com.baseProject.myBaseProject.dto.question.QuestionResponse;
 import com.baseProject.myBaseProject.entity.UserAccount;
 import com.baseProject.myBaseProject.enums.QuestionDifficulty;
@@ -118,6 +121,38 @@ class QuestionAdminControllerTest {
                 .andExpect(jsonPath("$.fieldErrors.difficulty").exists());
 
         verifyNoInteractions(questionService);
+    }
+
+    @Test
+    void eventAdminCanFilterQuestionList() throws Exception {
+        QuestionFilter expectedFilter = new QuestionFilter(
+                "spring",
+                true,
+                2,
+                false,
+                QuestionLevel.JUNIOR,
+                QuestionType.TECHNICAL,
+                QuestionDifficulty.MEDIUM
+        );
+        when(questionService.search(expectedFilter, 1, 10))
+                .thenReturn(new PageResponse<>(List.of(), 1, 10, 0, 0, false, true));
+
+        mockMvc.perform(get("/api/admin/questions")
+                        .with(user(userDetails(UserRole.EVENT_ADMIN)))
+                        .param("keyword", "spring")
+                        .param("active", "true")
+                        .param("techStackId", "2")
+                        .param("unclassified", "false")
+                        .param("level", "JUNIOR")
+                        .param("questionType", "TECHNICAL")
+                        .param("difficulty", "MEDIUM")
+                        .param("page", "1")
+                        .param("size", "10"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.page").value(1))
+                .andExpect(jsonPath("$.size").value(10));
+
+        verify(questionService).search(expectedFilter, 1, 10);
     }
 
     private static CustomUserDetails userDetails(UserRole role) {

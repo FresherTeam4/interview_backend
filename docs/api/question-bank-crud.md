@@ -25,6 +25,32 @@ Authorization: Bearer <access-token>
 
 Page size must be from 1 to 50.
 
+## Search and filtering
+
+The paginated list endpoint accepts optional filters. Filters are combined with
+`AND`; omitted parameters do not restrict the result.
+
+```http
+GET /api/admin/questions?keyword=spring&active=true&techStackId=2&level=JUNIOR&questionType=TECHNICAL&difficulty=MEDIUM&page=0&size=20
+```
+
+| Parameter | Type | Meaning |
+|---|---|---|
+| `keyword` | string | Case-insensitive substring search in Vietnamese and English content; maximum 200 characters |
+| `active` | boolean | Filter active or inactive questions |
+| `techStackId` | positive integer | Filter by a Tech Stack id |
+| `unclassified` | boolean | With `true`, return questions whose Tech Stack is null |
+| `level` | enum | `FRESHER`, `JUNIOR`, `MID`, or `SENIOR` |
+| `questionType` | enum | `BEHAVIORAL`, `TECHNICAL`, or `CASE_STUDY` |
+| `difficulty` | enum | `EASY`, `MEDIUM`, or `HARD` |
+| `page` | integer | Zero-based page number |
+| `size` | integer | Page size from 1 to 50 |
+
+`techStackId` and `unclassified=true` are mutually exclusive. Sending both
+returns `400 INVALID_QUESTION`. An empty or whitespace-only keyword is treated
+as no keyword filter. Existing clients may continue calling the endpoint with
+only `page` and `size`.
+
 ## Create request
 
 ```json
