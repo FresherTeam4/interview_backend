@@ -7,6 +7,7 @@ import java.util.Locale;
 import com.baseProject.myBaseProject.dto.question.QuestionFilter;
 import com.baseProject.myBaseProject.entity.Question;
 import jakarta.persistence.criteria.Predicate;
+import jakarta.persistence.criteria.JoinType;
 import org.springframework.data.jpa.domain.Specification;
 
 public final class QuestionSpecifications {
@@ -18,6 +19,7 @@ public final class QuestionSpecifications {
     public static Specification<Question> withFilter(QuestionFilter filter) {
         return (root, query, criteriaBuilder) -> {
             List<Predicate> predicates = new ArrayList<>();
+            query.distinct(true);
 
             String keyword = normalizeKeyword(filter.keyword());
             if (keyword != null) {
@@ -39,26 +41,34 @@ public final class QuestionSpecifications {
             if (filter.active() != null) {
                 predicates.add(criteriaBuilder.equal(root.get("active"), filter.active()));
             }
-            if (filter.techStackId() != null) {
-                predicates.add(criteriaBuilder.equal(
-                        root.get("techStack").get("id"),
-                        filter.techStackId()
-                ));
+            if (hasValues(filter.techStackIds())) {
+                predicates.add(root.join("techStacks", JoinType.INNER)
+                        .get("id")
+                        .in(filter.techStackIds()));
             } else if (Boolean.TRUE.equals(filter.unclassified())) {
-                predicates.add(criteriaBuilder.isNull(root.get("techStack")));
+                predicates.add(criteriaBuilder.isEmpty(root.get("techStacks")));
             }
-            if (filter.level() != null) {
-                predicates.add(criteriaBuilder.equal(root.get("level"), filter.level()));
+            if (hasValues(filter.technologyIds())) {
+                predicates.add(root.join("technologies", JoinType.INNER)
+                        .get("id")
+                        .in(filter.technologyIds()));
             }
-            if (filter.questionType() != null) {
-                predicates.add(criteriaBuilder.equal(root.get("questionType"), filter.questionType()));
+            if (hasValues(filter.levels())) {
+                predicates.add(root.get("level").in(filter.levels()));
             }
-            if (filter.difficulty() != null) {
-                predicates.add(criteriaBuilder.equal(root.get("difficulty"), filter.difficulty()));
+            if (hasValues(filter.questionTypes())) {
+                predicates.add(root.get("questionType").in(filter.questionTypes()));
+            }
+            if (hasValues(filter.difficulties())) {
+                predicates.add(root.get("difficulty").in(filter.difficulties()));
             }
 
             return criteriaBuilder.and(predicates.toArray(Predicate[]::new));
         };
+    }
+
+    private static boolean hasValues(List<?> values) {
+        return values != null && !values.isEmpty();
     }
 
     private static String normalizeKeyword(String keyword) {

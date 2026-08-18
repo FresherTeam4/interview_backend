@@ -1,6 +1,7 @@
 package com.baseProject.myBaseProject.controller;
 
 import java.net.URI;
+import java.util.List;
 
 import com.baseProject.myBaseProject.config.OpenApiConfig;
 import com.baseProject.myBaseProject.dto.common.PageResponse;
@@ -66,22 +67,24 @@ public class QuestionAdminController {
     public PageResponse<QuestionResponse> getAll(
             @RequestParam(required = false) String keyword,
             @RequestParam(required = false) Boolean active,
-            @RequestParam(required = false) Integer techStackId,
+            @RequestParam(required = false) List<Integer> techStackIds,
             @RequestParam(required = false) Boolean unclassified,
-            @RequestParam(required = false) QuestionLevel level,
-            @RequestParam(required = false) QuestionType questionType,
-            @RequestParam(required = false) QuestionDifficulty difficulty,
+            @RequestParam(required = false) List<Integer> technologyIds,
+            @RequestParam(required = false) List<QuestionLevel> levels,
+            @RequestParam(required = false) List<QuestionType> questionTypes,
+            @RequestParam(required = false) List<QuestionDifficulty> difficulties,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size
     ) {
         QuestionFilter filter = new QuestionFilter(
                 keyword,
                 active,
-                techStackId,
+                techStackIds,
                 unclassified,
-                level,
-                questionType,
-                difficulty
+                technologyIds,
+                levels,
+                questionTypes,
+                difficulties
         );
         return questionService.search(filter, page, size);
     }

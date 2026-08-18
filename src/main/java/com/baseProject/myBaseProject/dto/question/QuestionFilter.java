@@ -1,5 +1,7 @@
 package com.baseProject.myBaseProject.dto.question;
 
+import java.util.List;
+
 import com.baseProject.myBaseProject.enums.QuestionDifficulty;
 import com.baseProject.myBaseProject.enums.QuestionLevel;
 import com.baseProject.myBaseProject.enums.QuestionType;
@@ -7,13 +9,14 @@ import com.baseProject.myBaseProject.enums.QuestionType;
 public record QuestionFilter(
         String keyword,
         Boolean active,
-        Integer techStackId,
+        List<Integer> techStackIds,
         Boolean unclassified,
-        QuestionLevel level,
-        QuestionType questionType,
-        QuestionDifficulty difficulty
+        List<Integer> technologyIds,
+        List<QuestionLevel> levels,
+        List<QuestionType> questionTypes,
+        List<QuestionDifficulty> difficulties
 ) {
     public static QuestionFilter empty() {
-        return new QuestionFilter(null, null, null, null, null, null, null);
+        return new QuestionFilter(null, null, null, null, null, null, null, null);
     }
 }

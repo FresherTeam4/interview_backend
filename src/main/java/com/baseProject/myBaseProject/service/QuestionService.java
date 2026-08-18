@@ -8,6 +8,8 @@ import com.baseProject.myBaseProject.dto.question.QuestionFilter;
 import com.baseProject.myBaseProject.dto.question.QuestionResponse;
 import com.baseProject.myBaseProject.dto.question.QuestionUpdateRequest;
 import com.baseProject.myBaseProject.dto.question.TechStackSummaryResponse;
+import com.baseProject.myBaseProject.dto.question.TechnologySummaryResponse;
+import com.baseProject.myBaseProject.enums.TechnologyType;
 
 public interface QuestionService {
     QuestionResponse create(QuestionCreateRequest request, Long creatorId);
@@ -23,4 +25,6 @@ public interface QuestionService {
     void delete(Long id);
 
     List<TechStackSummaryResponse> getTechStacks(boolean activeOnly);
+
+    List<TechnologySummaryResponse> getTechnologies(boolean activeOnly, TechnologyType type);
 }

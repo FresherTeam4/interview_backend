@@ -13,14 +13,14 @@ import org.springframework.data.jpa.domain.Specification;
 public interface QuestionRepository extends JpaRepository<Question, Long>,
         JpaSpecificationExecutor<Question> {
     @Override
-    @EntityGraph(attributePaths = {"techStack", "createdBy"})
+    @EntityGraph(attributePaths = {"techStacks", "technologies", "createdBy"})
     Optional<Question> findById(Long id);
 
     @Override
-    @EntityGraph(attributePaths = {"techStack", "createdBy"})
+    @EntityGraph(attributePaths = {"createdBy"})
     Page<Question> findAll(Pageable pageable);
 
     @Override
-    @EntityGraph(attributePaths = {"techStack", "createdBy"})
+    @EntityGraph(attributePaths = {"createdBy"})
     Page<Question> findAll(Specification<Question> specification, Pageable pageable);
 }

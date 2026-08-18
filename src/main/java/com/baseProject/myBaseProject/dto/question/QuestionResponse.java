@@ -1,6 +1,7 @@
 package com.baseProject.myBaseProject.dto.question;
 
 import java.time.Instant;
+import java.util.List;
 
 import com.baseProject.myBaseProject.enums.QuestionDifficulty;
 import com.baseProject.myBaseProject.enums.QuestionLevel;
@@ -10,7 +11,8 @@ public record QuestionResponse(
         Long id,
         String contentVi,
         String contentEn,
-        TechStackSummaryResponse techStack,
+        List<TechStackSummaryResponse> techStacks,
+        List<TechnologySummaryResponse> technologies,
         QuestionLevel level,
         QuestionType questionType,
         QuestionDifficulty difficulty,

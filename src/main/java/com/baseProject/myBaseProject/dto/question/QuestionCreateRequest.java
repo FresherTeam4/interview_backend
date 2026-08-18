@@ -1,5 +1,7 @@
 package com.baseProject.myBaseProject.dto.question;
 
+import java.util.Set;
+
 import com.baseProject.myBaseProject.enums.QuestionDifficulty;
 import com.baseProject.myBaseProject.enums.QuestionLevel;
 import com.baseProject.myBaseProject.enums.QuestionType;
@@ -14,8 +16,11 @@ public record QuestionCreateRequest(
 
         String contentEn,
 
-        @Positive(message = "Tech stack id must be positive")
-        Integer techStackId,
+        @Size(max = 20, message = "A question must not have more than 20 tech stacks")
+        Set<@Positive(message = "Tech stack id must be positive") Integer> techStackIds,
+
+        @Size(max = 20, message = "A question must not have more than 20 technologies")
+        Set<@Positive(message = "Technology id must be positive") Integer> technologyIds,
 
         @NotNull(message = "Question level is required")
         QuestionLevel level,

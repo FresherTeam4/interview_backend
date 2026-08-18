@@ -1,6 +1,8 @@
 package com.baseProject.myBaseProject.entity;
 
 import java.time.Instant;
+import java.util.LinkedHashSet;
+import java.util.Set;
 
 import com.baseProject.myBaseProject.enums.QuestionDifficulty;
 import com.baseProject.myBaseProject.enums.QuestionLevel;
@@ -15,6 +17,8 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
+import jakarta.persistence.JoinTable;
+import jakarta.persistence.ManyToMany;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import jakarta.persistence.Version;
@@ -23,6 +27,7 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import org.hibernate.annotations.BatchSize;
 
 @Entity
 @Table(name = "questions")
@@ -42,9 +47,25 @@ public class Question {
     @Column(name = "content_en", columnDefinition = "TEXT")
     private String contentEn;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "tech_stack_id")
-    private TechStack techStack;
+    @ManyToMany(fetch = FetchType.LAZY)
+    @JoinTable(
+            name = "question_tech_stacks",
+            joinColumns = @JoinColumn(name = "question_id"),
+            inverseJoinColumns = @JoinColumn(name = "tech_stack_id")
+    )
+    @BatchSize(size = 50)
+    @Builder.Default
+    private Set<TechStack> techStacks = new LinkedHashSet<>();
+
+    @ManyToMany(fetch = FetchType.LAZY)
+    @JoinTable(
+            name = "question_technologies",
+            joinColumns = @JoinColumn(name = "question_id"),
+            inverseJoinColumns = @JoinColumn(name = "technology_id")
+    )
+    @BatchSize(size = 50)
+    @Builder.Default
+    private Set<Technology> technologies = new LinkedHashSet<>();
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
