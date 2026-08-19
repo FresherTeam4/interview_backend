@@ -5,7 +5,7 @@ import java.util.List;
 import com.baseProject.myBaseProject.config.OpenApiConfig;
 import com.baseProject.myBaseProject.dto.question.TechnologySummaryResponse;
 import com.baseProject.myBaseProject.enums.TechnologyType;
-import com.baseProject.myBaseProject.security.authorization.IsEventAdmin;
+import com.baseProject.myBaseProject.security.authorization.IsAdmin;
 import com.baseProject.myBaseProject.service.QuestionService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -19,7 +19,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/api/admin/technologies")
 @RequiredArgsConstructor
-@IsEventAdmin
+@IsAdmin
 @SecurityRequirement(name = OpenApiConfig.BEARER_AUTH)
 @Tag(name = "Question Bank Admin", description = "Manage interview questions")
 public class TechnologyAdminController {

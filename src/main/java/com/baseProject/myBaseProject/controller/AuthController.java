@@ -3,6 +3,7 @@ package com.baseProject.myBaseProject.controller;
 import com.baseProject.myBaseProject.config.OpenApiConfig;
 import com.baseProject.myBaseProject.dto.auth.AuthResponse;
 import com.baseProject.myBaseProject.dto.auth.AuthResult;
+import com.baseProject.myBaseProject.dto.auth.CurrentUserResponse;
 import com.baseProject.myBaseProject.dto.auth.GoogleLoginRequest;
 import com.baseProject.myBaseProject.dto.auth.LoginRequest;
 import com.baseProject.myBaseProject.dto.auth.RegisterRequest;
@@ -12,6 +13,8 @@ import com.baseProject.myBaseProject.exception.InvalidRefreshTokenException;
 import com.baseProject.myBaseProject.exception.MissingRefreshTokenException;
 import com.baseProject.myBaseProject.security.RefreshTokenCookieFactory;
 import com.baseProject.myBaseProject.security.SecurityUtils;
+import com.baseProject.myBaseProject.security.CustomUserDetails;
+import com.baseProject.myBaseProject.security.authorization.CurrentUser;
 import com.baseProject.myBaseProject.security.authorization.IsAuthenticated;
 import com.baseProject.myBaseProject.service.AuthService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -24,6 +27,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -56,6 +60,14 @@ public class AuthController {
     @Operation(summary = "Đăng nhập bằng Google")
     public ResponseEntity<AuthResponse> loginWithGoogle(@Valid @RequestBody GoogleLoginRequest request) {
         return withRefreshCookie(HttpStatus.OK, authService.loginWithGoogle(request));
+    }
+
+    @GetMapping("/me")
+    @IsAuthenticated
+    @SecurityRequirement(name = OpenApiConfig.BEARER_AUTH)
+    @Operation(summary = "Lấy thông tin người dùng hiện tại")
+    public CurrentUserResponse currentUser(@CurrentUser CustomUserDetails currentUser) {
+        return authService.currentUser(currentUser.getId());
     }
 
     @PostMapping("/refresh")

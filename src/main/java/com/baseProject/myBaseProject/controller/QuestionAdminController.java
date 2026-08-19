@@ -14,7 +14,7 @@ import com.baseProject.myBaseProject.enums.QuestionLevel;
 import com.baseProject.myBaseProject.enums.QuestionType;
 import com.baseProject.myBaseProject.security.CustomUserDetails;
 import com.baseProject.myBaseProject.security.authorization.CurrentUser;
-import com.baseProject.myBaseProject.security.authorization.IsEventAdmin;
+import com.baseProject.myBaseProject.security.authorization.IsAdmin;
 import com.baseProject.myBaseProject.service.QuestionService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -36,7 +36,7 @@ import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 @RestController
 @RequestMapping("/api/admin/questions")
 @RequiredArgsConstructor
-@IsEventAdmin
+@IsAdmin
 @SecurityRequirement(name = OpenApiConfig.BEARER_AUTH)
 @Tag(name = "Question Bank Admin", description = "Manage interview questions")
 public class QuestionAdminController {

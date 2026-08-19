@@ -13,6 +13,7 @@ import org.springframework.transaction.annotation.Transactional;
 import com.baseProject.myBaseProject.constant.Message;
 import com.baseProject.myBaseProject.dto.auth.AuthResponse;
 import com.baseProject.myBaseProject.dto.auth.AuthResult;
+import com.baseProject.myBaseProject.dto.auth.CurrentUserResponse;
 import com.baseProject.myBaseProject.dto.auth.GoogleLoginRequest;
 import com.baseProject.myBaseProject.dto.auth.GoogleUserInfo;
 import com.baseProject.myBaseProject.dto.auth.LoginRequest;
@@ -20,6 +21,7 @@ import com.baseProject.myBaseProject.dto.auth.RegisterRequest;
 import com.baseProject.myBaseProject.entity.UserAccount;
 import com.baseProject.myBaseProject.enums.UserRole;
 import com.baseProject.myBaseProject.exception.DuplicateEmailException;
+import com.baseProject.myBaseProject.exception.ResourceNotFoundException;
 import com.baseProject.myBaseProject.repository.UserAccountRepository;
 import com.baseProject.myBaseProject.security.CustomUserDetails;
 import com.baseProject.myBaseProject.security.GoogleIdTokenVerifier;
@@ -52,7 +54,7 @@ public class AuthServiceImpl implements AuthService {
                 .fullName(request.fullName().trim())
                 .email(email)
                 .passwordHash(passwordEncoder.encode(request.password()))
-                .role(UserRole.PARTICIPANT)
+                .role(UserRole.USER)
                 .enabled(true)
                 .createdAt(clock.instant())
                 .build();
@@ -96,6 +98,22 @@ public class AuthServiceImpl implements AuthService {
         return issueTokens(new CustomUserDetails(account), account);
     }
 
+    @Transactional(readOnly = true)
+    public CurrentUserResponse currentUser(Long userId) {
+        UserAccount account = userAccountRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException(Message.USER_NOT_FOUND));
+
+        return new CurrentUserResponse(
+                account.getId(),
+                account.getFullName(),
+                account.getEmail(),
+                account.getAvatarUrl(),
+                account.getRole(),
+                account.getCreatedAt(),
+                account.getUpdatedAt()
+        );
+    }
+
     private UserAccount syncProfile(UserAccount account, GoogleUserInfo googleUser) {
         account.setFullName(googleUser.fullName());
         account.setAvatarUrl(googleUser.avatarUrl());
@@ -118,7 +136,7 @@ public class AuthServiceImpl implements AuthService {
                 .googleId(googleUser.googleId())
                 .avatarUrl(googleUser.avatarUrl())
                 .passwordHash(null)
-                .role(UserRole.PARTICIPANT)
+                .role(UserRole.USER)
                 .enabled(true)
                 .createdAt(clock.instant())
                 .build();
