@@ -3,14 +3,18 @@ package com.baseProject.myBaseProject.service.impl;
 import java.time.Clock;
 
 import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.DisabledException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.baseProject.myBaseProject.constant.Message;
 import com.baseProject.myBaseProject.dto.auth.AuthResponse;
 import com.baseProject.myBaseProject.dto.auth.AuthResult;
+import com.baseProject.myBaseProject.dto.auth.GoogleLoginRequest;
+import com.baseProject.myBaseProject.dto.auth.GoogleUserInfo;
 import com.baseProject.myBaseProject.dto.auth.LoginRequest;
 import com.baseProject.myBaseProject.dto.auth.RegisterRequest;
 import com.baseProject.myBaseProject.entity.UserAccount;
@@ -18,6 +22,7 @@ import com.baseProject.myBaseProject.enums.UserRole;
 import com.baseProject.myBaseProject.exception.DuplicateEmailException;
 import com.baseProject.myBaseProject.repository.UserAccountRepository;
 import com.baseProject.myBaseProject.security.CustomUserDetails;
+import com.baseProject.myBaseProject.security.GoogleIdTokenVerifier;
 import com.baseProject.myBaseProject.service.AuthService;
 import com.baseProject.myBaseProject.service.JwtService;
 import com.baseProject.myBaseProject.service.RefreshTokenService;
@@ -32,6 +37,7 @@ public class AuthServiceImpl implements AuthService {
     private final JwtService jwtService;
     private final RefreshTokenService refreshTokenService;
     private final AuthenticationManager authenticationManager;
+    private final GoogleIdTokenVerifier googleIdTokenVerifier;
     private final Clock clock;
 
     @Transactional
@@ -69,6 +75,53 @@ public class AuthServiceImpl implements AuthService {
         UserAccount accountRef = userAccountRepository.getReferenceById(userDetails.getId());
 
         return issueTokens(userDetails, accountRef);
+    }
+
+    @Transactional
+    public AuthResult loginWithGoogle(GoogleLoginRequest request) {
+        GoogleUserInfo googleUser = googleIdTokenVerifier.verify(request.idToken());
+
+        UserAccount account = userAccountRepository.findByGoogleId(googleUser.googleId())
+                .map(existing -> syncProfile(existing, googleUser))
+                .orElseGet(() -> userAccountRepository.findByEmail(googleUser.email())
+                        .map(existing -> linkGoogleAccount(existing, googleUser))
+                        .orElseGet(() -> createFromGoogle(googleUser)));
+
+
+        if (!account.isEnabled()) {
+            throw new DisabledException(Message.ACCOUNT_DISABLED);
+        }
+
+        account = userAccountRepository.save(account);
+        return issueTokens(new CustomUserDetails(account), account);
+    }
+
+    private UserAccount syncProfile(UserAccount account, GoogleUserInfo googleUser) {
+        account.setFullName(googleUser.fullName());
+        account.setAvatarUrl(googleUser.avatarUrl());
+        return account;
+    }
+
+    private UserAccount linkGoogleAccount(UserAccount account, GoogleUserInfo googleUser) {
+        account.setGoogleId(googleUser.googleId());
+
+        if (account.getAvatarUrl() == null) {
+            account.setAvatarUrl(googleUser.avatarUrl());
+        }
+        return account;
+    }
+
+    private UserAccount createFromGoogle(GoogleUserInfo googleUser) {
+        return UserAccount.builder()
+                .fullName(googleUser.fullName())
+                .email(googleUser.email())
+                .googleId(googleUser.googleId())
+                .avatarUrl(googleUser.avatarUrl())
+                .passwordHash(null)
+                .role(UserRole.PARTICIPANT)
+                .enabled(true)
+                .createdAt(clock.instant())
+                .build();
     }
 
     @Transactional

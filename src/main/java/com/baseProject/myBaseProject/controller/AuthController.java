@@ -3,6 +3,7 @@ package com.baseProject.myBaseProject.controller;
 import com.baseProject.myBaseProject.config.OpenApiConfig;
 import com.baseProject.myBaseProject.dto.auth.AuthResponse;
 import com.baseProject.myBaseProject.dto.auth.AuthResult;
+import com.baseProject.myBaseProject.dto.auth.GoogleLoginRequest;
 import com.baseProject.myBaseProject.dto.auth.LoginRequest;
 import com.baseProject.myBaseProject.dto.auth.RegisterRequest;
 import com.baseProject.myBaseProject.exception.ApiError;
@@ -55,6 +56,17 @@ public class AuthController {
     )
     public ResponseEntity<AuthResponse> login(@Valid @RequestBody LoginRequest request) {
         return withRefreshCookie(HttpStatus.OK, authService.login(request));
+    }
+
+    @PostMapping("/google")
+    @Operation(
+            summary = "Đăng nhập bằng Google",
+            description = "Nhận ID token do Google Identity Services cấp ở phía client, xác thực chữ ký "
+                    + "với Google, sau đó tạo mới hoặc liên kết tài khoản và trả về access token "
+                    + "kèm refresh token trong cookie HttpOnly."
+    )
+    public ResponseEntity<AuthResponse> loginWithGoogle(@Valid @RequestBody GoogleLoginRequest request) {
+        return withRefreshCookie(HttpStatus.OK, authService.loginWithGoogle(request));
     }
 
     @PostMapping("/refresh")

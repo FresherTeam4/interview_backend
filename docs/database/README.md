@@ -18,5 +18,6 @@ baseline procedure for a shared database.
 `spring.jpa.hibernate.ddl-auto=validate` ensures JPA entities match the Liquibase schema.
 Do not switch it back to `update` while Liquibase owns schema evolution.
 
-Google OAuth controller/service implementation is outside these database changes. The
-schema and entity only provide the required fields for account creation/linking.
+Google OAuth uses ID token verification (`POST /api/auth/google`); see
+`docs/google-login.md`. It reuses `user_accounts.google_id` and `avatar_url` and requires no
+additional schema change.
