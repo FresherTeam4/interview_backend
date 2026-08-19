@@ -55,8 +55,8 @@ class QuestionAdminControllerTest {
     }
 
     @Test
-    void participantReceivesForbidden() throws Exception {
-        mockMvc.perform(get("/api/admin/questions/1").with(user(userDetails(UserRole.PARTICIPANT))))
+    void userReceivesForbidden() throws Exception {
+        mockMvc.perform(get("/api/admin/questions/1").with(user(userDetails(UserRole.USER))))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value("ACCESS_DENIED"));
 
@@ -67,7 +67,7 @@ class QuestionAdminControllerTest {
     void eventAdminCanReadQuestion() throws Exception {
         when(questionService.getById(1L)).thenReturn(response(1L));
 
-        mockMvc.perform(get("/api/admin/questions/1").with(user(userDetails(UserRole.EVENT_ADMIN))))
+        mockMvc.perform(get("/api/admin/questions/1").with(user(userDetails(UserRole.ADMIN))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(1))
                 .andExpect(jsonPath("$.contentVi").value("Dependency Injection la gi?"))
@@ -84,7 +84,7 @@ class QuestionAdminControllerTest {
                 .thenReturn(response(101L));
 
         mockMvc.perform(post("/api/admin/questions")
-                        .with(user(userDetails(UserRole.EVENT_ADMIN)))
+                        .with(user(userDetails(UserRole.ADMIN)))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
@@ -108,7 +108,7 @@ class QuestionAdminControllerTest {
     @Test
     void invalidCreateRequestReturnsFieldErrors() throws Exception {
         mockMvc.perform(post("/api/admin/questions")
-                        .with(user(userDetails(UserRole.EVENT_ADMIN)))
+                        .with(user(userDetails(UserRole.ADMIN)))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
@@ -144,7 +144,7 @@ class QuestionAdminControllerTest {
                 .thenReturn(new PageResponse<>(List.of(), 1, 10, 0, 0, false, true));
 
         mockMvc.perform(get("/api/admin/questions")
-                        .with(user(userDetails(UserRole.EVENT_ADMIN)))
+                        .with(user(userDetails(UserRole.ADMIN)))
                         .param("keyword", "spring")
                         .param("active", "true")
                         .param("techStackIds", "2", "4")
@@ -176,7 +176,7 @@ class QuestionAdminControllerTest {
                 .thenReturn(List.of(java));
 
         mockMvc.perform(get("/api/admin/technologies")
-                        .with(user(userDetails(UserRole.EVENT_ADMIN)))
+                        .with(user(userDetails(UserRole.ADMIN)))
                         .param("activeOnly", "true")
                         .param("type", "LANGUAGE"))
                 .andExpect(status().isOk())

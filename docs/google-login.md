@@ -109,7 +109,7 @@ Phản hồi `200`, giống hệt `/api/auth/login`:
   "accessToken": "eyJhbGciOiJIUzI1NiJ9...",
   "userId": 7,
   "email": "nguoidung@gmail.com",
-  "role": "PARTICIPANT"
+  "role": "USER"
 }
 ```
 
@@ -132,7 +132,7 @@ Kèm header `Set-Cookie: refresh_token=...; HttpOnly; Path=/api/auth`.
    `google_id` vào đó, giữ nguyên `fullName` người dùng tự đặt, chỉ bổ sung avatar nếu còn
    trống. Không báo lỗi trùng email — nếu báo lỗi, người dùng sẽ bị kẹt: đăng nhập Google
    không được mà cũng không hiểu vì sao. Liên kết an toàn vì Google đã xác minh email.
-3. **Không thấy cả hai** → tạo tài khoản mới với `password_hash = NULL`, role `PARTICIPANT`.
+3. **Không thấy cả hai** → tạo tài khoản mới với `password_hash = NULL`, role `USER`.
 
 Sau khi liên kết ở trường hợp 2, người dùng đăng nhập được bằng **cả hai** cách.
 

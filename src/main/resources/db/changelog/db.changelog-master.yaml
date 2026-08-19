@@ -1,5 +1,5 @@
 databaseChangeLog:
-  
+
   - include:
       file: 001-create-user-accounts.sql
       relativeToChangelogFile: true
@@ -7,7 +7,6 @@ databaseChangeLog:
       file: 002-create-refresh-tokens.sql
       relativeToChangelogFile: true
 
-  
   - include:
       file: 010-create-tech-stacks.sql
       relativeToChangelogFile: true
@@ -31,4 +30,8 @@ databaseChangeLog:
       relativeToChangelogFile: true
   - include:
       file: 017-use-extensible-session-status.sql
+      relativeToChangelogFile: true
+
+  - include:
+      file: 018-rename-user-roles.sql
       relativeToChangelogFile: true

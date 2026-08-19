@@ -42,4 +42,4 @@ master changelog tạo trong Sprint 1.
 
 Các endpoint Google OAuth nằm ngoài thay đổi taxonomy này. Taxonomy Question Bank
 không phụ thuộc việc Google OAuth đã hoàn thành hay chưa; nó chỉ phụ thuộc cơ chế
-xác thực cung cấp principal có role `EVENT_ADMIN` khi gọi API admin.
+xác thực cung cấp principal có role `ADMIN` khi gọi API admin.

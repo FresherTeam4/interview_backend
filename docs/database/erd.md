@@ -22,7 +22,7 @@ erDiagram
         varchar password_hash "nullable"
         varchar google_id UK "nullable, Google sub"
         varchar avatar_url
-        varchar role "EVENT_ADMIN or PARTICIPANT"
+        varchar role "ADMIN or USER"
         boolean enabled
         datetime created_at
         datetime updated_at

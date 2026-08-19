@@ -2,8 +2,8 @@
 
 ## 1. Phạm vi
 
-API cho phép `EVENT_ADMIN` tạo, xem, sửa, vô hiệu hóa và lọc ngân hàng câu hỏi.
-Mọi endpoint bên dưới đều cần access token có role `EVENT_ADMIN`:
+API cho phép `ADMIN` tạo, xem, sửa, vô hiệu hóa và lọc ngân hàng câu hỏi.
+Mọi endpoint bên dưới đều cần access token có role `ADMIN`:
 
 ```http
 Authorization: Bearer <access-token>
@@ -163,7 +163,7 @@ giữ nguyên lịch sử phỏng vấn có tham chiếu câu hỏi. Có thể k
 | `204` | Vô hiệu hóa thành công |
 | `400` | Body, enum, filter, paging hoặc quy tắc nghiệp vụ không hợp lệ |
 | `401` | Thiếu/sai access token |
-| `403` | Tài khoản không có role `EVENT_ADMIN` |
+| `403` | Tài khoản không có role `ADMIN` |
 | `404` | Không tìm thấy câu hỏi, người tạo, Tech Stack hoặc Technology đang hoạt động |
 | `409` | Xung đột version hoặc constraint database |
 

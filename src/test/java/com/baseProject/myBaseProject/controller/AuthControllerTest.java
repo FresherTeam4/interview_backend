@@ -49,7 +49,7 @@ class AuthControllerTest {
                 "Nguyen Van A",
                 "user@example.com",
                 "https://example.com/avatar.png",
-                UserRole.PARTICIPANT,
+                UserRole.USER,
                 createdAt,
                 updatedAt
         );
@@ -61,7 +61,7 @@ class AuthControllerTest {
                 .andExpect(jsonPath("$.fullName").value("Nguyen Van A"))
                 .andExpect(jsonPath("$.email").value("user@example.com"))
                 .andExpect(jsonPath("$.avatarUrl").value("https://example.com/avatar.png"))
-                .andExpect(jsonPath("$.role").value("PARTICIPANT"))
+                .andExpect(jsonPath("$.role").value("USER"))
                 .andExpect(jsonPath("$.createdAt").value("2026-08-19T01:00:00Z"))
                 .andExpect(jsonPath("$.updatedAt").value("2026-08-19T02:00:00Z"));
 
@@ -73,7 +73,7 @@ class AuthControllerTest {
                 .id(10L)
                 .email("user@example.com")
                 .passwordHash("password")
-                .role(UserRole.PARTICIPANT)
+                .role(UserRole.USER)
                 .enabled(true)
                 .build());
     }
