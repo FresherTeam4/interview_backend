@@ -13,13 +13,18 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.time.Instant;
+import java.util.List;
 
+import com.baseProject.myBaseProject.dto.common.PageResponse;
 import com.baseProject.myBaseProject.dto.question.QuestionCreateRequest;
+import com.baseProject.myBaseProject.dto.question.QuestionFilter;
 import com.baseProject.myBaseProject.dto.question.QuestionResponse;
+import com.baseProject.myBaseProject.dto.question.TechnologySummaryResponse;
 import com.baseProject.myBaseProject.entity.UserAccount;
 import com.baseProject.myBaseProject.enums.QuestionDifficulty;
 import com.baseProject.myBaseProject.enums.QuestionLevel;
 import com.baseProject.myBaseProject.enums.QuestionType;
+import com.baseProject.myBaseProject.enums.TechnologyType;
 import com.baseProject.myBaseProject.enums.UserRole;
 import com.baseProject.myBaseProject.security.CustomUserDetails;
 import com.baseProject.myBaseProject.service.QuestionService;
@@ -65,14 +70,16 @@ class QuestionAdminControllerTest {
         mockMvc.perform(get("/api/admin/questions/1").with(user(userDetails(UserRole.EVENT_ADMIN))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(1))
-                .andExpect(jsonPath("$.contentVi").value("Dependency Injection là gì?"))
+                .andExpect(jsonPath("$.contentVi").value("Dependency Injection la gi?"))
+                .andExpect(jsonPath("$.techStacks").isArray())
+                .andExpect(jsonPath("$.technologies").isArray())
                 .andExpect(jsonPath("$.version").value(0));
 
         verify(questionService).getById(1L);
     }
 
     @Test
-    void createReturnsLocationAndAuthenticatedCreator() throws Exception {
+    void createAcceptsMultipleTaxonomyIdsAndReturnsLocation() throws Exception {
         when(questionService.create(any(QuestionCreateRequest.class), eq(10L)))
                 .thenReturn(response(101L));
 
@@ -81,9 +88,10 @@ class QuestionAdminControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
-                                  "contentVi": "Dependency Injection là gì?",
+                                  "contentVi": "Dependency Injection la gi?",
                                   "contentEn": "What is Dependency Injection?",
-                                  "techStackId": 2,
+                                  "techStackIds": [2, 4],
+                                  "technologyIds": [1, 28],
                                   "level": "JUNIOR",
                                   "questionType": "TECHNICAL",
                                   "difficulty": "MEDIUM",
@@ -120,6 +128,64 @@ class QuestionAdminControllerTest {
         verifyNoInteractions(questionService);
     }
 
+    @Test
+    void eventAdminCanSubmitCheckboxFiltersAsRepeatedParameters() throws Exception {
+        QuestionFilter expectedFilter = new QuestionFilter(
+                "spring",
+                true,
+                List.of(2, 4),
+                false,
+                List.of(1, 28),
+                List.of(QuestionLevel.JUNIOR, QuestionLevel.MID),
+                List.of(QuestionType.TECHNICAL),
+                List.of(QuestionDifficulty.MEDIUM, QuestionDifficulty.HARD)
+        );
+        when(questionService.search(expectedFilter, 1, 10))
+                .thenReturn(new PageResponse<>(List.of(), 1, 10, 0, 0, false, true));
+
+        mockMvc.perform(get("/api/admin/questions")
+                        .with(user(userDetails(UserRole.EVENT_ADMIN)))
+                        .param("keyword", "spring")
+                        .param("active", "true")
+                        .param("techStackIds", "2", "4")
+                        .param("unclassified", "false")
+                        .param("technologyIds", "1", "28")
+                        .param("levels", "JUNIOR", "MID")
+                        .param("questionTypes", "TECHNICAL")
+                        .param("difficulties", "MEDIUM", "HARD")
+                        .param("page", "1")
+                        .param("size", "10"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.page").value(1))
+                .andExpect(jsonPath("$.size").value(10));
+
+        verify(questionService).search(expectedFilter, 1, 10);
+    }
+
+    @Test
+    void eventAdminCanListTechnologiesByType() throws Exception {
+        TechnologySummaryResponse java = new TechnologySummaryResponse(
+                1,
+                "JAVA",
+                "Java",
+                "Java",
+                TechnologyType.LANGUAGE,
+                true
+        );
+        when(questionService.getTechnologies(true, TechnologyType.LANGUAGE))
+                .thenReturn(List.of(java));
+
+        mockMvc.perform(get("/api/admin/technologies")
+                        .with(user(userDetails(UserRole.EVENT_ADMIN)))
+                        .param("activeOnly", "true")
+                        .param("type", "LANGUAGE"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].code").value("JAVA"))
+                .andExpect(jsonPath("$[0].type").value("LANGUAGE"));
+
+        verify(questionService).getTechnologies(true, TechnologyType.LANGUAGE);
+    }
+
     private static CustomUserDetails userDetails(UserRole role) {
         return new CustomUserDetails(UserAccount.builder()
                 .id(10L)
@@ -133,9 +199,10 @@ class QuestionAdminControllerTest {
     private static QuestionResponse response(Long id) {
         return new QuestionResponse(
                 id,
-                "Dependency Injection là gì?",
+                "Dependency Injection la gi?",
                 "What is Dependency Injection?",
-                null,
+                List.of(),
+                List.of(),
                 QuestionLevel.JUNIOR,
                 QuestionType.TECHNICAL,
                 QuestionDifficulty.MEDIUM,

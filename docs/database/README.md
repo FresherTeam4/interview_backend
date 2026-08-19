@@ -1,6 +1,6 @@
-# Liquibase ownership and execution order
+# Liquibase: quyền sở hữu và thứ tự thực thi
 
-The master changelog runs authentication before core database changes:
+Master changelog chạy authentication trước các bảng core và taxonomy:
 
 1. `001-create-user-accounts.sql` — Thái Văn Trường
 2. `002-create-refresh-tokens.sql` — Thái Văn Trường
@@ -9,14 +9,37 @@ The master changelog runs authentication before core database changes:
 5. `012-create-interview-sessions.sql` — Nguyễn Xuân Tùng
 6. `013-create-reports.sql` — Nguyễn Xuân Tùng
 7. `014-seed-sample-questions.sql` — Nguyễn Xuân Tùng
+8. `015-create-question-taxonomy.sql` — Nguyễn Xuân Tùng
+9. `016-migrate-question-taxonomy.sql` — Nguyễn Xuân Tùng
+10. `017-use-extensible-session-status.sql` — Nguyễn Xuân Tùng
 
-Use a clean database for the first Liquibase-managed run. If Hibernate previously created
-tables in `event_hub_db`, do not run these create-table changesets over that schema. Either
-recreate the local database when it contains no valuable data, or agree on a Liquibase
-baseline procedure for a shared database.
+Changeset 015 tạo danh mục `technologies` và hai bảng nối nhiều-nhiều.
+Changeset 016 sao chép mọi `questions.tech_stack_id` cũ sang
+`question_tech_stacks`, gắn công nghệ cho một số câu seed đã xác định rõ, rồi bỏ
+cột phân loại đơn cũ. Vì vậy dữ liệu phân loại Tech Stack hiện có không bị mất.
 
-`spring.jpa.hibernate.ddl-auto=validate` ensures JPA entities match the Liquibase schema.
-Do not switch it back to `update` while Liquibase owns schema evolution.
+Changeset 017 chỉ chuyển `interview_sessions.status` từ MySQL `ENUM` sang
+`VARCHAR(30)`. State Machine ở US-19 có thể thêm trạng thái ứng dụng mà không
+phải thay đổi kiểu cột sau mỗi lần mở rộng. Java vẫn kiểm soát giá trị bằng
+`InterviewSessionStatus`.
 
-Google OAuth controller/service implementation is outside these database changes. The
-schema and entity only provide the required fields for account creation/linking.
+
+## Quy tắc vận hành
+
+- Liquibase là nguồn duy nhất quản lý cấu trúc database.
+- `spring.jpa.hibernate.ddl-auto=validate` chỉ kiểm tra entity khớp schema; không
+  đổi lại thành `update`.
+- Không sửa nội dung changeset đã chạy trên database dùng chung. Nếu cần thay đổi,
+  tạo changeset mới.
+- Khi chạy lần đầu, nên dùng database sạch. Với database cũ không do Liquibase
+  quản lý, team cần thống nhất baseline thay vì chạy các lệnh `CREATE TABLE` chồng lên.
+- Trước khi merge/deploy, chạy ứng dụng trên một database test sạch, sau đó chạy
+  `docs/database/verify-schema.sql`.
+
+Round Module được trình bày đầy đủ trong ERD và `round-module-design.md` để team
+nhìn được kiến trúc tổng thể. Các bảng Round vẫn là thiết kế dự kiến, chưa được
+master changelog tạo trong Sprint 1.
+
+Các endpoint Google OAuth nằm ngoài thay đổi taxonomy này. Taxonomy Question Bank
+không phụ thuộc việc Google OAuth đã hoàn thành hay chưa; nó chỉ phụ thuộc cơ chế
+xác thực cung cấp principal có role `EVENT_ADMIN` khi gọi API admin.

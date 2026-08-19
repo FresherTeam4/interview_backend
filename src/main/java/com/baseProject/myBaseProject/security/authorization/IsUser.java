@@ -8,10 +8,9 @@ import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
-@Target({ElementType.METHOD, ElementType.TYPE}) // nơi đặt
-@Retention(RetentionPolicy.RUNTIME) // lifecycle
+@Target({ElementType.METHOD, ElementType.TYPE})
+@Retention(RetentionPolicy.RUNTIME)
 @Documented
-@PreAuthorize("hasRole('EVENT_ADMIN')")
-public @interface IsEventAdmin {
+@PreAuthorize("hasRole('USER')")
+public @interface IsUser {
 }
-

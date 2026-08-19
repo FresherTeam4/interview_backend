@@ -23,3 +23,12 @@ databaseChangeLog:
   - include:
       file: 014-seed-sample-questions.sql
       relativeToChangelogFile: true
+  - include:
+      file: 015-create-question-taxonomy.sql
+      relativeToChangelogFile: true
+  - include:
+      file: 016-migrate-question-taxonomy.sql
+      relativeToChangelogFile: true
+  - include:
+      file: 017-use-extensible-session-status.sql
+      relativeToChangelogFile: true

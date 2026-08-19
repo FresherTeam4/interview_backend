@@ -8,9 +8,9 @@ import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
-@Target({ElementType.METHOD, ElementType.TYPE})
-@Retention(RetentionPolicy.RUNTIME)
+@Target({ElementType.METHOD, ElementType.TYPE}) // nơi đặt
+@Retention(RetentionPolicy.RUNTIME) // lifecycle
 @Documented
-@PreAuthorize("hasRole('PARTICIPANT')")
-public @interface IsParticipant {
+@PreAuthorize("hasRole('ADMIN')")
+public @interface IsAdmin {
 }

@@ -1,15 +1,20 @@
 package com.baseProject.myBaseProject.controller;
 
 import java.net.URI;
+import java.util.List;
 
 import com.baseProject.myBaseProject.config.OpenApiConfig;
 import com.baseProject.myBaseProject.dto.common.PageResponse;
 import com.baseProject.myBaseProject.dto.question.QuestionCreateRequest;
+import com.baseProject.myBaseProject.dto.question.QuestionFilter;
 import com.baseProject.myBaseProject.dto.question.QuestionResponse;
 import com.baseProject.myBaseProject.dto.question.QuestionUpdateRequest;
+import com.baseProject.myBaseProject.enums.QuestionDifficulty;
+import com.baseProject.myBaseProject.enums.QuestionLevel;
+import com.baseProject.myBaseProject.enums.QuestionType;
 import com.baseProject.myBaseProject.security.CustomUserDetails;
 import com.baseProject.myBaseProject.security.authorization.CurrentUser;
-import com.baseProject.myBaseProject.security.authorization.IsEventAdmin;
+import com.baseProject.myBaseProject.security.authorization.IsAdmin;
 import com.baseProject.myBaseProject.service.QuestionService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -31,7 +36,7 @@ import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 @RestController
 @RequestMapping("/api/admin/questions")
 @RequiredArgsConstructor
-@IsEventAdmin
+@IsAdmin
 @SecurityRequirement(name = OpenApiConfig.BEARER_AUTH)
 @Tag(name = "Question Bank Admin", description = "Manage interview questions")
 public class QuestionAdminController {
@@ -60,10 +65,28 @@ public class QuestionAdminController {
     @GetMapping
     @Operation(summary = "Get a paginated question list")
     public PageResponse<QuestionResponse> getAll(
+            @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) Boolean active,
+            @RequestParam(required = false) List<Integer> techStackIds,
+            @RequestParam(required = false) Boolean unclassified,
+            @RequestParam(required = false) List<Integer> technologyIds,
+            @RequestParam(required = false) List<QuestionLevel> levels,
+            @RequestParam(required = false) List<QuestionType> questionTypes,
+            @RequestParam(required = false) List<QuestionDifficulty> difficulties,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size
     ) {
-        return questionService.getAll(page, size);
+        QuestionFilter filter = new QuestionFilter(
+                keyword,
+                active,
+                techStackIds,
+                unclassified,
+                technologyIds,
+                levels,
+                questionTypes,
+                difficulties
+        );
+        return questionService.search(filter, page, size);
     }
 
     @PutMapping("/{id}")
