@@ -47,6 +47,9 @@ public class Question {
     @Column(name = "content_en", columnDefinition = "TEXT")
     private String contentEn;
 
+    @Column(name = "content_fingerprint", nullable = false, length = 64)
+    private String contentFingerprint;
+
     @ManyToMany(fetch = FetchType.LAZY)
     @JoinTable(
             name = "question_tech_stacks",

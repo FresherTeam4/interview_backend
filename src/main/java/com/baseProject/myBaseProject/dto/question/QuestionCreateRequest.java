@@ -12,8 +12,10 @@ import jakarta.validation.constraints.Size;
 
 public record QuestionCreateRequest(
         @NotBlank(message = "Vietnamese content is required")
+        @Size(max = 10000, message = "Vietnamese content must not exceed 10000 characters")
         String contentVi,
 
+        @Size(max = 10000, message = "English content must not exceed 10000 characters")
         String contentEn,
 
         @Size(max = 20, message = "A question must not have more than 20 tech stacks")

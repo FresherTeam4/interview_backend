@@ -24,6 +24,7 @@ import com.baseProject.myBaseProject.enums.QuestionDifficulty;
 import com.baseProject.myBaseProject.enums.QuestionLevel;
 import com.baseProject.myBaseProject.enums.QuestionType;
 import com.baseProject.myBaseProject.enums.TechnologyType;
+import com.baseProject.myBaseProject.exception.DuplicateQuestionException;
 import com.baseProject.myBaseProject.exception.InvalidQuestionException;
 import com.baseProject.myBaseProject.exception.QuestionVersionConflictException;
 import com.baseProject.myBaseProject.exception.ResourceNotFoundException;
@@ -31,6 +32,7 @@ import com.baseProject.myBaseProject.repository.QuestionRepository;
 import com.baseProject.myBaseProject.repository.TechStackRepository;
 import com.baseProject.myBaseProject.repository.TechnologyRepository;
 import com.baseProject.myBaseProject.repository.UserAccountRepository;
+import com.baseProject.myBaseProject.util.QuestionFingerprint;
 import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -96,6 +98,9 @@ class QuestionServiceImplTest {
 
         assertThat(result.id()).isEqualTo(100L);
         assertThat(result.contentVi()).isEqualTo("Dependency Injection la gi?");
+        verify(questionRepository).findByContentFingerprint(
+                QuestionFingerprint.sha256("Dependency Injection la gi?")
+        );
         assertThat(result.contentEn()).isNull();
         assertThat(result.companyRef()).isEqualTo("FPT");
         assertThat(result.techStacks()).extracting("code").containsExactly("BACKEND", "DEVOPS");
@@ -103,6 +108,30 @@ class QuestionServiceImplTest {
         assertThat(result.createdById()).isEqualTo(10L);
         assertThat(result.active()).isTrue();
         verify(entityManager).refresh(any(Question.class));
+    }
+
+    @Test
+    void createRejectsNormalizedDuplicateContent() {
+        QuestionCreateRequest request = new QuestionCreateRequest(
+                "  REST   API LÀ GÌ? ",
+                null,
+                null,
+                null,
+                QuestionLevel.FRESHER,
+                QuestionType.BEHAVIORAL,
+                QuestionDifficulty.EASY,
+                null,
+                true
+        );
+        String fingerprint = QuestionFingerprint.sha256("rest api là gì?");
+        when(questionRepository.findByContentFingerprint(fingerprint))
+                .thenReturn(Optional.of(Question.builder().id(42L).build()));
+
+        assertThatThrownBy(() -> service.create(request, 10L))
+                .isInstanceOf(DuplicateQuestionException.class)
+                .hasMessageContaining("42");
+
+        verify(questionRepository, never()).saveAndFlush(any());
     }
 
     @Test

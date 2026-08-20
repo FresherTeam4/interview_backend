@@ -27,6 +27,8 @@ import com.baseProject.myBaseProject.enums.QuestionType;
 import com.baseProject.myBaseProject.enums.TechnologyType;
 import com.baseProject.myBaseProject.enums.UserRole;
 import com.baseProject.myBaseProject.security.CustomUserDetails;
+import com.baseProject.myBaseProject.service.QuestionImportAsyncWorker;
+import com.baseProject.myBaseProject.service.QuestionImportService;
 import com.baseProject.myBaseProject.service.QuestionService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -44,6 +46,14 @@ class QuestionAdminControllerTest {
 
     @MockitoBean
     private QuestionService questionService;
+
+    // Keep this controller test isolated from the import recovery component
+    // that runs when the Spring test application becomes ready.
+    @MockitoBean
+    private QuestionImportService questionImportService;
+
+    @MockitoBean
+    private QuestionImportAsyncWorker questionImportAsyncWorker;
 
     @Test
     void anonymousUserReceivesUnauthorized() throws Exception {

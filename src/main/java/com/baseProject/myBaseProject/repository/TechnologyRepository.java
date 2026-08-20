@@ -9,6 +9,8 @@ import org.springframework.data.jpa.repository.JpaRepository;
 public interface TechnologyRepository extends JpaRepository<Technology, Integer> {
     List<Technology> findAllByIdInAndActiveTrue(Collection<Integer> ids);
 
+    List<Technology> findAllByCodeInAndActiveTrue(Collection<String> codes);
+
     List<Technology> findAllByOrderByTechnologyTypeAscNameEnAsc();
 
     List<Technology> findAllByActiveTrueOrderByTechnologyTypeAscNameEnAsc();

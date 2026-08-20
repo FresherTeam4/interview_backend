@@ -35,3 +35,11 @@ databaseChangeLog:
   - include:
       file: 018-rename-user-roles.sql
       relativeToChangelogFile: true
+
+  - include:
+      file: 019-add-question-fingerprint.sql
+      relativeToChangelogFile: true
+
+  - include:
+      file: 020-create-question-import-tables.sql
+      relativeToChangelogFile: true

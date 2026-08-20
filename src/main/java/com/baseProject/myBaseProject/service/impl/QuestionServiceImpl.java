@@ -21,6 +21,7 @@ import com.baseProject.myBaseProject.entity.UserAccount;
 import com.baseProject.myBaseProject.enums.QuestionType;
 import com.baseProject.myBaseProject.enums.TechnologyType;
 import com.baseProject.myBaseProject.exception.InvalidQuestionException;
+import com.baseProject.myBaseProject.exception.DuplicateQuestionException;
 import com.baseProject.myBaseProject.exception.QuestionVersionConflictException;
 import com.baseProject.myBaseProject.exception.ResourceNotFoundException;
 import com.baseProject.myBaseProject.mapper.QuestionMapper;
@@ -30,6 +31,7 @@ import com.baseProject.myBaseProject.repository.TechnologyRepository;
 import com.baseProject.myBaseProject.repository.UserAccountRepository;
 import com.baseProject.myBaseProject.repository.specification.QuestionSpecifications;
 import com.baseProject.myBaseProject.service.QuestionService;
+import com.baseProject.myBaseProject.util.QuestionFingerprint;
 import jakarta.persistence.EntityManager;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.OptimisticLockingFailureException;
@@ -59,6 +61,12 @@ public class QuestionServiceImpl implements QuestionService {
     @Override
     @Transactional
     public QuestionResponse create(QuestionCreateRequest request, Long creatorId) {
+        String contentVi = request.contentVi().trim();
+        String fingerprint = QuestionFingerprint.sha256(contentVi);
+        questionRepository.findByContentFingerprint(fingerprint)
+                .ifPresent(existing -> {
+                    throw new DuplicateQuestionException(existing.getId());
+                });
         Set<TechStack> techStacks = findActiveTechStacks(request.techStackIds());
         Set<Technology> technologies = findActiveTechnologies(request.technologyIds());
         validateTechStackRequirement(request.questionType(), techStacks);
@@ -66,8 +74,9 @@ public class QuestionServiceImpl implements QuestionService {
                 .orElseThrow(() -> new ResourceNotFoundException("Creator account not found"));
 
         Question question = Question.builder()
-                .contentVi(request.contentVi().trim())
+                .contentVi(contentVi)
                 .contentEn(normalizeOptional(request.contentEn()))
+                .contentFingerprint(fingerprint)
                 .techStacks(techStacks)
                 .technologies(technologies)
                 .level(request.level())
@@ -117,8 +126,16 @@ public class QuestionServiceImpl implements QuestionService {
         Set<TechStack> techStacks = findActiveTechStacks(request.techStackIds());
         Set<Technology> technologies = findActiveTechnologies(request.technologyIds());
         validateTechStackRequirement(request.questionType(), techStacks);
-        question.setContentVi(request.contentVi().trim());
+        String contentVi = request.contentVi().trim();
+        String fingerprint = QuestionFingerprint.sha256(contentVi);
+        questionRepository.findByContentFingerprint(fingerprint)
+                .filter(existing -> !id.equals(existing.getId()))
+                .ifPresent(existing -> {
+                    throw new DuplicateQuestionException(existing.getId());
+                });
+        question.setContentVi(contentVi);
         question.setContentEn(normalizeOptional(request.contentEn()));
+        question.setContentFingerprint(fingerprint);
         question.setTechStacks(techStacks);
         question.setTechnologies(technologies);
         question.setLevel(request.level());
