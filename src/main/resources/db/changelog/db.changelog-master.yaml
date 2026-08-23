@@ -8,30 +8,5 @@ databaseChangeLog:
       relativeToChangelogFile: true
 
   - include:
-      file: 010-create-tech-stacks.sql
-      relativeToChangelogFile: true
-  - include:
-      file: 011-create-questions.sql
-      relativeToChangelogFile: true
-  - include:
-      file: 012-create-interview-sessions.sql
-      relativeToChangelogFile: true
-  - include:
-      file: 013-create-reports.sql
-      relativeToChangelogFile: true
-  - include:
-      file: 014-seed-sample-questions.sql
-      relativeToChangelogFile: true
-  - include:
-      file: 015-create-question-taxonomy.sql
-      relativeToChangelogFile: true
-  - include:
-      file: 016-migrate-question-taxonomy.sql
-      relativeToChangelogFile: true
-  - include:
-      file: 017-use-extensible-session-status.sql
-      relativeToChangelogFile: true
-
-  - include:
       file: 018-rename-user-roles.sql
       relativeToChangelogFile: true
