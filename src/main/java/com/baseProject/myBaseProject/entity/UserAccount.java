@@ -53,6 +53,10 @@ public class UserAccount {
     @Builder.Default
     private boolean enabled = true;
 
+    /** NULL = email not yet verified. Set when user clicks the verification link. */
+    @Column(name = "email_verified_at")
+    private Instant emailVerifiedAt;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 

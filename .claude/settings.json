@@ -1,0 +1,25 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(./mvnw.cmd -o -q compile)",
+      "Bash(./mvnw.cmd -o -q org.apache.maven.plugins:maven-dependency-plugin:3.6.1:list -DincludeGroupIds=com.anthropic -DoutputFile=/tmp/anthropic-dep.txt)",
+      "Read(//tmp/**)",
+      "Bash(rm -f target/classes/com/baseProject/myBaseProject/service/impl/CvParserServiceImpl.class target/classes/com/baseProject/myBaseProject/config/AiConfig.class)",
+      "Bash(./mvnw.cmd -o compile)",
+      "Bash(./mvnw.cmd -o -q org.apache.maven.plugins:maven-dependency-plugin:3.6.1:list -DoutputFile=/tmp/deps.txt -DincludeScope=runtime)",
+      "Read(//d/tmp/**)",
+      "Bash(python -)",
+      "PowerShell($javap='C:\\\\Program Files\\\\Java\\\\jdk-21\\\\bin\\\\javap.exe'; $jar=\"$env:USERPROFILE\\\\.m2\\\\repository\\\\org\\\\springframework\\\\ai\\\\spring-ai-model\\\\2.0.1\\\\spring-ai-model-2.0.1.jar\"; $out = & $javap -p -c -constants -classpath $jar org.springframework.ai.util.json.schema.JsonSchemaGenerator; $txt = $out -join \"`n\"; \\($txt -split \"`n\" | Select-String -Pattern 'victools|Module|JsonPropertyDescription|Option\\\\.|String ' | ForEach-Object { $_.ToString\\(\\).Trim\\(\\) } | Select-Object -Unique\\) -join \"`n\")",
+      "Read(//c/Users/tranh/.m2/repository/**)",
+      "Read(//c/Users/tranh/.m2/repository/org/springframework/ai/spring-ai-model/2.0.1/**)",
+      "PowerShell($javap='C:\\\\Program Files\\\\Java\\\\jdk-21\\\\bin\\\\javap.exe'; $jar=\"$env:USERPROFILE\\\\.m2\\\\repository\\\\com\\\\github\\\\victools\\\\jsonschema-module-jackson\\\\5.0.0\\\\jsonschema-module-jackson-5.0.0.jar\"; $out = & $javap -p -c -classpath $jar com.github.victools.jsonschema.module.jackson.JacksonModule 2>&1; \\($out -join \"`n\" -split \"`n\" | Select-String -Pattern 'JsonPropertyDescription|JsonClassDescription' | Select-Object -First 4 | ForEach-Object { $_.ToString\\(\\).Trim\\(\\) }\\) -join \"`n\"; \"---- jackson-annotations in .m2 ----\"; Get-ChildItem \"$env:USERPROFILE\\\\.m2\\\\repository\\\\com\\\\fasterxml\\\\jackson\\\\core\\\\jackson-annotations\" -Directory | Select-Object -ExpandProperty Name)",
+      "PowerShell($javap='C:\\\\Program Files\\\\Java\\\\jdk-21\\\\bin\\\\javap.exe'; $jar=\"$env:USERPROFILE\\\\.m2\\\\repository\\\\org\\\\springframework\\\\ai\\\\spring-ai-model\\\\2.0.1\\\\spring-ai-model-2.0.1.jar\"; & $javap -classpath $jar org.springframework.ai.chat.metadata.Usage)",
+      "PowerShell(Set-Location 'd:\\\\FPTdocument\\\\MockInterview\\\\MockInterviewProject\\\\interview_backend'; & '.\\\\mvnw.cmd' -o -q compile; \"EXIT=$LASTEXITCODE\")",
+      "Read(//c/Users/tranh/.m2/repository/org/apache/maven/plugins/maven-dependency-plugin/**)",
+      "PowerShell(Set-Location 'd:\\\\FPTdocument\\\\MockInterview\\\\MockInterviewProject\\\\interview_backend'; & '.\\\\mvnw.cmd' -o -q org.apache.maven.plugins:maven-dependency-plugin:3.6.1:build-classpath \"-Dmdep.outputFile=target/cp.txt\" \"-Dmdep.includeScope=runtime\"; \"EXIT=$LASTEXITCODE\"; if \\(Test-Path target\\\\cp.txt\\) { \"LEN=\" + \\(Get-Content target\\\\cp.txt -Raw\\).Length })",
+      "PowerShell(Set-Location 'd:\\\\FPTdocument\\\\MockInterview\\\\MockInterviewProject\\\\interview_backend'; $cp = \\(Get-Content target\\\\cp.txt -Raw\\).Trim\\(\\); $java = 'C:\\\\Program Files\\\\Java\\\\jdk-21\\\\bin\\\\java.exe'; & $java -cp \"target\\\\classes;$cp\" target\\\\probe\\\\SchemaProbe.java; \"EXIT=$LASTEXITCODE\")",
+      "PowerShell(Set-Location 'd:\\\\FPTdocument\\\\MockInterview\\\\MockInterviewProject\\\\interview_backend'; & '.\\\\mvnw.cmd' -o -q compile; \"COMPILE_EXIT=$LASTEXITCODE\"; Remove-Item -Recurse -Force target\\\\probe, target\\\\cp.txt -ErrorAction SilentlyContinue; \"cleaned probe files\")",
+      "Read(//d/FPTdocument/MockInterview/MockInterviewProject/**)"
+    ]
+  }
+}

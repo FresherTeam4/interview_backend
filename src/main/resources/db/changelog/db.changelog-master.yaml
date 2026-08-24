@@ -10,3 +10,46 @@ databaseChangeLog:
   - include:
       file: 018-rename-user-roles.sql
       relativeToChangelogFile: true
+
+  # Interview core domain. Numbering resumes at 019 because 003-017 were consumed
+  # by the question-bank feature that was removed in 2d9ea2d and are still recorded
+  # in existing DATABASECHANGELOG tables.
+  - include:
+      file: 019-drop-legacy-session-tables.sql
+      relativeToChangelogFile: true
+  - include:
+      file: 020-create-user-preferences.sql
+      relativeToChangelogFile: true
+  - include:
+      file: 021-create-cv-documents.sql
+      relativeToChangelogFile: true
+  - include:
+      file: 022-create-candidate-profiles.sql
+      relativeToChangelogFile: true
+  - include:
+      file: 023-create-rubrics.sql
+      relativeToChangelogFile: true
+  - include:
+      file: 024-create-interview-sessions.sql
+      relativeToChangelogFile: true
+  - include:
+      file: 025-create-session-turns.sql
+      relativeToChangelogFile: true
+  - include:
+      file: 026-create-session-voice-connections.sql
+      relativeToChangelogFile: true
+  - include:
+      file: 027-create-session-scoring.sql
+      relativeToChangelogFile: true
+  - include:
+      file: 028-create-speech-metrics.sql
+      relativeToChangelogFile: true
+  - include:
+      file: 029-seed-default-rubric.sql
+      relativeToChangelogFile: true
+  - include:
+      file: 030-seed-filler-words.sql
+      relativeToChangelogFile: true
+  - include:
+      file: 031-sync-schema-additions.sql
+      relativeToChangelogFile: true
