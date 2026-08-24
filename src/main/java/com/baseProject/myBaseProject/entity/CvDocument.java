@@ -26,8 +26,10 @@ import java.time.Instant;
  * An uploaded CV file. Holds the file's metadata only; the bytes live in object storage
  * under {@link #storageKey}.
  *
- * <p>A new upload does not delete the previous row, it flips {@code active} to false,
- * so reports from earlier interview sessions keep pointing at a CV that still exists.
+ * <p>A user keeps several CVs at once and picks which one an interview runs against, so
+ * uploading a new CV leaves the existing rows alone. {@code active} is a soft-delete
+ * flag: removing a CV flips it to false and the row stays, because the profile built
+ * from it and any interview session that used it still point here.
  */
 @Entity
 @Table(
@@ -79,7 +81,7 @@ public class CvDocument {
     @Column(name = "status_message", columnDefinition = "TEXT")
     private String statusMessage;
 
-    /** Maps {@code is_active}: one active CV per user. */
+    /** Maps {@code is_active}. False means the user removed this CV — a soft delete. */
     @Column(name = "is_active", nullable = false)
     @Builder.Default
     private boolean active = true;

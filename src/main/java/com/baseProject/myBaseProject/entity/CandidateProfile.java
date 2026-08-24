@@ -25,10 +25,14 @@ import java.math.BigDecimal;
 import java.time.Instant;
 
 /**
- * The editable working copy of a parsed CV — one per user, and the only place the
- * user touches. {@link CvParseResult} keeps the untouched AI output alongside it,
- * which is why no "prefer the edited version" flag is needed: the edited version
- * is the only version anything downstream reads.
+ * The editable working copy of a parsed CV — one per {@link CvDocument}, and the only
+ * place the user touches. {@link CvParseResult} keeps the untouched AI output alongside
+ * it, which is why no "prefer the edited version" flag is needed: the edited version is
+ * the only version anything downstream reads.
+ *
+ * <p>A user owns as many profiles as they have CVs and picks which one an interview runs
+ * against, so uploading a new CV never disturbs an older profile's manual edits. The
+ * one-per-CV rule is the database's job: {@code uq_candidate_profiles_cv_document}.
  *
  * <p>Child rows live in {@link ProfileEducation}, {@link ProfileSkill} and
  * {@link ProfileProject} rather than a JSON blob, because generated questions
@@ -38,7 +42,7 @@ import java.time.Instant;
 @Table(
         name = "candidate_profiles",
         indexes = {
-                @Index(name = "idx_candidate_profiles_cv_document_id", columnList = "cv_document_id")
+                @Index(name = "idx_candidate_profiles_user_id", columnList = "user_id")
         }
 )
 @Getter
@@ -51,13 +55,17 @@ public class CandidateProfile {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @OneToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "user_id", nullable = false, unique = true)
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "user_id", nullable = false)
     private UserAccount user;
 
-    /** Which CV this profile was built from. The database refuses to delete that CV. */
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "cv_document_id", nullable = false)
+    /**
+     * Which CV this profile was built from. Unique, so a CV never grows a second
+     * profile; and the foreign key is RESTRICT, so that CV cannot be deleted while
+     * this row points at it — which is why removing a CV is a soft delete.
+     */
+    @OneToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "cv_document_id", nullable = false, unique = true)
     private CvDocument cvDocument;
 
     @Column(length = 255)
@@ -69,12 +77,6 @@ public class CandidateProfile {
     @Column(name = "target_position", length = 150)
     private String targetPosition;
 
-    /**
-     * STUDENT | FRESHER | JUNIOR | MID | SENIOR.
-     *
-     * <p>Deliberately a free-form string: the schema keeps this vocabulary open so a
-     * new level does not need a migration, so the database does not constrain it either.
-     */
     @Column(name = "seniority_level", length = 30)
     private String seniorityLevel;
 
@@ -83,10 +85,6 @@ public class CandidateProfile {
     @Builder.Default
     private ProfileSource source = ProfileSource.AUTO_PARSED;
 
-    /**
-     * Null until the user presses "Information is correct". Starting an interview
-     * session before that is blocked — see {@link #isConfirmed()}.
-     */
     @Column(name = "confirmed_at")
     private Instant confirmedAt;
 

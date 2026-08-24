@@ -13,7 +13,7 @@ CREATE TABLE cv_documents (
     checksum_sha256   VARCHAR(64) NULL COMMENT 'Lowercase hex SHA-256; lets a re-upload of the same file skip a paid parse call',
     status            VARCHAR(20) NOT NULL DEFAULT 'UPLOADED' COMMENT 'Application-managed CvDocumentStatus',
     status_message    TEXT NULL COMMENT 'User-facing message when status = FAILED',
-    is_active         BOOLEAN NOT NULL DEFAULT TRUE COMMENT 'One active CV per user; a new upload flips the previous row to false instead of deleting it',
+    is_active         BOOLEAN NOT NULL DEFAULT TRUE COMMENT 'Soft-delete flag. FALSE = the user removed this CV; the row stays so past interview sessions keep their link',
     uploaded_at       DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
     parsed_at         DATETIME(6) NULL,
 
