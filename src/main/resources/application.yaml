@@ -17,6 +17,30 @@ spring:
   liquibase:
     enabled: true
     change-log: classpath:db/changelog/db.changelog-master.yaml
+  servlet:
+    multipart:
+      max-file-size: 6MB
+      max-request-size: 8MB
+  # ---- Timeout cho RestClient (Spring AI dùng RestClient mặc định của Boot) ----
+  http:
+    client:
+      connect-timeout: 10s
+      read-timeout: 120s
+  # ---- Cấu hình AI (Spring AI) - Đa mô hình ----
+  ai:
+    # Primary Model: OpenAI
+    openai:
+      api-key: ${PRIMARY_AI_KEY:dummy-openai-key}
+      chat:
+        options:
+          model: ${PRIMARY_AI_MODEL:gpt-4o}
+    # Fallback Model: Gemini
+    google:
+      genai:
+        api-key: ${FALLBACK_AI_KEY:dummy-gemini-key}
+        chat:
+          options:
+            model: ${FALLBACK_AI_MODEL:gemini-3.5-flash-lite}
 
 springdoc:
   api-docs:
@@ -38,7 +62,6 @@ app:
   refresh-token:
     expiration-ms: ${REFRESH_TOKEN_EXPIRATION_MS:604800000}
     cookie-name: ${REFRESH_TOKEN_COOKIE_NAME:refresh_token}
-    # only auth apis need cookie
     cookie-path: ${REFRESH_TOKEN_COOKIE_PATH:/api/auth}
     cookie-secure: ${REFRESH_TOKEN_COOKIE_SECURE:false}
     cookie-same-site: ${REFRESH_TOKEN_COOKIE_SAME_SITE:Lax}
@@ -50,3 +73,17 @@ app:
       client-id: ${GOOGLE_CLIENT_ID:1063418979323-9esrkg9ef25jofnrjrrkdgcduhaffaia.apps.googleusercontent.com}
       jwk-set-uri: ${GOOGLE_JWK_SET_URI:https://www.googleapis.com/oauth2/v3/certs}
       issuers: ${GOOGLE_ISSUERS:https://accounts.google.com,accounts.google.com}
+  cv:
+    storage:
+      dir: ${CV_STORAGE_DIR:./data/cv}
+      max-file-size-bytes: ${CV_MAX_FILE_SIZE_BYTES:5242880}
+
+# ---- Cấu hình Retry & Fallback (Resilience4j) ----
+resilience4j.retry:
+  instances:
+    cvParseRetry:
+      maxAttempts: 2
+      waitDuration: 2s
+      retryExceptions:
+        - java.lang.RuntimeException
+
