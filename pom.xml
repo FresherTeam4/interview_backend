@@ -16,7 +16,24 @@
     <url/>
     <properties>
         <java.version>17</java.version>
+        <!-- Ghim tay: Spring Boot không quản version cho hai thư viện này -->
+        <awssdk.version>2.46.7</awssdk.version>
+        <pdfbox.version>3.0.7</pdfbox.version>
     </properties>
+
+    <dependencyManagement>
+        <dependencies>
+            <!-- BOM của AWS SDK v2: khai version một chỗ, các artifact con tự khớp nhau -->
+            <dependency>
+                <groupId>software.amazon.awssdk</groupId>
+                <artifactId>bom</artifactId>
+                <version>${awssdk.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
     <dependencies>
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -82,6 +99,28 @@
             <artifactId>jjwt-jackson</artifactId>
             <version>0.12.6</version>
             <scope>runtime</scope>
+        </dependency>
+
+        <!-- MinIO nói giao thức S3, nên dùng luôn client S3 của AWS SDK v2.
+             Artifact này chứa cả S3Client (đọc/ghi) và S3Presigner (link tải có hạn). -->
+        <dependency>
+            <groupId>software.amazon.awssdk</groupId>
+            <artifactId>s3</artifactId>
+            <exclusions>
+                <!-- Chỉ dùng client đồng bộ; bỏ client async để Netty không bị kéo vào -->
+                <exclusion>
+                    <groupId>software.amazon.awssdk</groupId>
+                    <artifactId>netty-nio-client</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+
+        <!-- Kiểm tra PDF tại chỗ trước khi gọi AI: mở được, không khoá mật khẩu,
+             đếm số trang. File hỏng bị chặn ở đây nên không tốn một lần gọi API. -->
+        <dependency>
+            <groupId>org.apache.pdfbox</groupId>
+            <artifactId>pdfbox</artifactId>
+            <version>${pdfbox.version}</version>
         </dependency>
 
 <!--        test -->

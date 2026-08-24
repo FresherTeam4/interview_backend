@@ -730,50 +730,41 @@ báo lỗi: người dùng không làm gì sai, không có lý gì bắt họ nh
 
 ### 11.1. MinIO bằng docker compose
 
-`docker-compose.yml` ở gốc project, thêm service `minio` cạnh MySQL (nếu MySQL cũng đang chạy
-docker) và một service dùng-một-lần để tạo bucket:
+`docker-compose.yml` ở gốc project, chỉ một service `minio`. MySQL không đưa vào đây vì máy dev
+đang chạy MySQL cài trực tiếp — hai bản cùng nghe cổng 3306 thì rắc rối hơn là tiện:
 
 ```yaml
 services:
   minio:
-    image: minio/minio:<ghim tag cụ thể>
+    image: minio/minio:RELEASE.2025-09-07T16-13-09Z
+    container_name: interview-minio
     command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${STORAGE_ACCESS_KEY:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${STORAGE_SECRET_KEY:-minioadmin}
     ports:
       - "9000:9000"   # S3 API
       - "9001:9001"   # web console
-    environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
     volumes:
       - minio-data:/data
     healthcheck:
       test: ["CMD", "mc", "ready", "local"]
-      interval: 5s
-      timeout: 3s
-      retries: 12
-
-  minio-init:
-    image: minio/mc:<ghim tag cụ thể>
-    depends_on:
-      minio:
-        condition: service_healthy
-    entrypoint: >
-      /bin/sh -c "
-      mc alias set local http://minio:9000 $$MINIO_ROOT_USER $$MINIO_ROOT_PASSWORD &&
-      mc mb --ignore-existing local/interview-cv &&
-      mc anonymous set none local/interview-cv
-      "
-    environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
 volumes:
   minio-data:
 ```
 
-`mc anonymous set none` là dòng quan trọng: nói rõ bucket **không** cho đọc công khai, thay vì
-tin vào mặc định. `latest` không dùng — ghim tag lúc thêm file thật, để máy người khác trong
-team không bị bản khác.
+Tag ghim `RELEASE.2025-09-07T16-13-09Z` — bản community mới nhất còn được đẩy lên Docker Hub
+(sau đó MinIO chuyển sang AIStor, không có tag 2026 nào). Không dùng `latest`.
+
+**Không có service `minio/mc` để tạo bucket.** Thay vào đó ứng dụng tự tạo bucket lúc khởi động
+nếu chưa có (chunk hạ tầng service). Hai lý do: bớt một container và một tag phải ghim; và bucket
+mới tạo bằng API mặc định đã là private, nên `mc anonymous set none` chỉ là xác nhận lại điều vốn
+đã đúng. Khi deploy thật mà key của app không có quyền `CreateBucket` thì bước này chỉ log cảnh
+báo rồi đi tiếp, vì bucket lúc đó đã do hạ tầng dựng sẵn.
 
 ### 11.2. Nói chuyện với MinIO bằng AWS SDK v2
 
@@ -809,11 +800,15 @@ Tách sẵn từ đầu rẻ hơn là đi tìm nguyên nhân sau.
 
 | Việc | Thêm gì | Ghi chú |
 |---|---|---|
-| Validate PDF | `org.apache.pdfbox:pdfbox` | chỉ mở file, kiểm mã hóa, đếm trang — không rút text |
-| MinIO / S3 | `software.amazon.awssdk:s3` (qua BOM `bom`) | kèm `S3Presigner` nằm trong cùng artifact |
+| Validate PDF | `org.apache.pdfbox:pdfbox` `3.0.7` | chỉ mở file, kiểm mã hóa, đếm trang — không rút text |
+| MinIO / S3 | `software.amazon.awssdk:s3` qua BOM `2.46.7` | kèm `S3Presigner` nằm trong cùng artifact |
 | Gọi Gemini | không thêm gì | `RestClient` có sẵn trong `spring-boot-starter-web` |
 
-Version cụ thể đối chiếu Maven Central rồi ghim số chính xác, không để range.
+Hai version ghim thẳng số, đối chiếu Maven Central ngày 24/08/2026, không để range. Spring Boot
+không quản version cho cả hai nên phải tự khai.
+
+Artifact `s3` bị loại `netty-nio-client`: code chỉ dùng `S3Client` đồng bộ, client sync đi kèm là
+`apache5-client`, nên Netty vào chỉ để nằm đó. Đã kiểm bằng `dependency:tree`.
 
 ### 11.4. `application.yaml`
 
@@ -821,40 +816,66 @@ Version cụ thể đối chiếu Maven Central rồi ghim số chính xác, kh�
 spring:
   servlet:
     multipart:
-      max-file-size: 5MB
-      max-request-size: 6MB
+      max-file-size: 6MB
+      max-request-size: 8MB
 
 app:
   cv:
     max-file-size-bytes: ${CV_MAX_FILE_SIZE_BYTES:5242880}
     max-pages: ${CV_MAX_PAGES:10}
     max-per-user: ${CV_MAX_PER_USER:10}
-    parse-timeout-ms: ${CV_PARSE_TIMEOUT_MS:25000}
   storage:
     endpoint: ${STORAGE_ENDPOINT:http://localhost:9000}
     public-endpoint: ${STORAGE_PUBLIC_ENDPOINT:http://localhost:9000}
     bucket: ${STORAGE_BUCKET:interview-cv}
     region: ${STORAGE_REGION:us-east-1}
-    access-key: ${STORAGE_ACCESS_KEY:}
-    secret-key: ${STORAGE_SECRET_KEY:}
+    access-key: ${STORAGE_ACCESS_KEY:minioadmin}
+    secret-key: ${STORAGE_SECRET_KEY:minioadmin}
     presign-ttl-seconds: ${STORAGE_PRESIGN_TTL_SECONDS:300}
   ai:
-    base-url: ${AI_BASE_URL:https://generativelanguage.googleapis.com/v1beta}
+    base-url: ${GEMINI_BASE_URL:https://generativelanguage.googleapis.com/v1beta}
     api-key: ${GEMINI_API_KEY:}
-    model: ${AI_MODEL:gemini-3.6-flash}
-    schema-version: ${AI_SCHEMA_VERSION:v1}
+    model: ${GEMINI_MODEL:gemini-3.6-flash}
+    schema-version: ${GEMINI_SCHEMA_VERSION:v1}
+    timeout-ms: ${GEMINI_TIMEOUT_MS:25000}
 ```
 
-`access-key`, `secret-key`, `api-key` **để rỗng trong file**, thiếu thì app fail lúc khởi động.
-Không commit key thật vào repo.
+Ba chỗ lệch so với bản nháp ở trên, có lý do:
 
-`parse-timeout-ms` 25 giây, thấp hơn mốc 30 giây của tiêu chí nghiệm thu, để còn chỗ cho việc
-tải file từ MinIO và ghi DB.
+**`multipart.max-file-size` là 6MB chứ không phải 5MB.** Đặt bằng đúng hạn mức của app thì file
+5.1MB bị servlet chặn trước, người dùng nhận `MaxUploadSizeExceededException` thô. Để servlet nới
+hơn một chút thì chính app trả `CV_FILE_TOO_LARGE` kèm câu tiếng Việt. Handler cho
+`MaxUploadSizeExceededException` vẫn giữ, nhưng chỉ còn là lưới an toàn cho file cực lớn.
+
+**`access-key` / `secret-key` mặc định `minioadmin`, không để rỗng.** Cặp này đã nằm trong
+`docker-compose.yml` của repo rồi, nên bắt app chết lúc khởi động chỉ tạo thêm một bước thủ công
+mà không giữ được bí mật nào cả. Deploy thật thì set biến môi trường như bình thường.
+
+**`api-key` để rỗng nhưng app vẫn khởi động được.** Nếu bắt fail lúc khởi động thì không ai chạy
+được test hay làm tính năng khác mà không có key Gemini. Thay vào đó thiếu key thì lần bóc tách
+đầu tiên trả `FAILED` kèm lý do — vẫn đúng yêu cầu "báo lỗi rõ khi không xử lý được", và
+`AiProperties.hasApiKey()` là chỗ duy nhất kiểm tra việc này.
+
+**`parse-timeout-ms` bỏ khỏi `app.cv`, đổi thành `app.ai.timeout-ms`.** Hai chỗ cùng một con số
+thì sớm muộn lệch nhau. Thứ thật sự cắt thời gian là timeout của lần gọi HTTP sang Gemini, nên nó
+thuộc `app.ai`. 25 giây, thấp hơn mốc 30 giây của tiêu chí nghiệm thu, để còn chỗ tải file từ
+MinIO và ghi DB.
+
+Ngoài ra `AI_*` đổi tên biến môi trường thành `GEMINI_*` cho khớp với `GEMINI_API_KEY` — đọc
+`docker compose`/CI config sẽ thấy cả bốn biến cùng một tiền tố.
+
+Validate lúc khởi động không chỉ là `@NotBlank`: tên bucket phải khớp `[a-z0-9][a-z0-9-]{1,61}[a-z0-9]`
+(sai thì cả path-style URL lẫn link presigned đều vỡ), `presign-ttl-seconds` không quá 604800 giây
+(trần cứng của SigV4), `model` ≤ 100 và `schema-version` ≤ 20 ký tự cho vừa cột trong
+`cv_parse_results`. Sai thì app không lên, kèm số dòng trong `application.yaml`.
 
 Thêm `@EnableAsync` + một `ThreadPoolTaskExecutor` hàng đợi giới hạn cho việc parse. Điểm yếu đã
-biết: app restart giữa lúc đang `PARSING` thì hàng đó treo mãi. Cách xử lý gọn nhất là một job
-lúc khởi động, quét `status = PARSING` cũ hơn 5 phút và chuyển thành `FAILED` để người dùng bấm
-thử lại được — làm luôn trong chunk service.
+biết: app restart giữa lúc đang `PARSING` thì hàng đó treo mãi. Cách xử lý: một job chạy ở
+`ApplicationReadyEvent`, quét toàn bộ `status = PARSING` và chuyển thành `FAILED` để người dùng
+bấm thử lại được — không dùng ngưỡng thời gian, vì `POST /api/cvs/{id}/parse` đặt `PARSING` trên
+một CV có `uploaded_at` cũ, ngưỡng 5 phút sẽ bắn chết một lần parse đang chạy hợp lệ. Lúc vừa
+khởi động thì không thể có lần parse nào đang chạy, nên quét sạch là đúng. Đánh đổi: giả định chỉ
+có một instance — instance thứ hai boot lên sẽ giết parse của instance đầu.
 
 ## 12. Chia chunk để review
 

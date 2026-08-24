@@ -1,0 +1,37 @@
+# Stack phụ trợ cho tính năng CV. Chạy: docker compose up -d
+#
+# Chỉ có MinIO. MySQL vẫn dùng bản cài trực tiếp trên máy như trước, không đưa vào đây
+# để không có hai MySQL cùng nghe cổng 3306.
+#
+# Bucket không tạo ở file này: ứng dụng tự tạo lúc khởi động nếu chưa có, nên clone repo
+# về là chạy được ngay, không cần thao tác tay trên console.
+#
+# Biến môi trường cần export cho ứng dụng (không phải cho file này):
+#   GEMINI_API_KEY  — thiếu thì upload vẫn xong nhưng bóc tách trả FAILED
+#   STORAGE_ACCESS_KEY / STORAGE_SECRET_KEY — chỉ khi đổi khác mặc định dưới đây
+
+services:
+  minio:
+    image: minio/minio:RELEASE.2025-09-07T16-13-09Z
+    container_name: interview-minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${STORAGE_ACCESS_KEY:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${STORAGE_SECRET_KEY:-minioadmin}
+    ports:
+      # API S3 — app nói chuyện qua cổng này
+      - "9000:9000"
+      # Console web — vào http://localhost:9001 để xem file bằng mắt
+      - "9001:9001"
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  # File CV nằm trong volume, nên docker compose down không mất dữ liệu đã upload.
+  # Muốn xoá sạch: docker compose down -v
+  minio-data:
