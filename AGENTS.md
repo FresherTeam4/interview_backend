@@ -40,6 +40,22 @@
    reporting completion.
 6. Report changed behavior, verification actually run, and any remaining risk or blocked check.
 
+### Interview Engine module review override
+
+- Effective from Interview Engine `M03`, do not create new unit, controller, or integration test
+  files for a module unless the user explicitly asks for automated tests.
+- This scoped agreement overrides the general test-authoring and per-change test-execution
+  requirements in this file for planned Interview Engine modules `M03`–`M16`; it does not delete,
+  disable, or weaken tests that already exist from `M01`/`M02` or other features.
+- Default verification is compilation plus relevant configuration, Liquibase/Hibernate, startup,
+  and diff checks in proportion to the change. Do not run a large test suite by default merely as a
+  module review ritual; report any verification that was actually run.
+- At the end of every module, explain the implementation and runtime flow. For every API created or
+  changed, provide a Swagger checklist with sample input, expected success response, and important
+  failure cases. Authentication setup is intentionally omitted from that checklist.
+- For a foundation module with no public API, provide safe local database, application-startup, or
+  log inspection steps instead of Swagger instructions.
+
 Do not edit generated or local-only artifacts such as `target/`, `.idea/`, `.claude/settings.local.json`, or local database files. Do not commit, push, rewrite Git history, delete data, or run destructive Docker/database commands unless the user explicitly requests it.
 
 ## Build and verification commands

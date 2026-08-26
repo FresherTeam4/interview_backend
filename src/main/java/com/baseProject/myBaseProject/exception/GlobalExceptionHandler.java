@@ -24,6 +24,7 @@ import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.method.annotation.HandlerMethodValidationException;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 import org.springframework.security.access.AccessDeniedException;
@@ -129,6 +130,22 @@ public class GlobalExceptionHandler {
                 "Required parameter '%s' is missing".formatted(ex.getParameterName()), req);
     }
 
+    /** Validation của {@code @RequestParam}/{@code @PathVariable} trên controller method. */
+    @ExceptionHandler(HandlerMethodValidationException.class)
+    public ResponseEntity<ApiError> handleMethodValidation(
+            HandlerMethodValidationException ex,
+            HttpServletRequest req) {
+        Map<String, String> fields = new LinkedHashMap<>();
+        ex.getParameterValidationResults().forEach(result -> {
+            String parameterName = result.getMethodParameter().getParameterName();
+            String field = parameterName == null ? "parameter" : parameterName;
+            result.getResolvableErrors().stream()
+                    .findFirst()
+                    .ifPresent(error -> fields.putIfAbsent(field, error.getDefaultMessage()));
+        });
+        return validationResponse(fields, req);
+    }
+
     /**
      * File upload vượt {@code spring.servlet.multipart.max-file-size}.
      *
@@ -136,15 +153,15 @@ public class GlobalExceptionHandler {
      * {@code MultipartFile}, nên chốt kiểm dung lượng trong service không bao giờ chạy tới.
      * Thiếu handler này thì Spring trả 500 trắng cho một lỗi hoàn toàn là của người gửi.
      *
-     * <p>Câu thông báo không kèm số MB vì hạn mức ở đây là của servlet, còn hạn mức app
-     * ({@code cv.max-file-size-bytes}) mới là con số nói với người dùng — nó nằm ở tầng khác.
+     * <p>Câu thông báo không kèm số MB vì hạn mức ở đây là của servlet; validator theo từng
+     * feature mới biết con số cụ thể để trả mã CV/JD tương ứng.
      */
     @ExceptionHandler(MaxUploadSizeExceededException.class)
     public ResponseEntity<ApiError> handleMaxUploadSize(MaxUploadSizeExceededException ex,
                                                        HttpServletRequest req) {
         log.debug("Upload rejected by servlet limit on {} {}", req.getMethod(), req.getRequestURI());
-        return build(HttpStatus.CONTENT_TOO_LARGE, ErrorCode.CV_FILE_TOO_LARGE,
-                Message.CV_FILE_TOO_LARGE, req);
+        return build(HttpStatus.CONTENT_TOO_LARGE, ErrorCode.UPLOAD_TOO_LARGE,
+                Message.UPLOAD_TOO_LARGE, req);
     }
 
     // request path not found. vd path /api...

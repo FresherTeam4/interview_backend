@@ -58,6 +58,12 @@ app:
     max-file-size-bytes: ${CV_MAX_FILE_SIZE_BYTES:5242880}
     max-pages: ${CV_MAX_PAGES:10}
     max-per-user: ${CV_MAX_PER_USER:10}
+  jd:
+    min-text-chars: ${JD_MIN_TEXT_CHARS:100}
+    max-text-chars: ${JD_MAX_TEXT_CHARS:50000}
+    max-per-user: ${JD_MAX_PER_USER:30}
+    max-file-size-bytes: ${JD_MAX_FILE_SIZE_BYTES:2097152}
+    max-pages: ${JD_MAX_PAGES:20}
   storage:
     endpoint: ${STORAGE_ENDPOINT:http://localhost:9000}
     public-endpoint: ${STORAGE_PUBLIC_ENDPOINT:http://localhost:9000}

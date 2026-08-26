@@ -30,3 +30,8 @@ databaseChangeLog:
   - include:
       file: 024-create-profile-projects.sql
       relativeToChangelogFile: true
+
+  # Nhóm 3 — Interview Engine MVP
+  - include:
+      file: 025-create-job-descriptions.sql
+      relativeToChangelogFile: true

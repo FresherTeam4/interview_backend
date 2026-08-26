@@ -34,6 +34,8 @@ public enum ErrorCode {
     METHOD_NOT_ALLOWED,
     INTERNAL_ERROR,
     GOOGLE_LOGIN_NOT_CONFIGURED,
+    /** 413 — lưới an toàn multipart toàn cục, trước validator theo feature. */
+    UPLOAD_TOO_LARGE,
 
     // ---- CV & Hồ sơ ----
     // Nhóm theo tính năng thay vì theo mã HTTP như các khối trên: 14 mã này trải từ 400 tới
@@ -65,5 +67,27 @@ public enum ErrorCode {
     /** 409 — hồ sơ được chọn chưa bấm xác nhận (nhóm 4 dùng lúc tạo phiên). */
     PROFILE_NOT_CONFIRMED,
     /** 503 — không kết nối được object storage. */
-    STORAGE_UNAVAILABLE
+    STORAGE_UNAVAILABLE,
+
+    // ---- Job Description ----
+    /** 400 — body không có nội dung JD hoặc chỉ gồm khoảng trắng. */
+    JD_CONTENT_REQUIRED,
+    /** 400 — nội dung JD nằm ngoài giới hạn độ dài cấu hình. */
+    JD_INVALID_TEXT,
+    /** 404 — JD không thuộc người gọi hoặc đã xóa mềm. */
+    JD_NOT_FOUND,
+    /** 409 — cố sửa một JD đã xác nhận. */
+    JD_ALREADY_CONFIRMED,
+    /** 409 — đã giữ đủ số JD active được cấu hình. */
+    JD_LIMIT_REACHED,
+    /** 415 — extension không phải PDF/TXT hoặc nội dung không khớp loại file. */
+    JD_INVALID_FILE_TYPE,
+    /** 413 — file vượt {@code app.jd.max-file-size-bytes}. */
+    JD_FILE_TOO_LARGE,
+    /** 400 — file hỏng, không đọc được hoặc PDF được mã hóa. */
+    JD_FILE_CORRUPTED,
+    /** 400 — PDF vượt {@code app.jd.max-pages}. */
+    JD_TOO_MANY_PAGES,
+    /** 409 — yêu cầu file URL cho một JD source TEXT. */
+    JD_HAS_NO_FILE
 }

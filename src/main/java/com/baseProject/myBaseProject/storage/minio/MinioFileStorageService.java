@@ -12,6 +12,7 @@ import software.amazon.awssdk.core.exception.SdkException;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.CreateBucketRequest;
+import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.model.HeadBucketRequest;
 import software.amazon.awssdk.services.s3.model.NoSuchBucketException;
@@ -73,7 +74,7 @@ public class MinioFileStorageService implements FileStorageService {
                             .contentLength((long) content.length)
                             .build(),
                     RequestBody.fromBytes(content));
-            log.debug("Đã ghi {} byte vào '{}'", content.length, key);
+            log.debug("Đã ghi {} byte vào object storage", content.length);
         } catch (SdkException e) {
             throw new StorageUnavailableException(e);
         }
@@ -104,6 +105,18 @@ public class MinioFileStorageService implements FileStorageService {
                             .build());
 
             return new PresignedUrl(presigned.url().toString(), presigned.expiration());
+        } catch (SdkException e) {
+            throw new StorageUnavailableException(e);
+        }
+    }
+
+    @Override
+    public void delete(String key) {
+        try {
+            s3Client.deleteObject(DeleteObjectRequest.builder()
+                    .bucket(storageProperties.bucket())
+                    .key(key)
+                    .build());
         } catch (SdkException e) {
             throw new StorageUnavailableException(e);
         }

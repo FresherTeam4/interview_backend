@@ -1,6 +1,6 @@
 # Interview Engine MVP — Kịch bản sản phẩm và kế hoạch triển khai
 
-> Trạng thái: Bản nháp để review lần cuối trước khi viết code  
+> Trạng thái: M00–M01 đã approved; M02 implementation review candidate
 > Ngày cập nhật: 2026-08-26  
 > Phạm vi: Interview Engine, JD, text interview, voice turn-based và scoring
 
@@ -112,11 +112,11 @@ Xác nhận JD
 `rawText` giữ nguyên kết quả trích xuất đầu tiên. `confirmedText` là bản cuối cùng được dùng để
 sinh câu hỏi. Không ghi đè `rawText` bằng nội dung người dùng sửa.
 
-Đề xuất mặc định cho MVP:
+Contract đã khóa trong M00:
 
 - Hỗ trợ text được dán trực tiếp.
 - Hỗ trợ file PDF và TXT UTF-8.
-- DOCX để sau nếu chưa muốn thêm parser/dependency mới.
+- DOCX để sau MVP.
 - Một request chỉ được có file hoặc text, không được có cả hai hoặc không có gì.
 
 ### 2.3. Cấu hình và sinh kịch bản
@@ -255,7 +255,7 @@ COMPLETED
 Nhánh kết thúc khác:
 
 ```text
-IN_PROGRESS/PAUSED → ABANDONED
+READY/IN_PROGRESS/PAUSED/FAILED → ABANDONED
 Bất kỳ bước xử lý hợp lệ nào → FAILED
 ```
 
@@ -290,6 +290,10 @@ hạn 24 giờ.
 - Scheduler xử lý từng session trong transaction riêng, không khóa toàn bộ danh sách.
 - Timeout ghi transition với actor `SCHEDULER` và `endReason = TIMEOUT_24H`.
 - Session sau đó được scoring bằng các câu trả lời đã xác nhận.
+- Các trạng thái bị timeout là `READY`, `IN_PROGRESS` và `PAUSED`. Session `READY` chưa có answer
+  vẫn đi qua `SCORING`, tạo report `INSUFFICIENT_EVIDENCE`, rồi chuyển `COMPLETED`.
+- Cho phép người dùng abandon session `FAILED` để lỗi provider lặp lại không giữ vĩnh viễn một
+  slot trong giới hạn session mở.
 
 ---
 
@@ -323,7 +327,7 @@ Mỗi câu lưu tối thiểu:
 
 ### 4.2. Số lượng và độ khó
 
-Giá trị mặc định đề xuất:
+Giá trị đã khóa trong M00:
 
 | Độ khó | Số câu gốc |
 |---|---:|
@@ -333,8 +337,8 @@ Giá trị mặc định đề xuất:
 
 Độ khó phải thay đổi cả chiều sâu câu hỏi, không chỉ thay đổi số lượng.
 
-Ngoài giới hạn tối đa hai follow-up liên tiếp trên mỗi câu gốc, nên có thêm ngân sách tối đa năm
-follow-up cho toàn phiên để thời lượng không tăng tới 15–21 câu hỏi.
+Ngoài giới hạn tối đa hai follow-up liên tiếp trên mỗi câu gốc, backend áp dụng ngân sách tối đa
+năm follow-up cho toàn phiên để thời lượng không tăng tới 15–21 câu hỏi.
 
 ### 4.3. Độ đa dạng
 
@@ -383,8 +387,8 @@ Quy tắc server-side:
 - Câu trả lời phải được persist trước khi gọi AI.
 - Nếu AI lỗi, câu trả lời không bị mất và tác vụ sinh lượt tiếp theo có thể retry idempotently.
 - Không giữ transaction database mở trong lúc chờ AI.
-- Prompt yêu cầu giọng điệu chuyên nghiệp; chất lượng được kiểm tra thêm bằng evaluation dataset,
-  không dựa hoàn toàn vào unit test hoặc prompt.
+- Prompt yêu cầu giọng điệu chuyên nghiệp; chất lượng được người dùng đánh giá thủ công bằng bộ dữ
+  liệu mẫu, không dựa hoàn toàn vào prompt.
 
 ---
 
@@ -410,7 +414,8 @@ turn tương ứng và tiếp tục tác vụ an toàn.
 
 ### 6.2. Idempotency
 
-- Mỗi câu trả lời từ client mang `clientTurnId` hoặc `Idempotency-Key`.
+- Mỗi câu trả lời từ client bắt buộc mang `clientTurnId`; tạo session bắt buộc có
+  `Idempotency-Key`.
 - `(session_id, client_turn_id)` là unique.
 - Double-click hoặc retry cùng key trả lại kết quả cũ, không tạo hai turn.
 - Session có optimistic-lock `version` để ngăn hai tab cùng tiến phiên.
@@ -564,7 +569,7 @@ interview_sessions 1 ── N session_state_transitions
 interview_sessions 1 ── N session_questions
 interview_sessions 1 ── N session_turns
 interview_sessions 1 ── N voice_answer_attempts
-interview_sessions 1 ── 1 session_reports
+interview_sessions 1 ── 0..1 session_reports
 ```
 
 FK từ `session_questions` tới project/skill dùng `ON DELETE SET NULL`, vì question text và source
@@ -583,9 +588,12 @@ CV/Profile.
 ```http
 POST /api/job-descriptions/text
 POST /api/job-descriptions/file
+GET  /api/job-descriptions
 GET  /api/job-descriptions/{jobDescriptionId}
+GET  /api/job-descriptions/{jobDescriptionId}/file
 PUT  /api/job-descriptions/{jobDescriptionId}
 POST /api/job-descriptions/{jobDescriptionId}/confirm
+DELETE /api/job-descriptions/{jobDescriptionId}
 ```
 
 ### 10.2. Session
@@ -593,12 +601,14 @@ POST /api/job-descriptions/{jobDescriptionId}/confirm
 ```http
 POST /api/sessions
 GET  /api/sessions/{sessionId}
-GET  /api/sessions?status=ACTIVE
+GET  /api/sessions?scope=ACTIVE
+GET  /api/sessions/{sessionId}/rubric
 POST /api/sessions/{sessionId}/start
 POST /api/sessions/{sessionId}/pause
 POST /api/sessions/{sessionId}/resume
 POST /api/sessions/{sessionId}/complete
 POST /api/sessions/{sessionId}/abandon
+POST /api/sessions/{sessionId}/retry
 ```
 
 Tạo session:
@@ -656,9 +666,11 @@ POST /api/sessions/{sessionId}/answers
 
 ```http
 POST /api/sessions/{sessionId}/voice-attempts
+GET  /api/sessions/{sessionId}/voice-attempts/{attemptId}
 PUT  /api/sessions/{sessionId}/voice-attempts/{attemptId}/transcript
 POST /api/sessions/{sessionId}/voice-attempts/{attemptId}/confirm
 GET  /api/sessions/{sessionId}/turns/{turnId}/audio
+POST /api/sessions/{sessionId}/turns/{turnId}/audio/retry
 ```
 
 Ghi âm lại tạo `voice-attempts` mới. Confirm request mang `expectedVersion` và idempotency key.
@@ -757,7 +769,8 @@ ID rồi mới trả dữ liệu trước khi kiểm tra ownership.
   hơn audio.
 - Mọi provider nằm sau port riêng: question generator, follow-up decider, scorer, TTS và STT.
 - Prompt và JSON schema được version hóa trong `src/main/resources/ai`.
-- Unit test mock toàn bộ AI, STT, TTS và object storage; không dùng mạng thật.
+- AI, STT, TTS và object storage nằm sau port riêng để thay provider và kiểm tra thủ công từng biên
+  mà không làm lẫn business workflow.
 - Các latency SLO được ghi thành metric/duration trong dữ liệu hoặc monitoring.
 
 ---
@@ -772,14 +785,20 @@ Maven multi-module và không tách thành microservice.
 Mỗi module chỉ giải quyết một nhóm hành vi đủ nhỏ để:
 
 - Đọc được diff mà không phải hiểu đồng thời toàn bộ Interview Engine.
-- Chạy focused test và quan sát được kết quả riêng.
+- Có thể quan sát kết quả riêng qua Swagger, database hoặc log tùy loại module.
 - Review được schema, API và business rule liên quan trong một lần.
 - Có điểm dừng rõ ràng để approve, yêu cầu sửa hoặc từ chối.
 - Không buộc module sau phải sửa lại contract đã được approve của module trước.
 
 Một số module nền tảng chưa tạo ra đầy đủ luồng người dùng khi đứng riêng, nhưng sau mỗi module code
-phải compile, test liên quan phải pass và application không được có dependency bắt buộc chưa tồn
-tại. MVP chỉ được coi là phát hành được sau module `M16`.
+phải compile và application không được có dependency bắt buộc chưa tồn tại. MVP chỉ được coi là
+phát hành được sau module `M16`.
+
+> **Quy ước tiết kiệm token — có hiệu lực từ M03:** Codex không tạo thêm unit test, controller test
+> hoặc integration test cho từng module, trừ khi người dùng yêu cầu rõ. Các test đã tồn tại từ
+> M01/M02 được giữ nguyên, không xóa, không làm yếu và không được hiểu là yêu cầu phải tiếp tục viết
+> test cho module sau. Việc review chuyển sang giải thích implementation và hướng dẫn kiểm tra thủ
+> công; nếu module có API thì ưu tiên Swagger.
 
 ### 13.2. Quy trình review và approval bắt buộc
 
@@ -788,11 +807,11 @@ Chỉ triển khai **một module tại một thời điểm** theo quy trình:
 ```text
 Chốt scope module
    ↓
-Implement production code + migration + test + docs liên quan
+Implement production code + migration + docs liên quan
    ↓
-Chạy focused verification và broader verification phù hợp
+Compile/kiểm tra cấu hình, schema và diff ở mức cần thiết
    ↓
-Gửi review package
+Gửi giải thích implementation + hướng dẫn kiểm tra thủ công
    ↓
 DỪNG — chờ APPROVED hoặc CHANGES_REQUESTED
    ↓
@@ -802,12 +821,15 @@ Chỉ khi APPROVED mới bắt đầu module tiếp theo
 Review package cuối mỗi module phải có:
 
 1. Hành vi đã hoàn thành và hành vi cố ý chưa làm.
-2. Danh sách file thay đổi, tách rõ production/test/docs/migration.
+2. Giải thích luồng hoạt động từ controller đến persistence/provider.
 3. API hoặc database contract mới/thay đổi.
-4. Các lệnh verification đã thực sự chạy và kết quả.
-5. Demo request/response hoặc cách kiểm tra thủ công nếu module có API.
-6. Rủi ro hoặc quyết định còn mở.
-7. Tóm tắt module kế tiếp nhưng chưa triển khai nó.
+4. Danh sách file production/docs/migration đã thay đổi.
+5. Hướng dẫn test từng API trên Swagger, bỏ qua hướng dẫn authentication vì đây là bước hiển nhiên.
+6. Kết quả mong đợi cho happy path và các lỗi nghiệp vụ quan trọng.
+7. Với module chưa có API: cách kiểm tra bằng application startup, database hoặc log.
+8. Các lệnh compile/schema/diff check đã thực sự chạy và kết quả.
+9. Rủi ro hoặc quyết định còn mở.
+10. Tóm tắt module kế tiếp nhưng chưa triển khai nó.
 
 Quy ước approval:
 
@@ -826,9 +848,10 @@ Một module chỉ đủ điều kiện gửi review khi:
 - API dùng DTO/mapper, không expose entity.
 - Ownership được enforce trong repository/service query.
 - Expected business failures đi qua `DomainException`, `ErrorCode`, `Message` và `ApiError`.
-- External provider được mock trong unit test; không cần mạng, Gemini, MinIO, STT hoặc TTS thật.
-- Focused tests của module pass.
-- Existing tests không bị xóa, tắt hoặc làm yếu.
+- Không tạo automated test mới theo quy ước có hiệu lực từ M03, trừ khi người dùng yêu cầu.
+- Existing tests không bị xóa, tắt hoặc làm yếu; lỗi do test cũ phát hiện không được che giấu.
+- Module có API phải có checklist Swagger đủ happy path và failure path quan trọng.
+- Module chưa có API phải nêu rõ cách quan sát schema/database/log để người dùng tự kiểm tra.
 - `git diff --check` pass và không có generated/local/secret file.
 - OpenAPI và tài liệu được cập nhật cùng module nếu contract đã public.
 - Không có code chết được tạo trước “để dành” cho module sau.
@@ -875,13 +898,28 @@ Các milestone dễ quan sát:
 | C — Voice turn-based ready | `M12–M15` | Record, STT, edit, confirm, TTS/replay, text fallback |
 | D — MVP release candidate | `M16` | Full combined MVP đủ verification và tài liệu |
 
-Migration numbering trong tài liệu technical hiện là draft `025–031`. Vì module nhỏ hơn migration
-draft ban đầu, số changeset chính thức sẽ được khóa ở `M00` và có thể mở rộng tới `032/033`; tuyệt
-đối không sửa changeset `001–024` đã có.
+Migration sequence chính thức đã được khóa cho review M00:
+
+```text
+025-create-job-descriptions.sql             [M01]
+026-create-rubric-tables.sql                [M03]
+027-seed-interview-rubric-v1.sql            [M03]
+028-create-interview-session-foundation.sql [M04]
+029-create-session-questions.sql            [M05]
+030-create-session-turns.sql                [M08]
+031-create-interview-report-tables.sql      [M10]
+032-create-voice-answer-attempts.sql        [M12]
+033-create-turn-audio-assets.sql            [M15]
+```
+
+Migration chỉ được tạo trong module sở hữu, không tạo placeholder trước và tuyệt đối không sửa
+changeset `001–024` đã có. Chi tiết ownership nằm ở mục 23 của tài liệu technical.
 
 ---
 
 ### M00 — Khóa contract và implementation sequence
+
+**Trạng thái:** `APPROVED M00` ngày 2026-08-26.
 
 **Mục tiêu**
 
@@ -890,7 +928,7 @@ Biến hai tài liệu MVP thành contract được approve trước khi tạo s
 **Bao gồm**
 
 - Duyệt toàn bộ mục 14 của file này.
-- Duyệt mục “Open decisions” và checklist trong `interview-engine-mvp-api.md`.
+- Duyệt “M00 decision log” và checklist trong `interview-engine-mvp-api.md`.
 - Chốt tên endpoint `/api/sessions` và `/api/job-descriptions`.
 - Chốt JD bắt buộc, loại file, số câu, follow-up budget, active-session limit và ngôn ngữ.
 - Chốt state machine, `AwaitingAction`, async `202 + polling`, partial scoring policy.
@@ -914,11 +952,13 @@ Biến hai tài liệu MVP thành contract được approve trước khi tạo s
 - `git diff --check`.
 - Maven không cần chạy vì chỉ thay đổi documentation.
 
-**Điểm dừng:** chờ `APPROVED M00`.
+**Review gate:** đã qua với `APPROVED M00`; M01 được phép bắt đầu.
 
 ---
 
 ### M01 — Job Description text lifecycle
+
+**Trạng thái:** `APPROVED M01` ngày 2026-08-26; M02 được phép bắt đầu.
 
 **Kết quả người dùng**
 
@@ -926,7 +966,8 @@ Người dùng có thể tạo JD bằng text, xem, sửa bản draft, xác nh�
 
 **Phạm vi kỹ thuật**
 
-- Migration `job_descriptions` với source `TEXT`, ownership, raw/confirmed text và soft delete.
+- Migration `job_descriptions` khóa đầy đủ shape text/file, ownership, raw/confirmed text và soft
+  delete; M01 chỉ mở hành vi source `TEXT`, các cột file luôn `NULL` cho tới M02.
 - Entity, enum, repository, DTO, mapper, service và controller JD.
 - Typed `JobDescriptionProperties` cho giới hạn text/số JD.
 - API:
@@ -954,17 +995,19 @@ Người dùng có thể tạo JD bằng text, xem, sửa bản draft, xác nh�
 
 **Acceptance để approve**
 
-- CRUD lifecycle text hoạt động qua controller test.
+- CRUD lifecycle text hoạt động qua Swagger theo đúng contract.
 - Confirm lần hai giữ nguyên `confirmedAt`.
 - Update confirmed JD trả conflict.
 - List không gây N+1 và không trả full text ngoài endpoint detail.
-- Focused service/controller/entity tests pass.
+- Response và error code có thể kiểm tra thủ công trên Swagger.
 
-**Điểm dừng:** chờ `APPROVED M01`.
+**Review gate:** đã qua khi người dùng yêu cầu tiếp tục trực tiếp với M02 ngày 2026-08-26.
 
 ---
 
 ### M02 — Job Description file ingestion
+
+**Trạng thái:** implementation đã hoàn thành, chờ `APPROVED M02`.
 
 **Kết quả người dùng**
 
@@ -995,12 +1038,72 @@ Người dùng upload JD PDF/TXT, nhận text trích xuất để review và có
 - Không trả storage key hoặc presigned URL trong log.
 - Không làm thay đổi behavior CV ngoài mã lỗi global đã được chốt.
 
+**Luồng implementation M02**
+
+1. Controller nhận multipart `title` và `file`, chuyển toàn bộ use case xuống service.
+2. `JobDescriptionFileProcessor` kiểm tra file tồn tại, giới hạn 2 MB, làm sạch filename và chọn
+   extractor theo extension đã hỗ trợ.
+3. PDF extractor kiểm magic `%PDF`, mở bytes bằng PDFBox, chặn file hỏng/mã hóa/quá 20 trang rồi
+   dùng `PDFTextStripper` lấy text. TXT extractor dùng `CharsetDecoder` strict UTF-8.
+4. Service trim text, kiểm giới hạn 100–50.000 ký tự, chuẩn hóa line ending để tạo SHA-256.
+5. Chỉ sau khi validation/extraction thành công, file gốc mới được upload vào MinIO với key ngẫu
+   nhiên; filename người dùng không tham gia object key.
+6. Một transaction ngắn lock user, kiểm quota và insert JD `DRAFT`; `rawText` và `confirmedText`
+   ban đầu giống nhau.
+7. Nếu transaction DB thất bại sau upload, service gọi storage delete theo best effort rồi trả lỗi
+   gốc. Presigned URL chỉ được tạo khi người dùng gọi endpoint xem file.
+
 **Acceptance để approve**
 
 - PDF/TXT hợp lệ tạo JD `DRAFT` với raw/confirmed text giống nhau.
 - File hỏng, encrypted, quá trang, sai UTF-8, quá size hoặc sai magic bị từ chối đúng code.
 - Text source gọi file URL trả `JD_HAS_NO_FILE`.
-- Mock storage tests bao phủ upload failure và compensation.
+- Storage failure trả `STORAGE_UNAVAILABLE`; DB failure sau upload kích hoạt xóa bù theo thiết kế.
+
+**Hướng dẫn kiểm tra M02 trên Swagger**
+
+Chuẩn bị application và MinIO local, sau đó mở `/swagger-ui.html`. Phần authentication được bỏ qua
+trong hướng dẫn này theo quy ước review.
+
+1. Mở `POST /api/job-descriptions/file`, chọn một PDF hoặc TXT có nội dung từ 100 ký tự trở lên,
+   dung lượng không quá 2 MB; `title` có thể để trống.
+2. Execute và kiểm tra `201 Created`, header `Location`, `sourceType = FILE`, `status = DRAFT`,
+   `originalFilename` đúng tên an toàn, `rawText` bằng `confirmedText`; response không được có
+   `storageKey`.
+3. Gọi `GET /api/job-descriptions/{id}` và đối chiếu text đã trích xuất vẫn giống response tạo mới.
+4. Nếu text trích xuất cần sửa, gọi `PUT /api/job-descriptions/{id}` với JSON:
+
+   ```json
+   {
+     "title": "Backend Engineer",
+     "confirmedText": "Nội dung JD đã kiểm tra và chỉnh sửa, dài tối thiểu 100 ký tự..."
+   }
+   ```
+
+   `rawText` phải giữ nguyên; chỉ `confirmedText` và `title` thay đổi.
+5. Gọi `POST /api/job-descriptions/{id}/confirm`; kết quả phải là `status = READY` và có
+   `confirmedAt`. Gọi lại confirm phải giữ nguyên mốc `confirmedAt` đầu tiên.
+6. Gọi `GET /api/job-descriptions/{id}/file`; kiểm tra response có `url`, `expiresAt` và URL mở được
+   trước khi hết hạn mặc định năm phút.
+
+Các failure case nên thử trên Swagger:
+
+| Input/thao tác | Kết quả mong đợi |
+|---|---|
+| Không gửi file hoặc file rỗng | `400 JD_CONTENT_REQUIRED` |
+| `.docx`, extension lạ hoặc `.pdf` không bắt đầu bằng `%PDF` | `415 JD_INVALID_FILE_TYPE` |
+| PDF hỏng hoặc có mật khẩu | `400 JD_FILE_CORRUPTED` |
+| PDF trên 20 trang | `400 JD_TOO_MANY_PAGES` |
+| TXT có byte sequence UTF-8 không hợp lệ | `400 JD_INVALID_TEXT` |
+| Text extract dưới 100 hoặc trên 50.000 ký tự | `400 JD_INVALID_TEXT` |
+| File lớn hơn 2 MB nhưng dưới servlet limit | `413 JD_FILE_TOO_LARGE` |
+| Request vượt servlet limit toàn cục | `413 UPLOAD_TOO_LARGE` |
+| Gọi `/file` bằng ID của JD tạo từ `/text` | `409 JD_HAS_NO_FILE` |
+| Gọi detail/file sau khi soft-delete | `404 JD_NOT_FOUND` |
+
+Để kiểm tra storage failure trên local, có thể tạm dừng MinIO rồi upload một file hợp lệ; API phải
+trả `503 STORAGE_UNAVAILABLE` và không tạo JD mới. Không cố tình phá database để thử compensation;
+nhánh này được giải thích trong review code vì không có cách Swagger an toàn để ép commit DB fail.
 
 **Điểm dừng:** chờ `APPROVED M02`.
 
@@ -1018,7 +1121,7 @@ Hệ thống có một rubric công khai, versioned và bất biến để mọi
 - Seed `TECH_INTERVIEW_FRESHER` v1 với năm criterion và bốn level/criterion.
 - Dùng `rubrics.current_version_id`, không dùng unique `(rubric_id, is_current)`.
 - Entities/repositories/read service.
-- Test tổng weight bằng `1.000`, version published/current và đủ level.
+- Service kiểm tra tổng weight bằng `1.000`, version published/current và đủ level.
 
 **Cố ý chưa làm**
 
@@ -1075,7 +1178,7 @@ processing claim; chưa public luồng tạo session.
 
 **Acceptance để approve**
 
-- Test toàn bộ transition hợp lệ/bất hợp lệ.
+- Có bảng ma trận để người dùng đối chiếu toàn bộ transition hợp lệ/bất hợp lệ.
 - Mỗi transition ghi đúng một log và dùng fixed `Clock`.
 - Stale version bị từ chối.
 - Claim/reclaim stale work có kiểm soát.
@@ -1265,7 +1368,7 @@ cho AI làm hỏng state machine.
 - Prompt/schema follow-up v1.
 - Structured decision `FOLLOW_UP | NEXT_QUESTION | END_INTERVIEW`.
 - Evidence quote validation.
-- Max hai follow-up/câu gốc và năm follow-up/toàn phiên theo default.
+- Max hai follow-up/câu gốc và năm follow-up/toàn phiên theo contract M00.
 - Persist `parentTurnId`, `isFollowUp`, `followUpDepth`.
 - Retry/recovery cho `ENGINE_RESPONSE` và `ENGINE_RETRY`.
 - Evaluation fixtures cho đầy đủ/chưa đầy đủ/prompt injection/professional tone.
@@ -1345,12 +1448,12 @@ treo vĩnh viễn.
 **Phạm vi kỹ thuật**
 
 - `InterviewSessionExpiryJob` quét batch và xử lý mỗi session bằng transaction riêng.
-- Timeout cho `READY`, `IN_PROGRESS`, `PAUSED` theo quyết định cuối.
+- Timeout cho `READY`, `IN_PROGRESS`, `PAUSED` theo contract M00.
 - `endReason = TIMEOUT_24H`, actor `SCHEDULER`.
 - Dispatch scoring hoặc insufficient-evidence report.
 - Hoàn thiện `InterviewWorkflowRecoveryJob` cho script, next-turn và scoring.
 - Atomic claim/reclaim stale work, bounded retry/backoff.
-- Race test timeout vs answer/complete/pause.
+- Có kịch bản kiểm tra thủ công race timeout vs answer/complete/pause.
 
 **Cố ý chưa làm**
 
@@ -1365,7 +1468,7 @@ treo vĩnh viễn.
 
 **Acceptance để approve**
 
-- Fixed-clock tests chứng minh đúng mốc 24 giờ.
+- Hướng dẫn cấu hình timeout ngắn để kiểm tra thủ công đúng mốc hết hạn.
 - Answer thắng race hợp lệ không bị expire nhầm.
 - Stale work được xử lý đúng một lần dù recovery chạy đồng thời.
 - Transition/reason/report đúng cho session có và không có answer.
@@ -1558,8 +1661,8 @@ tích hợp frontend.
 - Failure recovery xuyên script/follow-up/scoring/STT/TTS.
 - OpenAPI hoàn chỉnh và frontend integration guide.
 - Đồng bộ product/API docs với code thực tế.
-- Full test suite và MySQL/Liquibase/Hibernate validation khi môi trường hỗ trợ.
-- Manual smoke test dùng dữ liệu giả, không dùng CV/JD/audio thật.
+- MySQL/Liquibase/Hibernate validation khi môi trường hỗ trợ.
+- Manual smoke test trên Swagger dùng dữ liệu giả, không dùng CV/JD/audio thật.
 
 **Không bao gồm**
 
@@ -1572,11 +1675,11 @@ tích hợp frontend.
 - Không còn secret/debug/generated file.
 - Không có session state hoặc work item có thể treo vĩnh viễn mà không recovery.
 - Standard `ApiError`, authorization và OpenAPI nhất quán.
-- Mọi acceptance criteria IE-01–IE-06 và VO-01–VO-02 có test/evidence tương ứng.
+- Mọi acceptance criteria IE-01–IE-06 và VO-01–VO-02 có checklist/evidence thủ công tương ứng.
 
 **Acceptance để approve MVP**
 
-- Full Maven suite pass, hoặc blocker hạ tầng được ghi chính xác cùng những test đã pass.
+- Toàn bộ checklist Swagger/manual verification pass hoặc blocker hạ tầng được ghi chính xác.
 - Liquibase chạy sạch từ schema `024` và `ddl-auto=validate` pass.
 - Text E2E: create → generate → start → answer/follow-up → complete → report → resume/history.
 - Voice E2E: TTS → record → STT → edit/re-record → confirm → follow-up/report.
@@ -1587,23 +1690,39 @@ tích hợp frontend.
 
 ---
 
-## 14. Các mục cần duyệt lần cuối
+## 14. M00 product decision log
 
-Các mục dưới đây là mặc định được đề xuất, chưa nên coi là bất biến cho tới khi review xong:
+Đây là bản tóm tắt product-level của decision log kỹ thuật. Trạng thái
+`LOCKED_M00` nghĩa là quyết định đã được approve ngày 2026-08-26 và là baseline cho các module sau.
 
-| Mục | Mặc định đề xuất |
-|---|---|
-| JD có bắt buộc không? | Bắt buộc cho MVP này; CV-only có thể bổ sung sau |
-| Định dạng JD file | PDF và TXT UTF-8; DOCX để sau |
-| Có lưu file JD gốc không? | Có, lưu MinIO; database chỉ giữ storage key và text |
-| Số câu | Easy 5, Medium 6, Hard 7 |
-| Follow-up toàn phiên | Tối đa 5, ngoài giới hạn 2/câu gốc |
-| Nhiều phiên đang dở | Cho phép nhiều; trang chủ sắp xếp theo `lastActivityAt` |
-| Audio tối đa mỗi answer | 5 phút; cần đối chiếu chi phí/provider trước khi code |
-| Retention audio | 30 ngày; transcript giữ theo vòng đời session/account |
-| Phiên timeout chưa có answer | `COMPLETED` + `INSUFFICIENT_EVIDENCE`, không có điểm |
-| Ngôn ngữ MVP | Tiếng Việt; giữ `languageCode` để mở rộng |
-| Public API path | `/api/sessions` |
-| Realtime/barge-in | Không nằm trong MVP, làm tuần tự sau MVP |
+| ID | Quyết định đã chốt cho review | Trạng thái |
+|---|---|---|
+| `D-001` | JD bắt buộc; tạo session bằng `profileId` đã confirm + `jobDescriptionId` `READY` | `LOCKED_M00` |
+| `D-002` | JD nhận text trực tiếp hoặc PDF/TXT UTF-8; DOCX sau MVP | `LOCKED_M00` |
+| `D-003` | Lưu file JD gốc ở MinIO; database chỉ giữ storage key/metadata/text | `LOCKED_M00` |
+| `D-004` | Confirmed JD bất biến; muốn đổi phải tạo JD mới | `LOCKED_M00` |
+| `D-005` | Public resource path là `/api/job-descriptions` và `/api/sessions` | `LOCKED_M00` |
+| `D-006` | Cho phép nhiều session mở, tối đa 5/user; active list sắp xếp `lastActivityAt DESC` | `LOCKED_M00` |
+| `D-007` | Base questions: Easy 5, Medium 6, Hard 7 | `LOCKED_M00` |
+| `D-008` | Follow-up tối đa 2 liên tiếp/câu gốc và 5/toàn phiên | `LOCKED_M00` |
+| `D-009` | Ngôn ngữ MVP là tiếng Việt (`vi`) | `LOCKED_M00` |
+| `D-010` | Timeout 24 giờ cho `READY/IN_PROGRESS/PAUSED`; không có state `EXPIRED` | `LOCKED_M00` |
+| `D-011` | Persist `AwaitingAction`; poll/read không kéo dài timeout | `LOCKED_M00` |
+| `D-012` | Workflow AI/STT/scoring dùng `202 + polling`, poll tối thiểu mỗi 1 giây | `LOCKED_M00` |
+| `D-013` | DB là nguồn sự thật; create/session turn/attempt có key bắt buộc, state command dùng optimistic version | `LOCKED_M00` |
+| `D-014` | Script thuộc session; không tạo `interview_scripts` dùng chung | `LOCKED_M00` |
+| `D-015` | Partial score normalize trên phần weight đã chấm và phải gắn nhãn; không answer thì score `NULL` | `LOCKED_M00` |
+| `D-016` | Rubric v1 gồm năm criterion/weight đã ghi trong tài liệu technical | `LOCKED_M00` |
+| `D-017` | Voice answer tồn tại dưới dạng attempt/draft; chỉ confirm mới gửi vào conversation/scoring | `LOCKED_M00` |
+| `D-018` | Audio tối đa 15 MB/5 phút, WebM/Opus + MP4/AAC, retention 30 ngày | `LOCKED_M00` |
+| `D-019` | API không trả trước future questions | `LOCKED_M00` |
+| `D-020` | Migration dùng chính xác `025–033` theo module owner; không sửa `001–024` | `LOCKED_M00` |
+| `D-021` | Chọn/benchmark STT provider tại gate trước `M13` | `DEFERRED_M13` |
+| `D-022` | Chọn/benchmark TTS provider tại gate trước `M15` | `DEFERRED_M15` |
 
-Sau khi các mục này được duyệt, schema và API contract mới được coi là đã khóa để bắt đầu migration.
+Realtime voice và barge-in vẫn nằm ngoài combined MVP, được làm tuần tự sau `M16`. Hai provider
+decision được defer không ảnh hưởng schema hay việc triển khai `M01–M12` vì STT/TTS nằm sau port.
+Decision log đầy đủ, rubric weights và checklist approval nằm tại mục 24–25 của
+`interview-engine-mvp-api.md`.
+
+**Review gate M00:** đã qua; M01 được bắt đầu sau approval.

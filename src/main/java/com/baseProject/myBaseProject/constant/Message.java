@@ -10,6 +10,7 @@ public final class Message {
     public static final String CONSTRAINT_VIOLATION = "Resource already exists or violates a data constraint";
     public static final String ENDPOINT_NOT_FOUND = "No endpoint found for this request";
     public static final String INTERNAL_ERROR = "Internal server error";
+    public static final String UPLOAD_TOO_LARGE = "File tải lên vượt quá dung lượng cho phép";
     public static final String EMAIL_NOT_FOUND = "Email not found";
     public static final String USER_NOT_FOUND = "User not found";
     public static final String MISSING_REFRESH_TOKEN = "Refresh token cookie is missing";
@@ -45,9 +46,28 @@ public final class Message {
     public static final String PROFILE_NOT_CONFIRMED =
             "Hồ sơ này chưa được xác nhận thông tin chính xác";
     public static final String STORAGE_UNAVAILABLE =
-            "Hiện chưa lưu được file CV, vui lòng thử lại sau ít phút";
+            "Hiện chưa lưu được file, vui lòng thử lại sau ít phút";
 
-    // ---- status_message của lần bóc tách ----
+    // ---- Job Description ----
+    public static final String JD_CONTENT_REQUIRED = "Nội dung JD không được để trống";
+    public static final String JD_INVALID_TEXT =
+            "Nội dung JD phải từ %d đến %d ký tự";
+    public static final String JD_INVALID_UTF8 = "File TXT phải được mã hóa bằng UTF-8 hợp lệ";
+    public static final String JD_NOT_FOUND = "Không tìm thấy JD này";
+    public static final String JD_ALREADY_CONFIRMED =
+            "JD đã được xác nhận; hãy tạo JD mới nếu bạn muốn thay đổi nội dung";
+    public static final String JD_LIMIT_REACHED =
+            "Bạn đã giữ tối đa %d JD. Hãy xóa một JD cũ trước khi tạo JD mới";
+    public static final String JD_INVALID_FILE_TYPE = "Chỉ nhận file JD định dạng PDF hoặc TXT";
+    public static final String JD_FILE_TOO_LARGE =
+            "File JD vượt quá dung lượng cho phép, tối đa %d MB";
+    public static final String JD_FILE_CORRUPTED =
+            "Không đọc được file JD này, hoặc file PDF đang được đặt mật khẩu";
+    public static final String JD_TOO_MANY_PAGES =
+            "File JD có %d trang, tối đa %d trang";
+    public static final String JD_HAS_NO_FILE = "JD dạng text không có file gốc để xem lại";
+
+    // ---- status_message của lần bóc tách CV ----
     // Không trả qua HTTP: bóc tách chạy sau khi request đã kết thúc, nên chỗ đọc được là
     // cột status_message. Viết cho người dùng, không đổ stacktrace hay message thô của Gemini.
 
