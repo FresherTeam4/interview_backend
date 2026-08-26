@@ -76,11 +76,10 @@ app:
     # Link tải CV sống 5 phút: đủ để bấm mở, không đủ để đem đi chia sẻ
     presign-ttl-seconds: ${STORAGE_PRESIGN_TTL_SECONDS:300}
   ai:
-    base-url: ${GEMINI_BASE_URL:https://generativelanguage.googleapis.com/v1beta}
     # Để trống trong repo. Thiếu key thì lần bóc tách đầu tiên trả FAILED kèm lý do,
     # chứ không làm app không khởi động được.
-    api-key: ${GEMINI_API_KEY:AIzaSyB97eaxyORxharkg3FfG4bCdM1Drm30qNk}
-    model: ${GEMINI_MODEL:gemini-3.5-flash-lite}
+    api-key: ${GEMINI_API_KEY:}
+    model: ${GEMINI_MODEL:gemini-3.5-flash}
     # Ghi vào cv_parse_results.schema_version để biết raw_json theo layout nào
     schema-version: ${GEMINI_SCHEMA_VERSION:v1}
     # Yêu cầu nghiệp vụ là dưới 30 giây; cắt ở 25 giây để còn chỗ ghi DB và log

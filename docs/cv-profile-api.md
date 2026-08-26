@@ -16,7 +16,7 @@ người dùng tự chọn dùng cái nào lúc tạo phiên phỏng vấn**. Đ
 | Sửa tay khi có CV mới | **Mất sạch**, `confirmed_at` bị reset | Không mất gì, hồ sơ cũ y nguyên |
 | Database | `019`–`024` như đang có | **Phải sửa `021`** (mục 2) |
 | Entity / repository | như đang có | 1 entity + 2 repository phải sửa (mục 2.3) |
-| AI provider | để mở | **Gemini** `gemini-3.6-flash` (mục 5) |
+| AI provider | để mở | **Gemini** `gemini-3.5-flash` qua Spring AI (mục 5) |
 | Storage | để mở | **MinIO** qua docker compose (mục 11) |
 | Rút text từ PDF | PDFBox `PDFTextStripper` | Gửi thẳng file PDF cho Gemini, PDFBox chỉ còn để validate |
 | Đường dẫn | `/api/cv`, `/api/profile` | `/api/cvs`, `/api/profiles` (số nhiều, có `{id}`) |
@@ -372,82 +372,53 @@ inline của Gemini là 50MB cho PDF, mình chặn ở 5MB nên không chạm t�
 
 ### 5.2. Request
 
-```
-POST https://generativelanguage.googleapis.com/v1beta/interactions
-x-goog-api-key: <GEMINI_API_KEY>
-Content-Type: application/json
-```
+```java
+Media pdf = Media.builder()
+        .mimeType(MediaType.APPLICATION_PDF)
+        .data(pdfContent)
+        .name("candidate-cv")
+        .build();
 
-```json
-{
-  "model": "gemini-3.6-flash",
-  "input": [
-    { "type": "document", "data": "<base64 của file PDF>", "mime_type": "application/pdf" },
-    { "type": "text", "text": "<prompt bóc tách, cố định theo schema_version>" }
-  ],
-  "response_format": {
-    "type": "text",
-    "mime_type": "application/json",
-    "schema": { "...": "JSON Schema ở mục 5.4" }
-  }
-}
+GoogleGenAiChatOptions options = GoogleGenAiChatOptions.builder()
+        .model(aiProperties.model())
+        .outputSchema(responseSchema)
+        .build();
+
+ChatResponse response = chatModel.call(new Prompt(
+        UserMessage.builder().text(prompt).media(pdf).build(), options));
 ```
 
-`response_format` là thứ làm tiêu chí *"Trả về JSON theo schema cố định"* thành ràng buộc thật
-do Gemini cưỡng chế, chứ không phải lời nhắc trong prompt rồi cầu mong. Vẫn parse phòng thủ ở
-phía mình.
+`GoogleGenAiChatOptions.outputSchema(...)` gửi schema bằng structured output native của Gemini,
+không chỉ ghép hướng dẫn định dạng vào prompt. Spring AI và Google GenAI SDK tự mã hóa `byte[]`
+của PDF sang inline data và dựng request `generateContent`; code ứng dụng không còn tự tạo JSON,
+header API key hay parse response của provider.
 
-Dùng `RestClient` có sẵn trong `spring-boot-starter-web`, không thêm SDK. Base64 của file 5MB
-thành ~6.7MB chuỗi JSON — cần nới `spring.codec.max-in-memory-size` nếu gặp lỗi buffer, ghi
-lại đây để nhớ.
+File schema trên đĩa vẫn là JSON Schema chuẩn. Trước khi đưa cho Spring AI 2.0, nullable dạng
+`type: ["string", "null"]` được chuyển sang OpenAPI `type: "string", nullable: true`, vì kiểu
+`Schema` của Google SDK dùng biểu diễn này. `additionalProperties` chưa có trường tương ứng trong
+kiểu SDK nên được bỏ ở bản gửi provider; ứng dụng vẫn parse phòng thủ vào DTO và bỏ trường lạ.
 
 ### 5.3. Response và cách đọc
 
-```json
-{
-  "id": "v1_ChdpQUFvYXI...",
-  "status": "completed",
-  "object": "interaction",
-  "model": "gemini-3.6-flash",
-  "usage": { "total_tokens": 4210, "total_input_tokens": 3980, "total_output_tokens": 230 },
-  "steps": [
-    { "type": "thought", "signature": "EvEFCu4FAQw..." },
-    { "type": "model_output",
-      "content": [ { "type": "text", "text": "{\"headline\":\"Java Backend Fresher\", ...}" } ] }
-  ]
-}
-```
-
-Cách đọc, và ba chỗ **không được viết tắt** kẻo `NullPointerException` lúc Gemini trả khác dự đoán:
+Spring AI chuẩn hóa response của provider thành `ChatResponse`:
 
 | Cần gì | Lấy ở đâu | Lưu vào |
 |---|---|---|
-| JSON hồ sơ | phần tử `steps[]` có `type = "model_output"` → `content[0].text` | `cv_parse_results.raw_json` |
-| Model thật đã chạy | `model` ở cấp ngoài cùng | `cv_parse_results.model_name` |
-| Số token | `usage.total_tokens` | `cv_parse_results.token_cost` |
+| JSON hồ sơ | `response.getResult().getOutput().getText()` | `cv_parse_results.raw_json` |
+| Model thật đã chạy | `response.getMetadata().getModel()` | `cv_parse_results.model_name` |
+| Số token | `response.getMetadata().getUsage().getTotalTokens()` | `cv_parse_results.token_cost` |
 | Thời gian | tự đo bằng `System.nanoTime()` quanh lời gọi | `cv_parse_results.duration_ms` |
 
-- `steps[]` **không phải phần tử đầu tiên là `model_output`** — trước nó còn `thought`, và có
-  thể có `user_input`. Phải lọc theo `type`, không lấy `steps[0]`.
-- `status` phải bằng `"completed"`. Giá trị khác (`requires_action`...) → coi như thất bại.
-- `content[0].text` là **chuỗi chứa JSON**, phải parse hai lần: đọc `text` rồi mới
-  `readValue` chuỗi đó.
-
-Hai chỗ tôi chưa dám chắc và sẽ kiểm bằng đúng một lệnh `curl` trước khi viết client, thay vì
-đoán:
-
-1. Tài liệu Google hiện có cả `/v1beta/interactions` và `/v1beta2/interactions`, và
-   `response_format` xuất hiện ở cả dạng object lẫn dạng array. Vì vậy base URL nằm trong
-   `application.yaml` (`app.ai.base-url`) để đổi không phải build lại.
-2. Gemini 3.x có "thinking" (`thought` trong `steps`, `thoughts_tokens` trong `usage`), tức là
-   tốn thêm thời gian trong ngân sách 30 giây. Nếu có tham số tắt/giảm thì nên tắt cho việc
-   bóc tách thuần cơ học này — tôi sẽ tra đúng tên tham số lúc đó, không bịa ra ở đây.
+Text vẫn được parse lại bằng `JsonMapper` thành `CvParsedPayload`; response rỗng, JSON sai hoặc
+không khớp DTO đều thành `CvParseFailedException.badResponse`. Lỗi 429/5xx, lỗi mạng và timeout
+được phân loại riêng. Bean model để lazy nên thiếu API key không làm ứng dụng hoặc test khác
+không liên quan tới CV chết lúc khởi động.
 
 ### 5.4. Schema JSON cố định — `v1`
 
 Lưu nguyên văn vào `cv_parse_results.raw_json` với `schema_version = "v1"`. Đây là hợp đồng:
 đổi cấu trúc thì tăng lên `v2`, không sửa tại chỗ. Cùng một object này vừa làm
-`response_format.schema` gửi cho Gemini, vừa làm DTO parse về.
+structured-output schema gửi cho Gemini, vừa làm DTO parse về.
 
 ```json
 {
@@ -729,8 +700,8 @@ báo lỗi: người dùng không làm gì sai, không có lý gì bắt họ nh
   trả thẳng bytes, `Content-Disposition: inline`): kín hơn, đổi lại băng thông đi qua server.
 - **Giới hạn multipart đặt ở tầng container**: `max-file-size: 5MB`, `max-request-size: 6MB`.
   Nhờ vậy body 500MB bị chặn trước khi vào code, không buffer hết vào RAM.
-- **`GEMINI_API_KEY` không bao giờ vào repo**, đọc từ biến môi trường, mặc định rỗng để app fail
-  ngay lúc khởi động nếu thiếu — hơn là chạy được rồi mọi lần parse đều `FAILED`.
+- **`GEMINI_API_KEY` không bao giờ vào repo**, đọc từ biến môi trường và mặc định rỗng. Bean
+  Spring AI để lazy; thiếu key thì riêng lần parse CV chuyển sang `FAILED`, app vẫn khởi động.
 - **Không gửi gì ngoài file CV cho Gemini**: không kèm email, không kèm `userId`. File CV đã đủ
   nhạy cảm, và đây là dữ liệu cá nhân của người thật.
 - `/api/cvs/**` và `/api/profiles/**` **không cần sửa `SecurityConfig`**: whitelist hiện tại chỉ
@@ -814,10 +785,10 @@ Tách sẵn từ đầu rẻ hơn là đi tìm nguyên nhân sau.
 |---|---|---|
 | Validate PDF | `org.apache.pdfbox:pdfbox` `3.0.7` | chỉ mở file, kiểm mã hóa, đếm trang — không rút text |
 | MinIO / S3 | `software.amazon.awssdk:s3` qua BOM `2.46.7` | kèm `S3Presigner` nằm trong cùng artifact |
-| Gọi Gemini | không thêm gì | `RestClient` có sẵn trong `spring-boot-starter-web` |
+| Gọi Gemini | `org.springframework.ai:spring-ai-google-genai` qua BOM `2.0.1` | `GoogleGenAiChatModel`, PDF media và native structured output |
 
-Hai version ghim thẳng số, đối chiếu Maven Central ngày 24/08/2026, không để range. Spring Boot
-không quản version cho cả hai nên phải tự khai.
+Các version được ghim, không để range. Spring Boot không quản version cho AWS SDK, PDFBox hay
+Spring AI nên mỗi hệ thư viện có một version/BOM rõ ràng trong `pom.xml`.
 
 Artifact `s3` bị loại `netty-nio-client`: code chỉ dùng `S3Client` đồng bộ, client sync đi kèm là
 `apache5-client`, nên Netty vào chỉ để nằm đó. Đã kiểm bằng `dependency:tree`.
@@ -845,9 +816,8 @@ app:
     secret-key: ${STORAGE_SECRET_KEY:minioadmin}
     presign-ttl-seconds: ${STORAGE_PRESIGN_TTL_SECONDS:300}
   ai:
-    base-url: ${GEMINI_BASE_URL:https://generativelanguage.googleapis.com/v1beta}
     api-key: ${GEMINI_API_KEY:}
-    model: ${GEMINI_MODEL:gemini-3.6-flash}
+    model: ${GEMINI_MODEL:gemini-3.5-flash}
     schema-version: ${GEMINI_SCHEMA_VERSION:v1}
     timeout-ms: ${GEMINI_TIMEOUT_MS:25000}
 ```
@@ -956,7 +926,7 @@ chunk tương ứng — mỗi dòng đều là sửa một chỗ, không phải 
 | 2 | Tên cột `is_active` | Giữ tên, đổi nghĩa thành xóa mềm (2.2) | Đổi thành `is_deleted` và đảo logic — giờ là lúc rẻ nhất |
 | 3 | Trần số CV | 10 / người | Số khác, một dòng cấu hình |
 | 4 | Đọc PDF | Gửi thẳng file cho Gemini, PDFBox chỉ validate (5.1) | PDFBox rút text như bản 1: rẻ hơn nhưng CV nhiều cột thì bóc tách kém |
-| 5 | Model | `gemini-3.6-flash` | `gemini-3.1-pro-preview` nếu chất lượng bóc tách chưa đủ, chậm và đắt hơn |
+| 5 | Model | `gemini-3.5-flash` | model khác qua `GEMINI_MODEL` nếu cần đổi cân bằng chất lượng/chi phí |
 | 6 | Xem lại file CV | URL presigned 5 phút | Stream qua backend: kín hơn, tốn băng thông server |
 | 7 | Sửa hồ sơ | Một `PUT` cho cả form, diff theo `id` (6.2) | REST chi tiết ~10 endpoint nếu UI sửa từng dòng |
 | 8 | `confirmed_at` sau khi sửa | Giữ nguyên (6.2) | Reset về `NULL`, bắt xác nhận lại mỗi lần sửa |

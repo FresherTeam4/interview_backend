@@ -16,9 +16,6 @@ import org.springframework.validation.annotation.Validated;
 @Validated
 @ConfigurationProperties(prefix = "app.ai")
 public record AiProperties(
-        @NotBlank(message = "Thiếu app.ai.base-url")
-        String baseUrl,
-
         /** Không để trong repo. Rỗng là hợp lệ, xem javadoc của lớp. */
         String apiKey,
 
