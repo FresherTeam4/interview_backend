@@ -79,7 +79,7 @@ app:
     # Để trống trong repo. Thiếu key thì lần bóc tách đầu tiên trả FAILED kèm lý do,
     # chứ không làm app không khởi động được.
     api-key: ${GEMINI_API_KEY:}
-    model: ${GEMINI_MODEL:gemini-3.5-flash}
+    model: ${GEMINI_MODEL:gemini-3.5-flash-lite}
     # Ghi vào cv_parse_results.schema_version để biết raw_json theo layout nào
     schema-version: ${GEMINI_SCHEMA_VERSION:v1}
     # Yêu cầu nghiệp vụ là dưới 30 giây; cắt ở 25 giây để còn chỗ ghi DB và log
