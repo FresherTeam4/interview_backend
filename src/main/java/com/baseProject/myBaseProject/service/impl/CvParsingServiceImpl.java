@@ -96,7 +96,7 @@ public class CvParsingServiceImpl implements CvParsingService {
             return;
         }
 
-        document.setStatus(CvDocumentStatus.PARSING);
+        document.markParsing();
         cvDocumentRepository.save(document);
 
         byte[] content = downloadOrFail(document);
@@ -105,9 +105,7 @@ public class CvParsingServiceImpl implements CvParsingService {
         Instant now = clock.instant();
         writeResultAndProfile(cvDocumentId, outcome, now);
 
-        document.setStatus(CvDocumentStatus.PARSED);
-        document.setParsedAt(now);
-        document.setStatusMessage(null);
+        document.markParsed(now);
         cvDocumentRepository.save(document);
     }
 
@@ -147,11 +145,7 @@ public class CvParsingServiceImpl implements CvParsingService {
             return;
         }
 
-        document.setStatus(CvDocumentStatus.PARSED);
-        document.setStatusMessage(null);
-        if (document.getParsedAt() == null) {
-            document.setParsedAt(clock.instant());
-        }
+        document.markParsed(clock.instant());
         cvDocumentRepository.save(document);
     }
 
@@ -164,8 +158,7 @@ public class CvParsingServiceImpl implements CvParsingService {
                     return;
                 }
 
-                document.setStatus(CvDocumentStatus.FAILED);
-                document.setStatusMessage(statusMessage);
+                document.markFailed(statusMessage);
                 cvDocumentRepository.save(document);
             });
         } catch (RuntimeException e) {
@@ -189,8 +182,7 @@ public class CvParsingServiceImpl implements CvParsingService {
         }
 
         stranded.forEach(document -> {
-            document.setStatus(CvDocumentStatus.FAILED);
-            document.setStatusMessage(Message.PARSE_FAILED_INTERRUPTED_BY_RESTART);
+            document.markFailed(Message.PARSE_FAILED_INTERRUPTED_BY_RESTART);
         });
         cvDocumentRepository.saveAll(stranded);
 

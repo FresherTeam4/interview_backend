@@ -11,6 +11,7 @@ import com.baseProject.myBaseProject.exception.CvNotFoundException;
 import com.baseProject.myBaseProject.exception.CvParseFailedException;
 import com.baseProject.myBaseProject.exception.CvParseInProgressException;
 import com.baseProject.myBaseProject.exception.CvParseNotRetryableException;
+import com.baseProject.myBaseProject.mapper.CvDocumentMapper;
 import com.baseProject.myBaseProject.repository.CandidateProfileRepository;
 import com.baseProject.myBaseProject.repository.CvDocumentRepository;
 import com.baseProject.myBaseProject.repository.UserAccountRepository;
@@ -30,8 +31,10 @@ import org.springframework.web.multipart.MultipartFile;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Clock;
+import java.util.HashMap;
 import java.util.HexFormat;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -54,65 +57,43 @@ public class CvDocumentServiceImpl implements CvDocumentService {
     private final CvFileValidator cvFileValidator;
     private final CvParsingService cvParsingService;
     private final CvProperties cvProperties;
+    private final CvDocumentMapper responseMapper;
     private final Clock clock;
 
     @Override
     public CvUploadResult upload(Long userId, MultipartFile file) {
-
-        // validate
         byte[] content = cvFileValidator.validateAndRead(file);
-
-        if (cvDocumentRepository.countByUserIdAndActiveTrue(userId) >= cvProperties.maxPerUser()) {
-            throw new CvLimitReachedException(cvProperties.maxPerUser());
-        }
+        ensureUploadCapacity(userId);
 
         String checksum = sha256Hex(content);
-
-        // check if already has in db
-        Optional<CvDocument> reusable = cvDocumentRepository
-                .findFirstByUserIdAndChecksumSha256AndStatusOrderByUploadedAtDesc(
-                        userId, checksum, CvDocumentStatus.PARSED);
+        Optional<CvDocument> reusable = findReusableDocument(userId, checksum);
         if (reusable.isPresent()) {
-            CvDocument existing = reusable.get();
-            if (!existing.isActive()) {
-                existing.setActive(true);
-                cvDocumentRepository.save(existing);
-            }
-            return new CvUploadResult(toResponse(existing), true);
+            return reuseDocument(reusable.get());
         }
 
-        //upload storage
-        String storageKey = STORAGE_KEY_FORMAT.formatted(userId, UUID.randomUUID());
-        fileStorage.upload(storageKey, content, PDF_CONTENT_TYPE);
-
-        CvDocument document = cvDocumentRepository.save(CvDocument.builder()
-                .user(userAccountRepository.getReferenceById(userId))
-                .storageKey(storageKey)
-                .originalFilename(safeFilename(file.getOriginalFilename()))
-                .contentType(PDF_CONTENT_TYPE)
-                .fileSizeBytes((long) content.length)
-                .checksumSha256(checksum)
-                .status(CvDocumentStatus.UPLOADED)
-                .uploadedAt(clock.instant())
-                .build());
-
+        CvDocument document = storeNewDocument(userId, file, content, checksum);
         submitParse(document);
 
-        return new CvUploadResult(toResponse(document, null), false);
+        return new CvUploadResult(responseMapper.toResponse(document, null), false);
     }
 
     @Override
     @Transactional(readOnly = true)
     public List<CvDocumentResponse> list(Long userId) {
-        return cvDocumentRepository.findByUserIdAndActiveTrueOrderByUploadedAtDesc(userId).stream()
-                .map(this::toResponse)
+        List<CvDocument> documents =
+                cvDocumentRepository.findByUserIdAndActiveTrueOrderByUploadedAtDesc(userId);
+        Map<Long, CandidateProfile> profilesByDocumentId = loadProfilesByDocumentId(documents);
+
+        return documents.stream()
+                .map(document -> responseMapper.toResponse(
+                        document, profilesByDocumentId.get(document.getId())))
                 .toList();
     }
 
     @Override
     @Transactional(readOnly = true)
     public CvDocumentResponse get(Long userId, Long cvId) {
-        return toResponse(requireActiveDocument(userId, cvId));
+        return loadResponse(requireActiveDocument(userId, cvId));
     }
 
     @Override
@@ -132,8 +113,7 @@ public class CvDocumentServiceImpl implements CvDocumentService {
 
         switch (document.getStatus()) {
             case FAILED -> {
-                document.setStatus(CvDocumentStatus.UPLOADED);
-                document.setStatusMessage(null);
+                document.prepareForRetry();
                 cvDocumentRepository.save(document);
 
                 submitParse(document);
@@ -142,7 +122,7 @@ public class CvDocumentServiceImpl implements CvDocumentService {
             case PARSED -> throw new CvParseNotRetryableException();
         }
 
-        return toResponse(document, null);
+        return responseMapper.toResponse(document, null);
     }
 
     @Override
@@ -154,9 +134,7 @@ public class CvDocumentServiceImpl implements CvDocumentService {
             throw new CvParseInProgressException();
         }
 
-        document.setActive(false);
-
-        cvDocumentRepository.save(document);
+        document.deactivate();
     }
 
     private CvDocument requireActiveDocument(Long userId, Long cvId) {
@@ -170,30 +148,67 @@ public class CvDocumentServiceImpl implements CvDocumentService {
         } catch (TaskRejectedException e) {
             CvParseFailedException failure = CvParseFailedException.queueFull(e);
             log.warn("Hàng đợi bóc tách đầy, cvDocumentId={}", document.getId(), e);
-            document.setStatus(CvDocumentStatus.FAILED);
-            document.setStatusMessage(failure.getStatusMessage());
+            document.markFailed(failure.getStatusMessage());
             cvDocumentRepository.save(document);
         }
     }
 
-    private CvDocumentResponse toResponse(CvDocument document) {
-        return toResponse(document, candidateProfileRepository.findByCvDocumentId(document.getId())
-                .orElse(null));
+    private void ensureUploadCapacity(Long userId) {
+        if (cvDocumentRepository.countByUserIdAndActiveTrue(userId) >= cvProperties.maxPerUser()) {
+            throw new CvLimitReachedException(cvProperties.maxPerUser());
+        }
     }
 
-    private CvDocumentResponse toResponse(CvDocument document, CandidateProfile profile) {
-        return new CvDocumentResponse(
-                document.getId(),
-                document.getOriginalFilename(),
-                document.getContentType(),
-                document.getFileSizeBytes(),
-                document.getStatus(),
-                document.getStatusMessage(),
-                document.getUploadedAt(),
-                document.getParsedAt(),
-                profile == null ? null : profile.getId(),
-                profile != null && profile.isConfirmed(),
-                profile == null ? null : profile.getHeadline());
+    private Optional<CvDocument> findReusableDocument(Long userId, String checksum) {
+        return cvDocumentRepository
+                .findFirstByUserIdAndChecksumSha256AndStatusOrderByUploadedAtDesc(
+                        userId, checksum, CvDocumentStatus.PARSED);
+    }
+
+    private CvUploadResult reuseDocument(CvDocument document) {
+        if (!document.isActive()) {
+            document.reactivate();
+            cvDocumentRepository.save(document);
+        }
+        return new CvUploadResult(loadResponse(document), true);
+    }
+
+    private CvDocument storeNewDocument(Long userId,
+                                        MultipartFile file,
+                                        byte[] content,
+                                        String checksum) {
+        String storageKey = STORAGE_KEY_FORMAT.formatted(userId, UUID.randomUUID());
+        fileStorage.upload(storageKey, content, PDF_CONTENT_TYPE);
+
+        return cvDocumentRepository.save(CvDocument.builder()
+                .user(userAccountRepository.getReferenceById(userId))
+                .storageKey(storageKey)
+                .originalFilename(safeFilename(file.getOriginalFilename()))
+                .contentType(PDF_CONTENT_TYPE)
+                .fileSizeBytes((long) content.length)
+                .checksumSha256(checksum)
+                .status(CvDocumentStatus.UPLOADED)
+                .uploadedAt(clock.instant())
+                .build());
+    }
+
+    private CvDocumentResponse loadResponse(CvDocument document) {
+        CandidateProfile profile = candidateProfileRepository
+                .findByCvDocumentId(document.getId())
+                .orElse(null);
+        return responseMapper.toResponse(document, profile);
+    }
+
+    private Map<Long, CandidateProfile> loadProfilesByDocumentId(List<CvDocument> documents) {
+        if (documents.isEmpty()) {
+            return Map.of();
+        }
+
+        List<Long> documentIds = documents.stream().map(CvDocument::getId).toList();
+        Map<Long, CandidateProfile> result = new HashMap<>();
+        candidateProfileRepository.findByCvDocumentIdIn(documentIds)
+                .forEach(profile -> result.put(profile.getCvDocument().getId(), profile));
+        return result;
     }
 
     // hash file content to hex string

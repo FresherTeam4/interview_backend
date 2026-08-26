@@ -18,7 +18,6 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
-import lombok.Setter;
 
 import java.time.Instant;
 
@@ -32,7 +31,6 @@ import java.time.Instant;
         }
 )
 @Getter
-@Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
@@ -85,5 +83,35 @@ public class CvDocument {
 
     public boolean isFailed() {
         return status == CvDocumentStatus.FAILED;
+    }
+
+    public void reactivate() {
+        active = true;
+    }
+
+    public void prepareForRetry() {
+        status = CvDocumentStatus.UPLOADED;
+        statusMessage = null;
+    }
+
+    public void markParsing() {
+        status = CvDocumentStatus.PARSING;
+    }
+
+    public void markParsed(Instant completedAt) {
+        status = CvDocumentStatus.PARSED;
+        statusMessage = null;
+        if (parsedAt == null) {
+            parsedAt = completedAt;
+        }
+    }
+
+    public void markFailed(String message) {
+        status = CvDocumentStatus.FAILED;
+        statusMessage = message;
+    }
+
+    public void deactivate() {
+        active = false;
     }
 }
