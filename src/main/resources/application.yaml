@@ -55,32 +55,19 @@ app:
       jwk-set-uri: ${GOOGLE_JWK_SET_URI:https://www.googleapis.com/oauth2/v3/certs}
       issuers: ${GOOGLE_ISSUERS:https://accounts.google.com,accounts.google.com}
   cv:
-    # 5MB, tính bằng byte để so trực tiếp với MultipartFile.getSize()
     max-file-size-bytes: ${CV_MAX_FILE_SIZE_BYTES:5242880}
-    # CV dài hơn mức này gần như chắc chắn là tài liệu khác bị up nhầm
     max-pages: ${CV_MAX_PAGES:10}
-    # Không còn "ghi đè CV cũ" nữa, nên cần hạn mức để chặn up vô hạn
     max-per-user: ${CV_MAX_PER_USER:10}
   storage:
-    # Địa chỉ server nói chuyện với MinIO (trong docker network là http://minio:9000)
     endpoint: ${STORAGE_ENDPOINT:http://localhost:9000}
-    # Địa chỉ trình duyệt của người dùng mở được. Tách riêng vì link presigned ký cả
-    # hostname: ký bằng "minio" rồi trả cho trình duyệt là link chết.
     public-endpoint: ${STORAGE_PUBLIC_ENDPOINT:http://localhost:9000}
     bucket: ${STORAGE_BUCKET:interview-cv}
-    # MinIO không có region thật nhưng SigV4 vẫn bắt buộc phải có một giá trị
     region: ${STORAGE_REGION:us-east-1}
-    # Mặc định trùng với docker-compose.yml; deploy thật thì bắt buộc set biến môi trường
     access-key: ${STORAGE_ACCESS_KEY:minioadmin}
     secret-key: ${STORAGE_SECRET_KEY:minioadmin}
-    # Link tải CV sống 5 phút: đủ để bấm mở, không đủ để đem đi chia sẻ
     presign-ttl-seconds: ${STORAGE_PRESIGN_TTL_SECONDS:300}
   ai:
-    # Để trống trong repo. Thiếu key thì lần bóc tách đầu tiên trả FAILED kèm lý do,
-    # chứ không làm app không khởi động được.
     api-key: ${GEMINI_API_KEY:}
     model: ${GEMINI_MODEL:gemini-3.5-flash-lite}
-    # Ghi vào cv_parse_results.schema_version để biết raw_json theo layout nào
     schema-version: ${GEMINI_SCHEMA_VERSION:v1}
-    # Yêu cầu nghiệp vụ là dưới 30 giây; cắt ở 25 giây để còn chỗ ghi DB và log
     timeout-ms: ${GEMINI_TIMEOUT_MS:25000}
