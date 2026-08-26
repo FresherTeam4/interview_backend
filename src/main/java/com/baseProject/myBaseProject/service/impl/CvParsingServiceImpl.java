@@ -2,6 +2,7 @@ package com.baseProject.myBaseProject.service.impl;
 
 import com.baseProject.myBaseProject.config.AsyncConfig;
 import com.baseProject.myBaseProject.constant.Message;
+import com.baseProject.myBaseProject.cv.parsing.CvParserClient;
 import com.baseProject.myBaseProject.entity.CvDocument;
 import com.baseProject.myBaseProject.entity.CvParseResult;
 import com.baseProject.myBaseProject.enums.CvDocumentStatus;
@@ -10,9 +11,8 @@ import com.baseProject.myBaseProject.exception.StorageUnavailableException;
 import com.baseProject.myBaseProject.repository.CvDocumentRepository;
 import com.baseProject.myBaseProject.repository.CvParseResultRepository;
 import com.baseProject.myBaseProject.service.CandidateProfileService;
-import com.baseProject.myBaseProject.service.CvParserClient;
 import com.baseProject.myBaseProject.service.CvParsingService;
-import com.baseProject.myBaseProject.service.FileStorageService;
+import com.baseProject.myBaseProject.storage.FileStorageService;
 
 import lombok.extern.slf4j.Slf4j;
 

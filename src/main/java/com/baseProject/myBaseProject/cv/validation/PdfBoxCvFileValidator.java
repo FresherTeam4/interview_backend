@@ -1,4 +1,4 @@
-package com.baseProject.myBaseProject.service.impl;
+package com.baseProject.myBaseProject.cv.validation;
 
 import com.baseProject.myBaseProject.config.properites.CvProperties;
 import com.baseProject.myBaseProject.exception.CvFileCorruptedException;
@@ -6,8 +6,6 @@ import com.baseProject.myBaseProject.exception.CvFileRequiredException;
 import com.baseProject.myBaseProject.exception.CvFileTooLargeException;
 import com.baseProject.myBaseProject.exception.CvInvalidFileTypeException;
 import com.baseProject.myBaseProject.exception.CvTooManyPagesException;
-import com.baseProject.myBaseProject.service.CvFileValidator;
-
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.pdfbox.Loader;

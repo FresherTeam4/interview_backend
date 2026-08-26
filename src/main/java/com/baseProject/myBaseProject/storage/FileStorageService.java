@@ -1,4 +1,4 @@
-package com.baseProject.myBaseProject.service;
+package com.baseProject.myBaseProject.storage;
 
 import java.time.Instant;
 

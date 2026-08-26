@@ -893,9 +893,9 @@ exception/GlobalExceptionHandler.java   ← thêm handler MaxUploadSizeExceededE
 **Chunk 3 — hạ tầng service.** Ba thứ độc lập nhau, test riêng được.
 ```
 config/AsyncConfig.java   config/S3Config.java
-service/FileStorageService.java  + impl/MinioFileStorageService.java
-service/CvFileValidator.java     + impl/PdfBoxCvFileValidator.java
-service/CvParserClient.java      + impl/GeminiCvParserClient.java
+storage/FileStorageService.java  + storage/minio/MinioFileStorageService.java
+cv/validation/CvFileValidator.java + cv/validation/PdfBoxCvFileValidator.java
+cv/parsing/CvParserClient.java   + cv/parsing/gemini/GeminiCvParserClient.java
 ```
 
 **Chunk 4 — service.** Chỗ chứa toàn bộ quyết định ở mục 4, 6.

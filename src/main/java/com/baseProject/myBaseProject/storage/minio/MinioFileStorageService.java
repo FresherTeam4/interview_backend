@@ -1,8 +1,8 @@
-package com.baseProject.myBaseProject.service.impl;
+package com.baseProject.myBaseProject.storage.minio;
 
 import com.baseProject.myBaseProject.config.properites.StorageProperties;
 import com.baseProject.myBaseProject.exception.StorageUnavailableException;
-import com.baseProject.myBaseProject.service.FileStorageService;
+import com.baseProject.myBaseProject.storage.FileStorageService;
 
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;

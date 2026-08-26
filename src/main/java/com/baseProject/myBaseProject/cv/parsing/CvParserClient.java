@@ -1,4 +1,4 @@
-package com.baseProject.myBaseProject.service;
+package com.baseProject.myBaseProject.cv.parsing;
 
 import com.baseProject.myBaseProject.dto.ai.CvParsedPayload;
 

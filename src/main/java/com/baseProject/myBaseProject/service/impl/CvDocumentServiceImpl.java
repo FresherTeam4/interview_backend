@@ -1,6 +1,7 @@
 package com.baseProject.myBaseProject.service.impl;
 
 import com.baseProject.myBaseProject.config.properites.CvProperties;
+import com.baseProject.myBaseProject.cv.validation.CvFileValidator;
 import com.baseProject.myBaseProject.dto.cv.CvDocumentResponse;
 import com.baseProject.myBaseProject.dto.cv.CvFileUrlResponse;
 import com.baseProject.myBaseProject.entity.CandidateProfile;
@@ -16,9 +17,8 @@ import com.baseProject.myBaseProject.repository.CandidateProfileRepository;
 import com.baseProject.myBaseProject.repository.CvDocumentRepository;
 import com.baseProject.myBaseProject.repository.UserAccountRepository;
 import com.baseProject.myBaseProject.service.CvDocumentService;
-import com.baseProject.myBaseProject.service.CvFileValidator;
 import com.baseProject.myBaseProject.service.CvParsingService;
-import com.baseProject.myBaseProject.service.FileStorageService;
+import com.baseProject.myBaseProject.storage.FileStorageService;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

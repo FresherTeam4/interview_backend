@@ -1,8 +1,8 @@
-package com.baseProject.myBaseProject.service.impl;
+package com.baseProject.myBaseProject.cv.parsing.gemini;
 
 import com.baseProject.myBaseProject.config.properites.AiProperties;
 import com.baseProject.myBaseProject.exception.CvParseFailedException;
-import com.baseProject.myBaseProject.service.CvParserClient;
+import com.baseProject.myBaseProject.cv.parsing.CvParserClient;
 import com.google.genai.Client;
 import com.google.genai.errors.ClientException;
 import org.junit.jupiter.api.BeforeEach;
