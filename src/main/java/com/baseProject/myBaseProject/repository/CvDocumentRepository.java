@@ -36,14 +36,6 @@ public interface CvDocumentRepository extends JpaRepository<CvDocument, Long> {
     /** Enforces the per-user cap on kept CVs before accepting another upload. */
     long countByUserIdAndActiveTrue(Long userId);
 
-    /**
-     * Dedup check before parsing: re-uploading identical bytes reuses the CV already
-     * parsed from them instead of paying for another AI call — and hands back the profile
-     * the user may have edited by hand, rather than a blank duplicate beside it.
-     *
-     * <p>Filtered to a given status on purpose: only a {@code PARSED} row is worth
-     * reusing, and a newer {@code FAILED} attempt on the same bytes must not hide it.
-     */
     Optional<CvDocument> findFirstByUserIdAndChecksumSha256AndStatusOrderByUploadedAtDesc(
             Long userId, String checksumSha256, CvDocumentStatus status);
 

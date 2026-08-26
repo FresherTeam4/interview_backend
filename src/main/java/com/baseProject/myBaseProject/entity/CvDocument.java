@@ -22,15 +22,6 @@ import lombok.Setter;
 
 import java.time.Instant;
 
-/**
- * An uploaded CV file. Holds the file's metadata only; the bytes live in object storage
- * under {@link #storageKey}.
- *
- * <p>A user keeps several CVs at once and picks which one an interview runs against, so
- * uploading a new CV leaves the existing rows alone. {@code active} is a soft-delete
- * flag: removing a CV flips it to false and the row stays, because the profile built
- * from it and any interview session that used it still point here.
- */
 @Entity
 @Table(
         name = "cv_documents",
@@ -64,11 +55,9 @@ public class CvDocument {
     @Builder.Default
     private String contentType = "application/pdf";
 
-    /** The 5MB cap is enforced in the application layer, not by the database. */
     @Column(name = "file_size_bytes", nullable = false)
     private Long fileSizeBytes;
 
-    /** Lowercase hex SHA-256, used to skip a paid re-parse of a file already seen. */
     @Column(name = "checksum_sha256", length = 64)
     private String checksumSha256;
 
@@ -77,11 +66,9 @@ public class CvDocument {
     @Builder.Default
     private CvDocumentStatus status = CvDocumentStatus.UPLOADED;
 
-    /** User-facing message when {@link #status} is {@code FAILED}. */
     @Column(name = "status_message", columnDefinition = "TEXT")
     private String statusMessage;
 
-    /** Maps {@code is_active}. False means the user removed this CV — a soft delete. */
     @Column(name = "is_active", nullable = false)
     @Builder.Default
     private boolean active = true;

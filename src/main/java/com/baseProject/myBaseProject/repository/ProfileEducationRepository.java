@@ -16,6 +16,14 @@ public interface ProfileEducationRepository extends JpaRepository<ProfileEducati
 
     Optional<ProfileEducation> findByIdAndProfileId(Long id, Long profileId);
 
+    /**
+     * Đếm cho một dòng của {@code GET /api/profiles}.
+     *
+     * <p>Đếm bằng {@code COUNT(*)} thay vì tải danh sách rồi {@code size()}: danh sách hồ sơ chỉ
+     * cần con số, tải cả 100 hàng con về rồi bỏ đi là tốn băng thông DB không đổi lấy gì.
+     */
+    long countByProfileId(Long profileId);
+
     /** Clears the list in one statement, for a replace-all profile edit. */
     @Modifying(flushAutomatically = true)
     @Query("delete from ProfileEducation e where e.profile.id = :profileId")

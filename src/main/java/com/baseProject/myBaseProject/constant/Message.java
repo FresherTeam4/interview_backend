@@ -17,4 +17,58 @@ public final class Message {
     public static final String GOOGLE_EMAIL_NOT_VERIFIED = "This Google account has no verified email";
     public static final String GOOGLE_LOGIN_NOT_CONFIGURED =
             "Google login is not configured on this server";
+
+    // ---- CV & Hồ sơ ----
+    // Nhóm này viết tiếng Việt, khác các dòng trên. Đây là thông báo người dùng cuối đọc
+    // trực tiếp trên màn hình upload CV, còn nhóm auth ở trên là lỗi kỹ thuật frontend xử lý.
+    // Mấy chuỗi có %s/%d là template, chỗ ném exception tự .formatted(...).
+
+    public static final String CV_FILE_REQUIRED = "Chưa chọn file CV, hoặc file rỗng";
+    public static final String CV_INVALID_FILE_TYPE = "Chỉ nhận file PDF";
+    /** Dùng cho lưới an toàn ở tầng servlet, chỗ không biết hạn mức của app là bao nhiêu. */
+    public static final String CV_FILE_TOO_LARGE = "File CV vượt quá dung lượng cho phép";
+    public static final String CV_FILE_TOO_LARGE_LIMIT =
+            "File CV vượt quá dung lượng cho phép, tối đa %d MB";
+    public static final String CV_FILE_CORRUPTED =
+            "Không mở được file PDF này, hoặc file đang được đặt mật khẩu";
+    public static final String CV_TOO_MANY_PAGES = "File CV có %d trang, tối đa %d trang";
+    public static final String CV_LIMIT_REACHED =
+            "Bạn đã giữ tối đa %d CV. Hãy xóa một CV cũ trước khi tải lên CV mới";
+    public static final String CV_NOT_FOUND = "Không tìm thấy CV này";
+    public static final String CV_PARSE_IN_PROGRESS =
+            "CV đang được bóc tách, vui lòng đợi rồi thử lại";
+    public static final String CV_PARSE_NOT_RETRYABLE =
+            "Chỉ bóc tách lại được CV đang ở trạng thái thất bại";
+    public static final String PROFILE_NOT_FOUND = "Không tìm thấy hồ sơ này";
+    public static final String PROFILE_ITEM_NOT_FOUND = "%s id %d không thuộc hồ sơ này";
+    public static final String DUPLICATE_SKILL_NAME = "Kỹ năng \"%s\" bị trùng trong danh sách";
+    public static final String PROFILE_NOT_CONFIRMED =
+            "Hồ sơ này chưa được xác nhận thông tin chính xác";
+    public static final String STORAGE_UNAVAILABLE =
+            "Hiện chưa lưu được file CV, vui lòng thử lại sau ít phút";
+
+    // ---- status_message của lần bóc tách ----
+    // Không trả qua HTTP: bóc tách chạy sau khi request đã kết thúc, nên chỗ đọc được là
+    // cột status_message. Viết cho người dùng, không đổ stacktrace hay message thô của Gemini.
+
+    public static final String PARSE_FAILED_NO_API_KEY =
+            "Máy chủ chưa cấu hình khóa API để bóc tách CV, vui lòng liên hệ quản trị viên";
+    public static final String PARSE_FAILED_TIMEOUT =
+            "Bóc tách CV quá lâu nên đã dừng lại, bạn thử lại giúp mình";
+    public static final String PARSE_FAILED_BAD_RESPONSE =
+            "Kết quả bóc tách không đúng định dạng mong đợi, bạn thử lại giúp mình";
+    public static final String PARSE_FAILED_AI_UNAVAILABLE =
+            "Dịch vụ bóc tách CV đang không phản hồi, bạn thử lại sau ít phút";
+    public static final String PARSE_FAILED_FILE_UNREADABLE =
+            "Không đọc lại được file CV đã tải lên, bạn thử tải lên lại giúp mình";
+    public static final String PARSE_FAILED_UNEXPECTED =
+            "Bóc tách CV thất bại vì một lỗi ngoài dự kiến, bạn thử lại giúp mình";
+    /**
+     * Hàng đợi bóc tách đã đầy (20 chỗ, xem {@code AsyncConfig}). Khác mọi lý do còn lại:
+     * file không có vấn đề gì, chỉ là máy chủ đang tắc — nên câu chữ nói rõ "thử lại ngay".
+     */
+    public static final String PARSE_FAILED_QUEUE_FULL =
+            "Máy chủ đang xử lý quá nhiều CV cùng lúc, bạn bấm bóc tách lại sau một chút giúp mình";
+    public static final String PARSE_FAILED_INTERRUPTED_BY_RESTART =
+            "Lần bóc tách trước bị dừng giữa lúc máy chủ khởi động lại, bạn bấm thử lại giúp mình";
 }

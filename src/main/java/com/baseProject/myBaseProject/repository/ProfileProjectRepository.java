@@ -17,6 +17,9 @@ public interface ProfileProjectRepository extends JpaRepository<ProfileProject, 
 
     Optional<ProfileProject> findByIdAndProfileId(Long id, Long profileId);
 
+    /** Đếm cho một dòng của {@code GET /api/profiles}. */
+    long countByProfileId(Long profileId);
+
     /** Clears the list in one statement, for a replace-all profile edit. */
     @Modifying(flushAutomatically = true)
     @Query("delete from ProfileProject p where p.profile.id = :profileId")

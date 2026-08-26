@@ -694,10 +694,22 @@ Mọi giới hạn dưới đây chặn ở `@Valid` trước khi tới database
 | `skills[].category` | ≤ 50 |
 | `startYear`, `endYear` | 1900 – 2100, `endYear >= startYear` |
 | `startDate`, `endDate` | `endDate >= startDate` |
+| `projects[].description` | ≤ 5000 — **giới hạn tôi tự chọn**, xem dưới |
+| `projects[].techStack` | ≤ 500 — **giới hạn tôi tự chọn**, xem dưới |
 | số phần tử mỗi mảng | educations ≤ 20, skills ≤ 100, projects ≤ 50 |
 
 Ba ràng buộc năm/ngày và `TRIM()` đã có `CHECK` trong DDL — validate ở đây để lỗi đọc được,
 không phải để thay thế.
+
+**Hai giới hạn không có trong DDL.** `description` và `tech_stack` là cột `TEXT`, mà `TEXT` chứa
+65535 **byte** chứ không phải ký tự — tiếng Việt tốn 3 byte một chữ, nên trần thật chỉ khoảng
+21800 ký tự và MySQL báo bằng một `DataIntegrityViolationException` → `409` không nói được tên
+trường nào sai. Chặn ở `@Valid` để lỗi đó thành `400 VALIDATION_FAILED`. Con số 5000 và 500 chọn
+theo độ dài thực tế của CV, không phải theo giới hạn kỹ thuật.
+
+Phía dữ liệu Gemini, `ProfileMapper` kẹp cùng hai con số đó, và kẹp thêm **tối đa 20 phần tử**
+`techStack` cho một dự án (`MAX_TECH_ITEMS`) — mảng công nghệ AI trả về thỉnh thoảng lặp và dài
+bất thường, giữ 20 cái đầu sau khi `distinct()` là đủ để hiển thị chip.
 
 Cùng bộ giới hạn này áp cho cả dữ liệu Gemini trả về (mục 5.5), nhưng ở đó **kẹp lại** thay vì
 báo lỗi: người dùng không làm gì sai, không có lý gì bắt họ nhận lỗi vì AI trả quá dài.

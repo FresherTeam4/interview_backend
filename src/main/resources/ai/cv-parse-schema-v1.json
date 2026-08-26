@@ -1,0 +1,109 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "headline",
+    "yearsExperience",
+    "targetPosition",
+    "seniorityLevel",
+    "educations",
+    "skills",
+    "projects"
+  ],
+  "properties": {
+    "headline": {
+      "type": ["string", "null"]
+    },
+    "yearsExperience": {
+      "type": ["number", "null"],
+      "minimum": 0,
+      "maximum": 99.9
+    },
+    "targetPosition": {
+      "type": ["string", "null"]
+    },
+    "seniorityLevel": {
+      "type": ["string", "null"],
+      "enum": ["INTERN", "FRESHER", "JUNIOR", "MIDDLE", "SENIOR", "LEAD", null]
+    },
+    "educations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["school", "degree", "fieldOfStudy", "startYear", "endYear"],
+        "properties": {
+          "school": {
+            "type": "string"
+          },
+          "degree": {
+            "type": ["string", "null"]
+          },
+          "fieldOfStudy": {
+            "type": ["string", "null"]
+          },
+          "startYear": {
+            "type": ["integer", "null"],
+            "minimum": 1900,
+            "maximum": 2100
+          },
+          "endYear": {
+            "type": ["integer", "null"],
+            "minimum": 1900,
+            "maximum": 2100
+          }
+        }
+      }
+    },
+    "skills": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "category"],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "category": {
+            "type": ["string", "null"],
+            "enum": ["LANGUAGE", "FRAMEWORK", "DATABASE", "TOOL", "CLOUD", "TESTING", "SOFT_SKILL", "OTHER", null]
+          }
+        }
+      }
+    },
+    "projects": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "description", "roleInProject", "techStack", "startDate", "endDate"],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": ["string", "null"]
+          },
+          "roleInProject": {
+            "type": ["string", "null"]
+          },
+          "techStack": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "startDate": {
+            "type": ["string", "null"],
+            "format": "date"
+          },
+          "endDate": {
+            "type": ["string", "null"],
+            "format": "date"
+          }
+        }
+      }
+    }
+  }
+}

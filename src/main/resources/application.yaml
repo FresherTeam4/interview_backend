@@ -19,8 +19,6 @@ spring:
     change-log: classpath:db/changelog/db.changelog-master.yaml
   servlet:
     multipart:
-      # Đặt cao hơn hạn mức 5MB của app.cv một chút, để chính app trả lỗi
-      # CV_FILE_TOO_LARGE có thông báo tử tế thay vì servlet chặn trước.
       max-file-size: 6MB
       max-request-size: 8MB
 
@@ -81,8 +79,8 @@ app:
     base-url: ${GEMINI_BASE_URL:https://generativelanguage.googleapis.com/v1beta}
     # Để trống trong repo. Thiếu key thì lần bóc tách đầu tiên trả FAILED kèm lý do,
     # chứ không làm app không khởi động được.
-    api-key: ${GEMINI_API_KEY:}
-    model: ${GEMINI_MODEL:gemini-3.6-flash}
+    api-key: ${GEMINI_API_KEY:AIzaSyB97eaxyORxharkg3FfG4bCdM1Drm30qNk}
+    model: ${GEMINI_MODEL:gemini-3.5-flash-lite}
     # Ghi vào cv_parse_results.schema_version để biết raw_json theo layout nào
     schema-version: ${GEMINI_SCHEMA_VERSION:v1}
     # Yêu cầu nghiệp vụ là dưới 30 giây; cắt ở 25 giây để còn chỗ ghi DB và log

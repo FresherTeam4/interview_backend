@@ -17,8 +17,12 @@ CREATE TABLE candidate_profiles (
     source           VARCHAR(20) NOT NULL DEFAULT 'AUTO_PARSED' COMMENT 'Application-managed ProfileSource',
     confirmed_at     DATETIME(6) NULL COMMENT 'NULL = the user has not pressed "Information is correct", which blocks starting a session',
     created_at       DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
-    updated_at       DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6)
-                                 ON UPDATE CURRENT_TIMESTAMP(6),
+    -- Deliberately NO "ON UPDATE CURRENT_TIMESTAMP(6)": the application writes this column
+    -- from its java.time.Clock bean, like every other timestamp in this table group.
+    -- CURRENT_TIMESTAMP resolves in the MySQL session time zone (SYSTEM by default), while
+    -- the app stores UTC Instants, so letting MySQL fill it puts one column of this table
+    -- in local time and the rest in UTC -- a silent offset on any server that is not UTC.
+    updated_at       DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
 
     CONSTRAINT uq_candidate_profiles_cv_document UNIQUE (cv_document_id),
     CONSTRAINT fk_candidate_profiles_user

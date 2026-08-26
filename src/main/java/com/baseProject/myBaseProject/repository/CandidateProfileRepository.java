@@ -28,6 +28,17 @@ public interface CandidateProfileRepository extends JpaRepository<CandidateProfi
     Optional<CandidateProfile> findByIdAndUserIdAndCvDocumentActiveTrue(Long id, Long userId);
 
     /**
+     * Hồ sơ của đúng một CV, để {@code GET /api/cvs/{cvId}} điền được ba trường
+     * {@code profile*} trong {@code CvDocumentResponse}.
+     *
+     * <p>Không kiểm chủ sở hữu ở đây vì chỗ gọi đã kiểm rồi: nó tìm được {@code CvDocument}
+     * bằng {@code findByIdAndUserIdAndActiveTrue}, nên CV này chắc chắn của người gọi và hồ sơ
+     * duy nhất treo trên CV đó cũng vậy. Thêm {@code userId} vào đây chỉ là kiểm hai lần cùng
+     * một điều.
+     */
+    Optional<CandidateProfile> findByCvDocumentId(Long cvDocumentId);
+
+    /**
      * Guard before building a profile from a finished parse. The database already forbids
      * a second profile for the same CV ({@code uq_candidate_profiles_cv_document}); this
      * turns that into a readable failure instead of a constraint violation if a parse job

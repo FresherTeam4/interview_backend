@@ -55,10 +55,6 @@ public class ProfileEducation {
     @Column(name = "end_year")
     private Short endYear;
 
-    /**
-     * Maps {@code is_user_edited}. True once the user corrects or hand-adds this row;
-     * the aggregate is free feedback on where the parse prompt is weakest.
-     */
     @Column(name = "is_user_edited", nullable = false)
     @Builder.Default
     private boolean userEdited = false;

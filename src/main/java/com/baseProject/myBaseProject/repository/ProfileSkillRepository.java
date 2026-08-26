@@ -20,6 +20,9 @@ public interface ProfileSkillRepository extends JpaRepository<ProfileSkill, Long
      */
     Optional<ProfileSkill> findByProfileIdAndName(Long profileId, String name);
 
+    /** Đếm cho một dòng của {@code GET /api/profiles}. */
+    long countByProfileId(Long profileId);
+
     /** Clears the list in one statement, for a replace-all profile edit. */
     @Modifying(flushAutomatically = true)
     @Query("delete from ProfileSkill s where s.profile.id = :profileId")
