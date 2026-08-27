@@ -1035,10 +1035,14 @@ Response `202 Accepted`:
   "id": 42,
   "status": "SCRIPT_GENERATING",
   "awaitingAction": "NONE",
-  "version": 0,
+  "version": 2,
   "createdAt": "2026-08-26T07:30:00Z"
 }
 ```
+
+`version` trong response 202 là `2` chứ không phải `0`: insert tạo bản ghi ở version `0`, transition
+`CREATED -> SCRIPT_GENERATING` ghi lần một (`1`), và set processing claim ghi lần hai (`2`). Client
+phải dùng đúng giá trị này khi gọi retry với `expectedVersion`, không tự giả định `0`.
 
 Headers:
 
@@ -1047,9 +1051,12 @@ Location: /api/sessions/42
 Retry-After: 1
 ```
 
-Thiếu/rỗng `Idempotency-Key` trả `400 IDEMPOTENCY_KEY_REQUIRED`. Nếu key đã tồn tại với cùng user,
-trả lại session cũ theo cùng response shape và `Location`; frontend tiếp tục poll resource đó. Nếu
-cùng key nhưng body có fingerprint khác, trả `409 IDEMPOTENCY_KEY_REUSED`.
+Thiếu/rỗng `Idempotency-Key` trả `400 IDEMPOTENCY_KEY_REQUIRED`. Key dài hơn 128 ký tự bị controller
+chặn trước bằng `@Size`, nên trả `400 VALIDATION_FAILED` với message field-level; service vẫn giữ
+cùng ràng buộc như một lớp phòng vệ thứ hai và map ra `400 IDEMPOTENCY_KEY_REQUIRED` nếu bị gọi
+trực tiếp. Nếu key đã tồn tại với cùng user, trả lại session cũ theo cùng response shape và
+`Location`; frontend tiếp tục poll resource đó. Nếu cùng key nhưng body có fingerprint khác, trả
+`409 IDEMPOTENCY_KEY_REUSED`.
 
 ### 8.2. Danh sách session
 
@@ -1295,6 +1302,12 @@ Body có `expectedVersion`. Cho phép khi:
 - `IN_PROGRESS + ENGINE_RETRY` ở next-turn generation.
 
 Server xác định stage từ persisted data, không cho client chọn stage. Trả `202 Accepted`.
+
+Trạng thái M06: chỉ nhánh script generation được implement. Service truyền cứng
+`SessionFailureStage.SCRIPT_GENERATION` vào state machine, nên retry cho scoring và next-turn vẫn là
+spec chờ M09/M13. Các lỗi thường gặp: `expectedVersion` lệch trả `409 SESSION_VERSION_CONFLICT`,
+session không ở trạng thái cho phép retry trả `409 SESSION_RETRY_NOT_ALLOWED`, session của user khác
+trả `404 SESSION_NOT_FOUND`.
 
 ---
 

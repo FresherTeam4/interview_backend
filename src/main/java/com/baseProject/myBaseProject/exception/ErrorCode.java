@@ -90,6 +90,8 @@ public enum ErrorCode {
     JD_TOO_MANY_PAGES,
     /** 409 — yêu cầu file URL cho một JD source TEXT. */
     JD_HAS_NO_FILE,
+    /** 409 — JD được chọn chưa ở trạng thái READY. */
+    JD_NOT_CONFIRMED,
 
     // ---- Interview Engine ----
     /** 503 — rubric MVP không có current published version hợp lệ. */
@@ -100,6 +102,14 @@ public enum ErrorCode {
     SESSION_INVALID_STATE,
     /** 409 — expectedVersion không còn là phiên bản hiện tại. */
     SESSION_VERSION_CONFLICT,
+    /** 409 — user đã có đủ số session chưa kết thúc. */
+    SESSION_LIMIT_REACHED,
+    /** 409 — session/stage hiện tại không cho phép retry. */
+    SESSION_RETRY_NOT_ALLOWED,
+    /** 400 — create session thiếu hoặc gửi key chỉ có whitespace. */
+    IDEMPOTENCY_KEY_REQUIRED,
+    /** 409 — cùng key create session được dùng cho request có nội dung khác. */
+    IDEMPOTENCY_KEY_REUSED,
     /** 503 — provider hoặc credential sinh nội dung phỏng vấn không dùng được. */
     INTERVIEW_AI_UNAVAILABLE
 }

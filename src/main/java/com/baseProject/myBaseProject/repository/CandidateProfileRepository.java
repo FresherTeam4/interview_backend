@@ -19,6 +19,19 @@ public interface CandidateProfileRepository extends JpaRepository<CandidateProfi
     List<CandidateProfile> findByUserIdAndCvDocumentActiveTrueOrderByCreatedAtDesc(Long userId);
     Optional<CandidateProfile> findByIdAndUserIdAndCvDocumentActiveTrue(Long id, Long userId);
 
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+            select profile
+            from CandidateProfile profile
+            join profile.cvDocument document
+            where profile.id = :profileId
+              and profile.user.id = :userId
+              and document.active = true
+            """)
+    Optional<CandidateProfile> findActiveOwnedByIdForUpdate(
+            @Param("profileId") Long profileId,
+            @Param("userId") Long userId);
+
     /** Serializes the short final diversity check for scripts sharing one profile. */
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select profile from CandidateProfile profile where profile.id = :profileId")

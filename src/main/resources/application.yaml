@@ -65,6 +65,10 @@ app:
     max-file-size-bytes: ${JD_MAX_FILE_SIZE_BYTES:2097152}
     max-pages: ${JD_MAX_PAGES:20}
   interview:
+    enabled: ${INTERVIEW_ENABLED:true}
+    recovery-cron: ${INTERVIEW_RECOVERY_CRON:30 */2 * * * *}
+    processing-lease-seconds: ${INTERVIEW_PROCESSING_LEASE_SECONDS:90}
+    max-active-per-user: ${INTERVIEW_MAX_ACTIVE_PER_USER:5}
     questions:
       easy: ${INTERVIEW_EASY_QUESTIONS:5}
       medium: ${INTERVIEW_MEDIUM_QUESTIONS:6}

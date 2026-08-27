@@ -12,6 +12,7 @@ import com.baseProject.myBaseProject.enums.SessionStatus;
 import com.baseProject.myBaseProject.enums.SessionTransitionActor;
 import com.baseProject.myBaseProject.exception.SessionInvalidStateException;
 import com.baseProject.myBaseProject.exception.SessionNotFoundException;
+import com.baseProject.myBaseProject.exception.SessionRetryNotAllowedException;
 import com.baseProject.myBaseProject.exception.SessionVersionConflictException;
 import com.baseProject.myBaseProject.repository.InterviewSessionRepository;
 import com.baseProject.myBaseProject.repository.SessionContextSnapshotRepository;
@@ -107,6 +108,28 @@ public class SessionStateMachine {
 
         TransitionPlan plan = userPlan(session, event, restoredAwaitingAction);
         return apply(session, plan, SessionTransitionActor.USER, reason);
+    }
+
+    @Transactional
+    public InterviewSession retryUserStage(
+            Long userId,
+            Long sessionId,
+            long expectedVersion,
+            SessionFailureStage allowedFailureStage,
+            String reason) {
+        InterviewSession session = sessionRepository
+                .findOwnedByIdForUpdate(sessionId, userId)
+                .orElseThrow(SessionNotFoundException::new);
+        verifyVersion(session, expectedVersion);
+        if (session.getStatus() != SessionStatus.FAILED
+                || session.getFailureStage() != allowedFailureStage) {
+            throw new SessionRetryNotAllowedException();
+        }
+        return apply(
+                session,
+                retryPlan(session),
+                SessionTransitionActor.USER,
+                reason);
     }
 
     @Transactional

@@ -1458,6 +1458,8 @@ kịch bản hợp lệ; chưa mở create-session API cho frontend.
 
 ### M06 — Create session, async generation và polling
 
+**Trạng thái:** implementation đã hoàn thành, chờ `APPROVED M06`.
+
 **Kết quả người dùng**
 
 Người dùng tạo phiên bằng confirmed profile + confirmed JD, nhận `202`, poll trạng thái và cuối cùng
@@ -1488,12 +1490,155 @@ nhận session `READY` hoặc lỗi retry được.
 - Queue full/restart không làm session treo vĩnh viễn.
 - Không expose future questions qua API.
 
+**Luồng implementation M06**
+
+1. `InterviewSessionController` đặt dưới `/api/sessions` với `@IsUser` và bearer security.
+   Controller chỉ parse HTTP: `@Valid` body, `@RequestHeader(name = "Idempotency-Key",
+   required = false) @Size(max = 128)`, `@CurrentUser` userId, rồi trả `202 Accepted` kèm
+   `Location: /api/sessions/{id}` và `Retry-After: 1`. Không có repository hay infrastructure call
+   nào trong controller.
+2. `InterviewSessionServiceImpl.create` chạy trong một transaction ngắn. Thứ tự bắt buộc:
+   `ensureEnabled` (feature flag off thành `503 INTERVIEW_AI_UNAVAILABLE`), normalize
+   `Idempotency-Key` (null/blank/dài quá 128 thành `400 IDEMPOTENCY_KEY_REQUIRED`), normalize
+   `languageCode` về lowercase, rồi tính `creation_request_hash` = SHA-256 hex của canonical string
+   `profileId|jobDescriptionId|difficulty|mode|languageCode`.
+3. `userAccountRepository.findByIdForUpdate` khóa hàng `user_accounts` của current user để serialize
+   create-session của cùng user. Có lock rồi mới re-check `(user_id, creation_key)`: trùng key và
+   trùng hash thì map lại session cũ và trả về mà không tính quota; trùng key nhưng hash khác thành
+   `409 IDEMPOTENCY_KEY_REUSED`. Unique index `(user_id, creation_key)` là guard cuối cùng.
+4. Profile và JD được load bằng query scope theo cả resource ID và user ID
+   (`findActiveOwnedByIdForUpdate`), nên resource của user khác không phân biệt được với resource
+   không tồn tại: `404 PROFILE_NOT_FOUND` / `404 JD_NOT_FOUND`. Sau đó mới kiểm trạng thái:
+   profile chưa confirm thành `409 PROFILE_NOT_CONFIRMED`, JD chưa `READY` thành
+   `409 JD_NOT_CONFIRMED`.
+5. `ensureCapacity` đếm session có status thuộc `ACTIVE_STATUSES` (`CREATED`, `SCRIPT_GENERATING`,
+   `READY`, `IN_PROGRESS`, `PAUSED`, `SCORING`, `FAILED`) rồi so với
+   `app.interview.max-active-per-user`; vượt thành `409 SESSION_LIMIT_REACHED` kèm giới hạn trong
+   message. Vì check nằm sau lock nên hai request song song của cùng user không cùng lọt qua.
+6. `RubricService.getCurrentPublishedVersion` lấy rubric đang publish; `ProfileSnapshotFactory` chụp
+   profile + education/skill/project theo `displayOrder` thành immutable snapshot JSON
+   (`SNAPSHOT_SCHEMA_VERSION = v1`). Snapshot được lưu cùng session nên script sau này không bị ảnh
+   hưởng nếu user sửa profile.
+7. Vẫn trong transaction đó: `SessionStateMachine.create` insert session (version `0`) và context
+   snapshot rồi ghi transition `NULL -> CREATED`; `transitionSystem(DISPATCH_SCRIPT_GENERATION)` ghi
+   transition `CREATED -> SCRIPT_GENERATING` (version `1`); `SessionProcessingClaimService.claim`
+   set `processing_stage`, `processing_token`, `processing_started_at` và tăng `processing_attempts`
+   (version `2`). Vì vậy body `202` trả `version: 2`.
+8. `InterviewScriptWorkflowDispatcher.dispatchAfterCommit` đăng ký `TransactionSynchronization` và
+   chỉ submit vào executor `afterCommit`, nên client disconnect hoặc rollback không để lại work
+   không có row tương ứng. Executor đầy thành `TaskRejectedException` được log ở mức `warn` và để
+   recovery job xử lý, không làm request thất bại.
+9. `InterviewScriptGenerationWorker` kiểm claim bằng `InterviewScriptWorkCoordinator.inspect` trước
+   khi gọi generator (M05). Thành công thì state machine persist script và đi
+   `SCRIPT_GENERATING -> READY`, xóa `processing_stage`/`processing_token`/`status_message`, set
+   `total_question_count`. Lỗi đi vào `handleFailure`: retryable và `processing_attempts <
+   MAX_PROVIDER_ATTEMPTS (2)` thì `releaseForRetry` nhả claim, ghi `next_retry_at = now + 1s` và
+   `status_message` đã sanitize, rồi scheduler tự claim lại; ngược lại `WORKFLOW_FAILED` đưa session
+   sang `FAILED` với `failure_stage = SCRIPT_GENERATION`.
+10. `InterviewWorkflowRecoveryJob` chạy ở `ApplicationReadyEvent` và theo
+    `@Scheduled(cron = "${app.interview.recovery-cron}")`. `findRecoverableWorkIds` lấy tối đa 50
+    session `SCRIPT_GENERATING` mà claim đã quá `processing-lease-seconds` hoặc tới `next_retry_at`,
+    rồi `claimAndDispatch` từng cái. Đây là lý do restart hoặc queue-full không làm session treo.
+11. `get` là `@Transactional(readOnly = true)` + `findByIdAndUserId`, map qua
+    `InterviewSessionMapper.toResponse`. Response chỉ có counters, status, `statusMessage` và
+    reference profile/JD; chưa có turns hay câu hỏi tương lai.
+12. `retry` gọi `SessionStateMachine.retryUserStage` với `findOwnedByIdForUpdate`, so
+    `expectedVersion`, và chỉ cho phép khi `status = FAILED` và `failure_stage = SCRIPT_GENERATION`.
+    Retry plan reset `processing_attempts` về `0` trước khi claim lại và dispatch, nên user được
+    thêm đủ hai lần thử provider.
+
+**Idempotency và retry invariant M06**
+
+| Tình huống | Guard | Kết quả |
+|---|---|---|
+| Thiếu/rỗng `Idempotency-Key` | Service normalize | `400 IDEMPOTENCY_KEY_REQUIRED` |
+| Key dài hơn 128 ký tự | Controller `@Size`, service normalize lần hai | `400 VALIDATION_FAILED` |
+| Cùng key, cùng body | Re-check sau user-row lock | `202` với session cũ, không tính quota |
+| Cùng key, body khác | So `creation_request_hash` | `409 IDEMPOTENCY_KEY_REUSED` |
+| Hai request song song cùng key | User-row lock rồi unique `(user_id, creation_key)` | Một session duy nhất |
+| Provider lỗi retryable, `attempts < 2` | `releaseForRetry` + `next_retry_at` | Tự retry, session vẫn `SCRIPT_GENERATING` |
+| Provider lỗi non-retryable hoặc hết attempts | `WORKFLOW_FAILED` | `FAILED` + `failure_stage = SCRIPT_GENERATION` |
+| Worker mất claim (stale token) | `ownsScriptClaim` | Bỏ qua, không ghi gì |
+| Retry với `expectedVersion` cũ | `verifyVersion` | `409 SESSION_VERSION_CONFLICT` |
+| Retry khi session không `FAILED` | `retryUserStage` | `409 SESSION_RETRY_NOT_ALLOWED` |
+| Session/profile/JD của user khác | Query scope theo `(id, userId)` | `404`, không tiết lộ tồn tại |
+
 **Acceptance để approve**
 
 - Happy path đi `SCRIPT_GENERATING -> READY` và lưu transition.
 - Ownership/confirmation/rubric errors đúng contract.
 - Generation failure/retry/recovery deterministic với mocked provider.
 - p95 chưa cần benchmark provider thật nhưng duration boundary được đo đúng.
+
+**Kiểm tra local M06 (Swagger checklist)**
+
+Chuẩn bị: đã có ít nhất một profile đã confirm và một JD `READY` thuộc chính user đang đăng nhập, và
+`app.interview.enabled = true`. Ba endpoint nằm trong Swagger tag `Interview Sessions`.
+
+1. `POST /api/sessions` — header `Idempotency-Key` bất kỳ (ví dụ một UUID), body:
+
+   ```json
+   {
+     "profileId": 7,
+     "jobDescriptionId": 12,
+     "difficulty": "MEDIUM",
+     "mode": "TEXT",
+     "languageCode": "vi"
+   }
+   ```
+
+   Kỳ vọng `202 Accepted`, header `Location: /api/sessions/{id}` và `Retry-After: 1`, body:
+
+   ```json
+   {
+     "id": 42,
+     "status": "SCRIPT_GENERATING",
+     "awaitingAction": "NONE",
+     "version": 2,
+     "createdAt": "2026-08-27T07:30:00Z"
+   }
+   ```
+
+   Lỗi cần thử: bỏ header thành `400 IDEMPOTENCY_KEY_REQUIRED`; header dài hơn 128 ký tự thành
+   `400 VALIDATION_FAILED`; `profileId` lạ hoặc của user khác thành `404 PROFILE_NOT_FOUND`; profile
+   chưa confirm thành `409 PROFILE_NOT_CONFIRMED`; JD `DRAFT` thành `409 JD_NOT_CONFIRMED`;
+   gửi lại đúng header và đúng body thành `202` với cùng `id`; gửi lại cùng header nhưng đổi
+   `difficulty` thành `409 IDEMPOTENCY_KEY_REUSED`; tạo vượt `max-active-per-user` thành
+   `409 SESSION_LIMIT_REACHED`; đặt `INTERVIEW_ENABLED=false` rồi gọi lại thành
+   `503 INTERVIEW_AI_UNAVAILABLE`.
+
+2. `GET /api/sessions/{sessionId}` — poll ngay sau `202`. Lần đầu thường thấy
+   `status: SCRIPT_GENERATING`, `totalQuestionCount: 0`; sau khi generation xong thấy
+   `status: READY`, `awaitingAction: START_SESSION`, `totalQuestionCount` bằng số câu theo
+   difficulty (5/6/7) và `statusMessage: null`. Nếu provider lỗi hẳn thì thấy `status: FAILED` kèm
+   `statusMessage` an toàn. Lỗi cần thử: `sessionId` của user khác hoặc không tồn tại thành
+   `404 SESSION_NOT_FOUND`. Response không chứa câu hỏi hay turns.
+
+3. `POST /api/sessions/{sessionId}/retry` — chỉ dùng khi session đang `FAILED`. Body
+   `{ "expectedVersion": 5 }` lấy đúng từ `version` của lần `GET` gần nhất. Kỳ vọng `202 Accepted`
+   với cùng response shape như create (`status: SCRIPT_GENERATING`) và header
+   `Location`/`Retry-After`, sau đó poll lại tới `READY`. Lỗi cần thử: `expectedVersion` cũ thành
+   `409 SESSION_VERSION_CONFLICT`; retry khi session đang `READY` thành
+   `409 SESSION_RETRY_NOT_ALLOWED`; session của user khác thành `404 SESSION_NOT_FOUND`; thiếu
+   `expectedVersion` thành `400 VALIDATION_FAILED`.
+
+**Kết quả verification đã chạy cho M06**
+
+- `.\mvnw.cmd -DskipTests compile` thành công trên 213 source, `release 17`.
+- Trên một schema MySQL dùng một lần (override bằng biến môi trường `DB_URL`, không chạm
+  `interview_db`), Liquibase apply đủ 14 changeset và Hibernate `ddl-auto=validate` pass;
+  application start bình thường.
+- Smoke nội bộ dùng provider giả và fixture tổng hợp trong một transaction rollback-only đã log:
+  `acceptedStatus=SCRIPT_GENERATING`, `acceptedVersion=2`, `replaySameId=true`,
+  `autoRetry=READY/v5/q6`, `userRetry=READY/v6/q6`, `transitions=3/5`,
+  `limitCheck=enforced(open=3,max=3)`, `rollback=true`. Trong đó `autoRetry` xác nhận đường
+  provider-lỗi-retryable tự nhả claim rồi claim lại tới `READY`, còn `limitCheck` chạy với
+  `--app.interview.max-active-per-user=3` nên thực sự chạm giới hạn.
+- Cùng smoke đó xác nhận các nhánh lỗi: key rỗng và key dài quá 128, profile lạ/của user khác,
+  profile chưa confirm, JD `DRAFT`, `GET` cross-user, `expectedVersion` lệch, retry cross-user,
+  retry khi đã `READY`, cùng key khác body, và chạm giới hạn session. Sau rollback, mọi bảng fixture
+  đếm về `0`.
+- Không gọi Gemini thật và không dùng CV/JD thật trong lần verification này.
 
 **Điểm dừng:** chờ `APPROVED M06`.
 

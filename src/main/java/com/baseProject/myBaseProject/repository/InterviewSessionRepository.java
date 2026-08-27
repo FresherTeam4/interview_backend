@@ -103,6 +103,8 @@ public interface InterviewSessionRepository extends JpaRepository<InterviewSessi
             set session.processingToken = :token,
                 session.processingStartedAt = :claimedAt,
                 session.processingAttempts = session.processingAttempts + 1,
+                session.nextRetryAt = null,
+                session.statusMessage = null,
                 session.updatedAt = :claimedAt,
                 session.version = session.version + 1
             where session.id = :sessionId

@@ -98,7 +98,7 @@ public class CandidateProfileServiceImpl implements CandidateProfileService {
     @Override
     @Transactional
     public CandidateProfileResponse update(Long userId, Long profileId, ProfileUpdateRequest request) {
-        CandidateProfile profile = requireProfile(userId, profileId);
+        CandidateProfile profile = requireProfileForUpdate(userId, profileId);
 
         rejectDuplicateSkillNames(request.skills());
 
@@ -172,7 +172,7 @@ public class CandidateProfileServiceImpl implements CandidateProfileService {
     @Override
     @Transactional
     public CandidateProfileResponse confirm(Long userId, Long profileId) {
-        CandidateProfile profile = requireProfile(userId, profileId);
+        CandidateProfile profile = requireProfileForUpdate(userId, profileId);
 
         if (!profile.isConfirmed()) {
             Instant now = clock.instant();
@@ -187,6 +187,11 @@ public class CandidateProfileServiceImpl implements CandidateProfileService {
 
     private CandidateProfile requireProfile(Long userId, Long profileId) {
         return candidateProfileRepository.findByIdAndUserIdAndCvDocumentActiveTrue(profileId, userId)
+                .orElseThrow(ProfileNotFoundException::new);
+    }
+
+    private CandidateProfile requireProfileForUpdate(Long userId, Long profileId) {
+        return candidateProfileRepository.findActiveOwnedByIdForUpdate(profileId, userId)
                 .orElseThrow(ProfileNotFoundException::new);
     }
 

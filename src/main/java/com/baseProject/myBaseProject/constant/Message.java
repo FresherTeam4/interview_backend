@@ -66,6 +66,8 @@ public final class Message {
     public static final String JD_TOO_MANY_PAGES =
             "File JD có %d trang, tối đa %d trang";
     public static final String JD_HAS_NO_FILE = "JD dạng text không có file gốc để xem lại";
+    public static final String JD_NOT_CONFIRMED =
+            "JD này chưa được xác nhận để dùng cho phiên phỏng vấn";
 
     // ---- Interview Engine ----
     public static final String RUBRIC_NOT_AVAILABLE =
@@ -75,6 +77,16 @@ public final class Message {
             "Thao tác này không hợp lệ với trạng thái hiện tại của phiên phỏng vấn";
     public static final String SESSION_VERSION_CONFLICT =
             "Phiên phỏng vấn đã thay đổi; vui lòng tải lại trạng thái mới nhất";
+    public static final String SESSION_LIMIT_REACHED =
+            "Bạn đã có tối đa %d phiên phỏng vấn chưa kết thúc";
+    public static final String SESSION_RETRY_NOT_ALLOWED =
+            "Phiên phỏng vấn này hiện không thể thử lại bước sinh câu hỏi";
+    public static final String IDEMPOTENCY_KEY_REQUIRED =
+            "Idempotency-Key là bắt buộc khi tạo phiên phỏng vấn";
+    public static final String IDEMPOTENCY_KEY_REUSED =
+            "Idempotency-Key này đã được dùng cho một yêu cầu tạo phiên khác";
+    public static final String INTERVIEW_AI_UNAVAILABLE =
+            "Tính năng sinh câu hỏi phỏng vấn hiện chưa sẵn sàng";
     public static final String SCRIPT_GENERATION_FAILED_NO_API_KEY =
             "Máy chủ chưa cấu hình dịch vụ sinh câu hỏi phỏng vấn";
     public static final String SCRIPT_GENERATION_FAILED_TIMEOUT =
