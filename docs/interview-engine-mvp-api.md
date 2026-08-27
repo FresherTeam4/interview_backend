@@ -1,6 +1,6 @@
 # Interview Engine MVP — Thiết kế kỹ thuật và API
 
-> Trạng thái: M00–M03 đã approved; M04 implementation review candidate
+> Trạng thái: M00–M04 đã approved; M05 implementation review candidate
 > Tài liệu sản phẩm liên quan: [interview-engine-mvp-plan.md](./interview-engine-mvp-plan.md)  
 > Baseline: Java 17, Spring Boot 4.1.x, Spring MVC, Spring Security, Spring Data JPA,
 > MySQL, Liquibase, MinIO/S3, Spring AI và Gemini
@@ -1595,6 +1595,23 @@ Server validation:
 - Diversity với ba session gần nhất đạt ngưỡng.
 - Không có markdown/code fence trong field text sau parse.
 
+#### 11.3.1. Runtime contract đã triển khai trong M05
+
+- System message giữ instruction; user message chỉ chứa JSON profile/JD có nhãn untrusted. Prompt
+  và schema được resolve theo `app.interview.ai.script-prompt-version` lúc startup.
+- Provider call chạy sau read transaction chuẩn bị input và trước write transaction persist output.
+- Source ID phải đồng thời xuất hiện trong immutable snapshot và còn thuộc profile đã chọn. DB FK
+  không được dùng thay cho bước trust-boundary validation này.
+- Server tự tạo SHA-256 signature từ source type/entity, competency và normalized concept. Seed chỉ
+  phục vụ audit.
+- Query diversity chỉ lấy tối đa ba session gần nhất cùng profile/JD hash. Không câu normalized nào
+  được trùng ba session này; ít nhất 70% signature phải khác session gần nhất.
+- Final write khóa profile cho diversity check đồng thời, rồi kiểm pessimistic session lock và
+  processing token. Questions, question count, READY transition và optimistic version cùng commit
+  hoặc cùng rollback.
+- Chỉ diversity rejection được regenerate ngay một lần. Provider/malformed/validation failures đi
+  ra bằng reason + retryable flag + message đã sanitize để M06 quyết định retry/session failure.
+
 ### 11.4. Follow-up input/output
 
 Chỉ gửi context cần thiết:
@@ -2320,5 +2337,5 @@ tới đúng module gate, không phải blocker của M00.
 - [x] Người dùng/team đã phát hành `APPROVED M00` ngày 2026-08-26.
 
 Sau `APPROVED M00`, thiết kế database/API được xem là khóa cho MVP. Mọi thay đổi sau đó phải nêu
-decision ID/module bị ảnh hưởng và đi bằng migration/API revision có chủ đích. M01–M03 đã được
-approve; M04 đang ở implementation review gate.
+decision ID/module bị ảnh hưởng và đi bằng migration/API revision có chủ đích. M01–M04 đã được
+approve; M05 đang ở implementation review gate và M06 chưa được phép bắt đầu.

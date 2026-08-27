@@ -1,0 +1,82 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["questions"],
+  "properties": {
+    "questions": {
+      "type": "array",
+      "minItems": 5,
+      "maxItems": 7,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "ordinal",
+          "questionText",
+          "topic",
+          "competency",
+          "difficulty",
+          "sourceType",
+          "sourceProjectId",
+          "sourceSkillId",
+          "sourceJdExcerpt",
+          "signatureConcept"
+        ],
+        "properties": {
+          "ordinal": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 7
+          },
+          "questionText": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          },
+          "topic": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 150
+          },
+          "competency": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "difficulty": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 5
+          },
+          "sourceType": {
+            "type": "string",
+            "enum": [
+              "CV_PROJECT",
+              "CV_SKILL",
+              "CV_JD_MATCH",
+              "JD_GAP",
+              "GENERAL_BEHAVIORAL"
+            ]
+          },
+          "sourceProjectId": {
+            "type": ["integer", "null"],
+            "minimum": 1
+          },
+          "sourceSkillId": {
+            "type": ["integer", "null"],
+            "minimum": 1
+          },
+          "sourceJdExcerpt": {
+            "type": ["string", "null"],
+            "maxLength": 2000
+          },
+          "signatureConcept": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,8 +1,10 @@
 package com.baseProject.myBaseProject.config;
 
 import com.baseProject.myBaseProject.config.properites.AiProperties;
+import com.baseProject.myBaseProject.config.properites.InterviewAiProperties;
 import com.google.genai.Client;
 import com.google.genai.types.HttpOptions;
+
 import org.springframework.ai.google.genai.GoogleGenAiChatModel;
 import org.springframework.ai.google.genai.GoogleGenAiChatOptions;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -13,37 +15,39 @@ import org.springframework.core.retry.RetryPolicy;
 import org.springframework.core.retry.RetryTemplate;
 
 @Configuration(proxyBeanMethods = false)
-public class CvParserAiConfig {
+public class InterviewAiConfig {
 
-    @Bean(destroyMethod = "close")
+    public static final String SCRIPT_CLIENT = "interviewScriptGenAiClient";
+    public static final String SCRIPT_CHAT_MODEL = "interviewScriptChatModel";
+
+    @Bean(name = SCRIPT_CLIENT, destroyMethod = "close")
     @Lazy
-    Client cvParserGenAiClient(AiProperties properties) {
-        if (!properties.hasApiKey()) {
+    Client interviewScriptGenAiClient(
+            AiProperties credentialProperties,
+            InterviewAiProperties interviewAiProperties) {
+        if (!credentialProperties.hasApiKey()) {
             throw new IllegalStateException("Thiếu cấu hình app.ai.api-key");
         }
 
         HttpOptions httpOptions = HttpOptions.builder()
-                .timeout(Math.toIntExact(properties.timeoutMs()))
+                .timeout(Math.toIntExact(interviewAiProperties.scriptTimeoutMs()))
                 .build();
-
         return Client.builder()
-                .apiKey(properties.apiKey())
+                .apiKey(credentialProperties.apiKey())
                 .httpOptions(httpOptions)
                 .build();
     }
 
-    @Bean
+    @Bean(name = SCRIPT_CHAT_MODEL)
     @Lazy
-    GoogleGenAiChatModel cvParserChatModel(
-            @Qualifier("cvParserGenAiClient") Client cvParserGenAiClient,
-            AiProperties properties) {
+    GoogleGenAiChatModel interviewScriptChatModel(
+            @Qualifier(SCRIPT_CLIENT) Client interviewScriptGenAiClient,
+            InterviewAiProperties properties) {
         return GoogleGenAiChatModel.builder()
-                .genAiClient(cvParserGenAiClient)
+                .genAiClient(interviewScriptGenAiClient)
                 .options(GoogleGenAiChatOptions.builder()
                         .model(properties.model())
                         .build())
-                // Timeout 25 giây là ngân sách cho toàn tác vụ; không retry ngầm để tránh
-                // một lần parse vượt tiêu chí nghiệp vụ 30 giây.
                 .retryTemplate(new RetryTemplate(RetryPolicy.withMaxRetries(0)))
                 .build();
     }

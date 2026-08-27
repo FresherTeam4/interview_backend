@@ -11,6 +11,8 @@ public interface SessionContextSnapshotRepository
 
     SessionContextSnapshot save(SessionContextSnapshot snapshot);
 
+    Optional<SessionContextSnapshot> findBySessionId(Long sessionId);
+
     Optional<SessionContextSnapshot> findBySessionIdAndSessionUserId(
             Long sessionId,
             Long userId);

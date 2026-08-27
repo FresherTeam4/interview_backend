@@ -99,5 +99,7 @@ public enum ErrorCode {
     /** 409 — event không hợp lệ với trạng thái session hiện tại. */
     SESSION_INVALID_STATE,
     /** 409 — expectedVersion không còn là phiên bản hiện tại. */
-    SESSION_VERSION_CONFLICT
+    SESSION_VERSION_CONFLICT,
+    /** 503 — provider hoặc credential sinh nội dung phỏng vấn không dùng được. */
+    INTERVIEW_AI_UNAVAILABLE
 }

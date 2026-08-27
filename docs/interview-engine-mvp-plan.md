@@ -1,6 +1,6 @@
 # Interview Engine MVP — Kịch bản sản phẩm và kế hoạch triển khai
 
-> Trạng thái: M00–M03 đã approved; M04 implementation review candidate
+> Trạng thái: M00–M04 đã approved; M05 implementation review candidate
 > Ngày cập nhật: 2026-08-27
 > Phạm vi: Interview Engine, JD, text interview, voice turn-based và scoring
 
@@ -1213,7 +1213,7 @@ Hệ thống có một rubric công khai, versioned và bất biến để mọi
 
 ### M04 — Session persistence và state-machine foundation
 
-**Trạng thái:** implementation đã hoàn thành, chờ `APPROVED M04`.
+**Trạng thái:** `APPROVED M04` ngày 2026-08-27; M05 được phép bắt đầu.
 
 **Kết quả kỹ thuật**
 
@@ -1335,11 +1335,13 @@ claim.
    hai thất bại; stale version bị từ chối; query user khác không thấy session; work sau retry xuất
    hiện trong recovery query. Sau rollback không còn fixture user/session trong database.
 
-**Điểm dừng:** chờ `APPROVED M04`.
+**Review gate:** đã qua với `APPROVED M04` ngày 2026-08-27; M05 được phép bắt đầu.
 
 ---
 
 ### M05 — Question generation core
+
+**Trạng thái:** implementation đã hoàn thành, chờ `APPROVED M05`.
 
 **Kết quả kỹ thuật**
 
@@ -1370,12 +1372,85 @@ kịch bản hợp lệ; chưa mở create-session API cho frontend.
 - `generationSeed` không bị nhầm với cơ chế guarantee diversity.
 - Không giữ transaction lúc gọi AI.
 
+**Luồng implementation M05**
+
+1. Liquibase `029` tạo `session_questions` bất biến với FK session `CASCADE`, FK project/skill
+   `SET NULL`, unique `(session_id, ordinal)` và `(session_id, question_signature)`, enum/check
+   constraint, metadata seed/prompt/model và index cho hai FK source.
+2. `InterviewQuestionGenerator` chỉ nhận/trả immutable records. Gemini adapter đọc prompt/schema
+   `v1` lúc startup, đặt instruction ở system message và toàn bộ profile/JD JSON ở user message có
+   nhãn untrusted; model không được tự quyết định relationship hay state.
+3. Service mở read-only transaction ngắn để chụp input, claim token, ID project/skill hợp lệ và
+   signatures/text của tối đa ba session gần nhất. Transaction đóng trước khi gọi Gemini với timeout
+   script riêng 12 giây.
+4. Backend kiểm count theo difficulty, ordinal liên tục, length/difficulty, code fence, source shape,
+   source ID vừa có trong snapshot vừa thuộc profile hiện tại, và JD excerpt. Excerpt không còn là
+   substring sau normalize bị bỏ; source type bắt buộc excerpt sau đó sẽ bị reject.
+5. `questionSignature` là SHA-256 lowercase do server tạo từ
+   `sourceType + projectId + skillId + competency + normalized concept`; model chỉ cung cấp concept.
+   `generationSeed` chỉ được lưu để audit, không tham gia quyết định pass/fail diversity.
+6. Exact normalized text không được trùng ba session gần nhất và ít nhất 70% signature phải khác
+   session gần nhất. Chỉ lỗi diversity được gọi provider lại đúng một lần; mọi output sai contract
+   khác bị từ chối ngay.
+7. Transaction ghi cuối khóa profile để serialize diversity check giữa hai generation đồng thời,
+   rồi khóa session/kiểm claim token lại. Toàn bộ questions, `totalQuestionCount`, transition
+   `SCRIPT_GENERATING -> READY` và optimistic version được flush một lần; lỗi ở bất kỳ bước nào
+   rollback toàn bộ script.
+8. Missing key, timeout, 429/5xx/network, malformed/invalid output được dịch thành
+   `ScriptGenerationException` có reason, retryable flag và `statusMessage` an toàn. M06 sẽ chịu
+   trách nhiệm chuyển lỗi nền này thành session failure/retry workflow.
+
+**Source metadata invariant M05**
+
+| `sourceType` | Project | Skill | JD excerpt sau normalize |
+|---|---|---|---|
+| `CV_PROJECT` | Bắt buộc | Tùy chọn | Tùy chọn |
+| `CV_SKILL` | Tùy chọn | Bắt buộc | Tùy chọn |
+| `CV_JD_MATCH` | Ít nhất project hoặc skill | Ít nhất project hoặc skill | Bắt buộc |
+| `JD_GAP` | Phải `null` | Phải `null` | Bắt buộc |
+| `GENERAL_BEHAVIORAL` | Phải `null` | Phải `null` | Phải `null` |
+
 **Acceptance để approve**
 
 - Mock response hợp lệ persist đúng 5/6/7 questions.
 - Unknown source ID, duplicate, sai count/schema rollback toàn bộ.
 - Same context vi phạm diversity retry tối đa một lần.
 - Missing key/429/timeout/5xx được map thành failure an toàn.
+
+**Kiểm tra local M05 (không có Swagger API)**
+
+1. Chạy `.\mvnw.cmd spring-boot:run`. Log phải báo database up-to-date hoặc apply changeset
+   `029-create-session-questions`; sau đó Hibernate khởi tạo `EntityManagerFactory` và application
+   start dù `GEMINI_API_KEY` để trống.
+2. Kiểm tra schema bằng query read-only:
+
+   ```sql
+   SELECT id, author, filename, dateexecuted
+   FROM databasechangelog
+   WHERE id = '029-create-session-questions';
+
+   SHOW CREATE TABLE session_questions;
+
+   SELECT index_name,
+          GROUP_CONCAT(column_name ORDER BY seq_in_index) AS columns_in_order,
+          non_unique
+   FROM information_schema.statistics
+   WHERE table_schema = DATABASE()
+     AND table_name = 'session_questions'
+   GROUP BY index_name, non_unique
+   ORDER BY index_name;
+   ```
+
+   Kết quả phải có hai unique key session/ordinal và session/signature, hai index source, FK session
+   `ON DELETE CASCADE`, còn FK project/skill `ON DELETE SET NULL`.
+3. Smoke nội bộ bằng provider giả và fixture tổng hợp trong transaction rollback đã cho kết quả:
+   `calls=2`, `diversityRetried=true`, session `READY`, `totalQuestionCount=6`, version `1`, đúng sáu
+   questions, đúng một transition và metadata `mock-m05:v1`. Sau rollback, fixture user/session/
+   question đều bằng `0`.
+4. Smoke contract riêng xác nhận missing key thành `MISSING_CREDENTIAL`, `retryable=false`, message
+   an toàn; source project ID không thuộc snapshot/profile thành `INVALID_OUTPUT` trước khi persist.
+5. Không gọi Gemini thật bằng CV/JD thật khi review. Nếu cần thử provider, chỉ dùng dữ liệu giả và
+   đối chiếu log model/prompt version/duration; log không được chứa full prompt/output.
 
 **Điểm dừng:** chờ `APPROVED M05`.
 

@@ -75,6 +75,16 @@ public final class Message {
             "Thao tác này không hợp lệ với trạng thái hiện tại của phiên phỏng vấn";
     public static final String SESSION_VERSION_CONFLICT =
             "Phiên phỏng vấn đã thay đổi; vui lòng tải lại trạng thái mới nhất";
+    public static final String SCRIPT_GENERATION_FAILED_NO_API_KEY =
+            "Máy chủ chưa cấu hình dịch vụ sinh câu hỏi phỏng vấn";
+    public static final String SCRIPT_GENERATION_FAILED_TIMEOUT =
+            "Sinh câu hỏi phỏng vấn quá lâu nên đã dừng; vui lòng thử lại";
+    public static final String SCRIPT_GENERATION_FAILED_AI_UNAVAILABLE =
+            "Dịch vụ sinh câu hỏi phỏng vấn đang không phản hồi; vui lòng thử lại sau";
+    public static final String SCRIPT_GENERATION_FAILED_INVALID_OUTPUT =
+            "Chưa sinh được bộ câu hỏi hợp lệ; vui lòng thử lại";
+    public static final String SCRIPT_GENERATION_FAILED_UNEXPECTED =
+            "Sinh câu hỏi phỏng vấn thất bại; vui lòng thử lại sau";
 
     // ---- status_message của lần bóc tách CV ----
     // Không trả qua HTTP: bóc tách chạy sau khi request đã kết thúc, nên chỗ đọc được là

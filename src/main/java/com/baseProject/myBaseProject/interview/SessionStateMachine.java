@@ -134,6 +134,24 @@ public class SessionStateMachine {
         return apply(session, plan, SessionTransitionActor.SYSTEM, reason);
     }
 
+    /**
+     * Completes script persistence for a session already protected by the caller's pessimistic
+     * lock. Avoiding a second lock query is important here: the query would auto-flush the newly
+     * recorded question count and advance {@code @Version} before the transition is applied.
+     */
+    @Transactional
+    public InterviewSession completeScriptGeneration(
+            InterviewSession lockedSession,
+            UUID processingToken,
+            String reason) {
+        Objects.requireNonNull(lockedSession);
+        if (lockedSession.getId() == null) {
+            throw new IllegalArgumentException("Script generation session must be persisted");
+        }
+        TransitionPlan plan = scriptPersistedPlan(lockedSession, processingToken);
+        return apply(lockedSession, plan, SessionTransitionActor.SYSTEM, reason);
+    }
+
     @Transactional
     public InterviewSession timeout(Long sessionId, long expectedVersion, String reason) {
         InterviewSession session = sessionRepository.findByIdForUpdate(sessionId)

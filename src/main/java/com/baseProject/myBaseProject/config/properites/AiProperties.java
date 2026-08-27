@@ -7,7 +7,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.validation.annotation.Validated;
 
 /**
- * Cấu hình lần gọi Gemini để bóc tách CV.
+ * Credential Gemini dùng chung và các default riêng của luồng bóc tách CV.
  *
  * <p>{@code apiKey} cố tình không {@code @NotBlank}: thiếu key thì app vẫn khởi động được
  * (chạy test, làm tính năng khác), và lần bóc tách đầu tiên sẽ trả về FAILED kèm lý do rõ
@@ -16,7 +16,7 @@ import org.springframework.validation.annotation.Validated;
 @Validated
 @ConfigurationProperties(prefix = "app.ai")
 public record AiProperties(
-        /** Không để trong repo. Rỗng là hợp lệ, xem javadoc của lớp. */
+        /** Không để trong repo. Rỗng là hợp lệ; interview generator cũng dùng credential này. */
         String apiKey,
 
         /** Ghi vào {@code cv_parse_results.model_name} — cột VARCHAR(100). */

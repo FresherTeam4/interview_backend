@@ -17,6 +17,7 @@ import org.springframework.ai.content.Media;
 import org.springframework.ai.google.genai.GoogleGenAiChatModel;
 import org.springframework.ai.google.genai.GoogleGenAiChatOptions;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.ResourceLoader;
 import org.springframework.http.MediaType;
@@ -55,6 +56,7 @@ public class GeminiCvParserClient implements CvParserClient {
     public GeminiCvParserClient(AiProperties aiProperties,
                                 JsonMapper jsonMapper,
                                 ResourceLoader resourceLoader,
+                                @Qualifier("cvParserChatModel")
                                 ObjectProvider<GoogleGenAiChatModel> chatModelProvider) {
         this.aiProperties = aiProperties;
         this.jsonMapper = jsonMapper;

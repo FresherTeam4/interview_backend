@@ -222,6 +222,17 @@ public class InterviewSession {
         return session;
     }
 
+    /** Records the all-or-nothing base script size immediately before the READY transition. */
+    public void recordGeneratedQuestionCount(int questionCount) {
+        if (status != SessionStatus.SCRIPT_GENERATING
+                || totalQuestionCount != 0
+                || questionCount < 5
+                || questionCount > 7) {
+            throw new IllegalStateException("Generated question count cannot be recorded");
+        }
+        totalQuestionCount = (short) questionCount;
+    }
+
     /** State mutation entry point; production callers go through SessionStateMachine. */
     public void applyStateTransition(
             SessionStatus targetStatus,
