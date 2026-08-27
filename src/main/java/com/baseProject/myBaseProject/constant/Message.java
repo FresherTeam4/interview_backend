@@ -80,7 +80,7 @@ public final class Message {
     public static final String SESSION_LIMIT_REACHED =
             "Bạn đã có tối đa %d phiên phỏng vấn chưa kết thúc";
     public static final String SESSION_RETRY_NOT_ALLOWED =
-            "Phiên phỏng vấn này hiện không thể thử lại bước sinh câu hỏi";
+            "Phiên phỏng vấn này hiện không có bước xử lý nào có thể thử lại";
     public static final String IDEMPOTENCY_KEY_REQUIRED =
             "Idempotency-Key là bắt buộc khi tạo phiên phỏng vấn";
     public static final String IDEMPOTENCY_KEY_REUSED =
@@ -104,6 +104,16 @@ public final class Message {
             "Chưa sinh được bộ câu hỏi hợp lệ; vui lòng thử lại";
     public static final String SCRIPT_GENERATION_FAILED_UNEXPECTED =
             "Sinh câu hỏi phỏng vấn thất bại; vui lòng thử lại sau";
+    public static final String FOLLOW_UP_FAILED_NO_API_KEY =
+            "Máy chủ chưa cấu hình dịch vụ tạo câu hỏi đào sâu";
+    public static final String FOLLOW_UP_FAILED_TIMEOUT =
+            "Tạo câu hỏi tiếp theo quá lâu nên đã dừng; vui lòng thử lại";
+    public static final String FOLLOW_UP_FAILED_AI_UNAVAILABLE =
+            "Dịch vụ tạo câu hỏi tiếp theo đang không phản hồi; vui lòng thử lại sau";
+    public static final String FOLLOW_UP_FAILED_INVALID_OUTPUT =
+            "Chưa tạo được câu hỏi tiếp theo hợp lệ; vui lòng thử lại";
+    public static final String FOLLOW_UP_FAILED_UNEXPECTED =
+            "Tạo câu hỏi tiếp theo thất bại; vui lòng thử lại sau";
 
     // ---- status_message của lần bóc tách CV ----
     // Không trả qua HTTP: bóc tách chạy sau khi request đã kết thúc, nên chỗ đọc được là

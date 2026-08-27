@@ -1,6 +1,7 @@
 package com.baseProject.myBaseProject.repository;
 
 import com.baseProject.myBaseProject.entity.InterviewSession;
+import com.baseProject.myBaseProject.enums.AwaitingAction;
 import com.baseProject.myBaseProject.enums.SessionProcessingStage;
 import com.baseProject.myBaseProject.enums.SessionStatus;
 import com.baseProject.myBaseProject.repository.projection.SessionSummaryProjection;
@@ -157,6 +158,30 @@ public interface InterviewSessionRepository extends JpaRepository<InterviewSessi
             @Param("sessionId") Long sessionId,
             @Param("stage") SessionProcessingStage stage,
             @Param("token") String token,
+            @Param("nextRetryAt") Instant nextRetryAt,
+            @Param("statusMessage") String statusMessage,
+            @Param("updatedAt") Instant updatedAt);
+
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("""
+            update InterviewSession session
+            set session.awaitingAction = :awaitingAction,
+                session.processingToken = null,
+                session.processingStartedAt = null,
+                session.nextRetryAt = :nextRetryAt,
+                session.statusMessage = :statusMessage,
+                session.updatedAt = :updatedAt,
+                session.version = session.version + 1
+            where session.id = :sessionId
+              and session.status = com.baseProject.myBaseProject.enums.SessionStatus.IN_PROGRESS
+              and session.processingStage = :stage
+              and session.processingToken = :token
+            """)
+    int releaseNextTurnProcessingClaimForRetry(
+            @Param("sessionId") Long sessionId,
+            @Param("stage") SessionProcessingStage stage,
+            @Param("token") String token,
+            @Param("awaitingAction") AwaitingAction awaitingAction,
             @Param("nextRetryAt") Instant nextRetryAt,
             @Param("statusMessage") String statusMessage,
             @Param("updatedAt") Instant updatedAt);

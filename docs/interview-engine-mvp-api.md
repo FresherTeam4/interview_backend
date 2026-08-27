@@ -1,6 +1,6 @@
 # Interview Engine MVP — Thiết kế kỹ thuật và API
 
-> Trạng thái: M00–M07 đã approved; M08 implementation review candidate
+> Trạng thái: M00–M08 đã approved; M09 implementation review candidate
 > Tài liệu sản phẩm liên quan: [interview-engine-mvp-plan.md](./interview-engine-mvp-plan.md)  
 > Baseline: Java 17, Spring Boot 4.1.x, Spring MVC, Spring Security, Spring Data JPA,
 > MySQL, Liquibase, MinIO/S3, Spring AI và Gemini
@@ -673,6 +673,7 @@ mềm; lịch sử session vẫn đọc qua snapshot.
 | `READY/IN_PROGRESS/PAUSED` | Timeout | `SCORING` | `SCHEDULER` | `REPORT` |
 | `SCORING` | Report committed | `COMPLETED` | `SYSTEM` | `NONE` |
 | `SCORING` | Exhaust retries | `FAILED` | `SYSTEM` | `ENGINE_RETRY` |
+| `IN_PROGRESS + ENGINE_RETRY` | Retry next turn | `IN_PROGRESS` | `USER` | `ENGINE_RESPONSE` |
 | `READY/IN_PROGRESS/PAUSED` | Abandon | `ABANDONED` | `USER` | `NONE` |
 | `FAILED` | Abandon retryable session | `ABANDONED` | `USER` | `NONE` |
 | `FAILED` | Retry valid stage | Stage tương ứng | `USER` | Tùy stage |
@@ -1303,6 +1304,25 @@ Transaction B sau AI:
 - `app.interview.max-answer-chars` mặc định 10.000; service strip content và đếm Unicode code point.
   Session `VOICE_TURN_BASED` dùng cùng endpoint làm text fallback mà không đổi session mode.
 
+#### 8.7.2. Runtime contract đã triển khai trong M09
+
+- Worker thay policy cố định bằng port `InterviewFollowUpDecider` và Gemini adapter dùng prompt/schema
+  follow-up v1. Provider chỉ nhận base question hiện tại, tối đa sáu turn thuộc question đó, candidate
+  answer mới nhất, relevant project/skill/JD excerpt và hai budget còn lại; không nhận toàn history.
+- Backend chỉ persist `FOLLOW_UP` khi evidence quote là exact substring của answer, question/evidence
+  là plain text và cả cap per-question 2 lẫn cap per-session 5 còn chỗ. Evidence sai, cap hết và
+  `END_INTERVIEW` sớm đều được override thành `NEXT_QUESTION`.
+- Follow-up interviewer turn dùng cùng `question_id`, `parent_turn_id` của candidate vừa nhận,
+  `is_followup=true`, depth 1–2 và provider latency. Answer cho follow-up không tăng
+  `answered_question_count` lần hai; cursor/index/counter/claim được đổi atomically dưới session lock.
+- Next-turn provider chạy tối đa ba attempt với backoff 1s/3s. Lỗi retryable giữ answer, chuyển
+  `ENGINE_RETRY` và nhả claim tới `next_retry_at`; scheduler và recovery claim token mới. Hết attempt
+  chuyển `FAILED/NEXT_TURN`. Endpoint retry có thể bỏ qua thời gian chờ khi đang
+  `IN_PROGRESS/ENGINE_RETRY`, hoặc phục hồi `FAILED/NEXT_TURN`; cả hai đều reset attempt, claim và
+  dispatch lại.
+- Commit sau provider luôn kiểm processing token, candidate turn ID và question ID. Worker cũ sau
+  restart/lease expiry hoặc hai dispatch trùng vì vậy không thể append hai interviewer turn.
+
 ### 8.8. Complete sớm
 
 ```http
@@ -1344,11 +1364,11 @@ Body có `expectedVersion`. Cho phép khi:
 
 Server xác định stage từ persisted data, không cho client chọn stage. Trả `202 Accepted`.
 
-Trạng thái M06: chỉ nhánh script generation được implement. Service truyền cứng
-`SessionFailureStage.SCRIPT_GENERATION` vào state machine, nên retry cho scoring và next-turn vẫn là
-spec chờ M09/M13. Các lỗi thường gặp: `expectedVersion` lệch trả `409 SESSION_VERSION_CONFLICT`,
-session không ở trạng thái cho phép retry trả `409 SESSION_RETRY_NOT_ALLOWED`, session của user khác
-trả `404 SESSION_NOT_FOUND`.
+Trạng thái M09: retry đã hỗ trợ `IN_PROGRESS + ENGINE_RETRY + NEXT_TURN`,
+`FAILED/SCRIPT_GENERATION` và `FAILED/NEXT_TURN`; server đọc persisted state/stage, reset attempt rồi
+claim/dispatch workflow tương ứng. Scoring retry vẫn chờ M10. Các lỗi thường gặp: `expectedVersion`
+lệch trả `409 SESSION_VERSION_CONFLICT`, session hoặc stage không cho phép retry trả
+`409 SESSION_RETRY_NOT_ALLOWED`, session của user khác trả `404 SESSION_NOT_FOUND`.
 
 ---
 

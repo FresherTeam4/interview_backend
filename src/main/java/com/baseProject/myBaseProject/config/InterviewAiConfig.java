@@ -19,6 +19,8 @@ public class InterviewAiConfig {
 
     public static final String SCRIPT_CLIENT = "interviewScriptGenAiClient";
     public static final String SCRIPT_CHAT_MODEL = "interviewScriptChatModel";
+    public static final String FOLLOW_UP_CLIENT = "interviewFollowUpGenAiClient";
+    public static final String FOLLOW_UP_CHAT_MODEL = "interviewFollowUpChatModel";
 
     @Bean(name = SCRIPT_CLIENT, destroyMethod = "close")
     @Lazy
@@ -45,6 +47,38 @@ public class InterviewAiConfig {
             InterviewAiProperties properties) {
         return GoogleGenAiChatModel.builder()
                 .genAiClient(interviewScriptGenAiClient)
+                .options(GoogleGenAiChatOptions.builder()
+                        .model(properties.model())
+                        .build())
+                .retryTemplate(new RetryTemplate(RetryPolicy.withMaxRetries(0)))
+                .build();
+    }
+
+    @Bean(name = FOLLOW_UP_CLIENT, destroyMethod = "close")
+    @Lazy
+    Client interviewFollowUpGenAiClient(
+            AiProperties credentialProperties,
+            InterviewAiProperties interviewAiProperties) {
+        if (!credentialProperties.hasApiKey()) {
+            throw new IllegalStateException("Thiếu cấu hình app.ai.api-key");
+        }
+
+        HttpOptions httpOptions = HttpOptions.builder()
+                .timeout(Math.toIntExact(interviewAiProperties.followUpTimeoutMs()))
+                .build();
+        return Client.builder()
+                .apiKey(credentialProperties.apiKey())
+                .httpOptions(httpOptions)
+                .build();
+    }
+
+    @Bean(name = FOLLOW_UP_CHAT_MODEL)
+    @Lazy
+    GoogleGenAiChatModel interviewFollowUpChatModel(
+            @Qualifier(FOLLOW_UP_CLIENT) Client interviewFollowUpGenAiClient,
+            InterviewAiProperties properties) {
+        return GoogleGenAiChatModel.builder()
+                .genAiClient(interviewFollowUpGenAiClient)
                 .options(GoogleGenAiChatOptions.builder()
                         .model(properties.model())
                         .build())

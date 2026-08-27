@@ -36,6 +36,10 @@ public interface SessionTurnRepository extends JpaRepository<SessionTurn, Long> 
             Long sessionId,
             String clientTurnId);
 
+    List<SessionTurn> findBySessionIdAndQuestionIdOrderByTurnIndexAsc(
+            Long sessionId,
+            Long questionId);
+
     @Query("""
             select turn
             from SessionTurn turn

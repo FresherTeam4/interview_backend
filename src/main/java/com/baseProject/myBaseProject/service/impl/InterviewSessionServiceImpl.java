@@ -91,7 +91,7 @@ public class InterviewSessionServiceImpl implements InterviewSessionService {
     private static final String SNAPSHOT_SCHEMA_VERSION = "v1";
     private static final int IDEMPOTENCY_KEY_MAX_LENGTH = 128;
     private static final String CREATE_TRANSITION_REASON = "Session accepted for script generation";
-    private static final String RETRY_TRANSITION_REASON = "User retried script generation";
+    private static final String RETRY_TRANSITION_REASON = "User retried interview AI workflow";
     private static final String START_TRANSITION_REASON = "User started interview";
     private static final String PAUSE_TRANSITION_REASON = "User paused interview";
     private static final String RESUME_TRANSITION_REASON = "User resumed interview";
@@ -348,6 +348,11 @@ public class InterviewSessionServiceImpl implements InterviewSessionService {
                 || currentPrompt.getQuestion() == null
                 || session.getCurrentQuestionOrdinal() == null
                 || currentPrompt.getTurnIndex() != session.getNextTurnIndex() - 1
+                || (currentPrompt.isFollowUp()
+                        && currentPrompt.getFollowUpDepth()
+                                != session.getCurrentFollowupDepth())
+                || (!currentPrompt.isFollowUp()
+                        && session.getCurrentFollowupDepth() != 0)
                 || currentPrompt.getQuestion().getOrdinal()
                         != session.getCurrentQuestionOrdinal()) {
             throw new CurrentPromptMismatchException();
@@ -355,7 +360,9 @@ public class InterviewSessionServiceImpl implements InterviewSessionService {
 
         Instant now = clock.instant();
         UUID processingToken = UUID.randomUUID();
-        int turnIndex = session.acceptBaseQuestionAnswer(processingToken, now);
+        int turnIndex = currentPrompt.isFollowUp()
+                ? session.acceptFollowUpAnswer(processingToken, now)
+                : session.acceptBaseQuestionAnswer(processingToken, now);
         SessionTurn candidateTurn = turnRepository.save(SessionTurn.candidateTextAnswer(
                 session,
                 currentPrompt.getQuestion(),
@@ -375,27 +382,37 @@ public class InterviewSessionServiceImpl implements InterviewSessionService {
             Long sessionId,
             RetryInterviewSessionRequest request) {
         ensureEnabled();
-        InterviewSession retrying = stateMachine.retryUserStage(
+        InterviewSession retrying = stateMachine.retryUserWorkflow(
                 userId,
                 sessionId,
                 request.expectedVersion(),
-                SessionFailureStage.SCRIPT_GENERATION,
+                Set.of(
+                        SessionFailureStage.SCRIPT_GENERATION,
+                        SessionFailureStage.NEXT_TURN),
                 RETRY_TRANSITION_REASON);
         UUID processingToken = UUID.randomUUID();
+        SessionProcessingStage processingStage = retrying.getProcessingStage();
         boolean claimed = claimService.claim(
                 retrying.getId(),
-                SessionProcessingStage.SCRIPT_GENERATION,
+                processingStage,
                 processingToken,
                 properties.processingLease());
         if (!claimed) {
             throw new IllegalStateException(
-                    "Retried script generation work could not be claimed, sessionId="
+                    "Retried interview work could not be claimed, sessionId="
                             + retrying.getId());
         }
 
         InterviewSession claimedSession = sessionRepository.findByIdAndUserId(sessionId, userId)
                 .orElseThrow(SessionNotFoundException::new);
-        workflowDispatcher.dispatchAfterCommit(sessionId, processingToken);
+        if (processingStage == SessionProcessingStage.SCRIPT_GENERATION) {
+            workflowDispatcher.dispatchAfterCommit(sessionId, processingToken);
+        } else if (processingStage == SessionProcessingStage.NEXT_TURN) {
+            nextTurnWorkflowDispatcher.dispatchAfterCommit(sessionId, processingToken);
+        } else {
+            throw new IllegalStateException(
+                    "Unsupported retried processing stage " + processingStage);
+        }
         return sessionMapper.toAcceptedResponse(claimedSession);
     }
 
@@ -494,7 +511,8 @@ public class InterviewSessionServiceImpl implements InterviewSessionService {
 
     private void redispatchPendingNextTurn(InterviewSession session) {
         if (session.getStatus() == SessionStatus.IN_PROGRESS
-                && session.getAwaitingAction() == AwaitingAction.ENGINE_RESPONSE
+                && (session.getAwaitingAction() == AwaitingAction.ENGINE_RESPONSE
+                        || session.getAwaitingAction() == AwaitingAction.ENGINE_RETRY)
                 && session.getProcessingStage() == SessionProcessingStage.NEXT_TURN
                 && session.getProcessingToken() != null) {
             nextTurnWorkflowDispatcher.dispatchAfterCommit(

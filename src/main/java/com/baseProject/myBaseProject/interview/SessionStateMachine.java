@@ -111,18 +111,30 @@ public class SessionStateMachine {
     }
 
     @Transactional
-    public InterviewSession retryUserStage(
+    public InterviewSession retryUserWorkflow(
             Long userId,
             Long sessionId,
             long expectedVersion,
-            SessionFailureStage allowedFailureStage,
+            Set<SessionFailureStage> allowedFailureStages,
             String reason) {
         InterviewSession session = sessionRepository
                 .findOwnedByIdForUpdate(sessionId, userId)
                 .orElseThrow(SessionNotFoundException::new);
         verifyVersion(session, expectedVersion);
+        if (session.getStatus() == SessionStatus.IN_PROGRESS
+                && session.getAwaitingAction() == AwaitingAction.ENGINE_RETRY
+                && session.getProcessingStage() == SessionProcessingStage.NEXT_TURN
+                && session.getProcessingToken() == null) {
+            return apply(
+                    session,
+                    nextTurnRetryPlan(),
+                    SessionTransitionActor.USER,
+                    reason);
+        }
         if (session.getStatus() != SessionStatus.FAILED
-                || session.getFailureStage() != allowedFailureStage) {
+                || session.getFailureStage() == null
+                || allowedFailureStages == null
+                || !allowedFailureStages.contains(session.getFailureStage())) {
             throw new SessionRetryNotAllowedException();
         }
         return apply(
@@ -252,6 +264,18 @@ public class SessionStateMachine {
         };
     }
 
+    private TransitionPlan nextTurnRetryPlan() {
+        return new TransitionPlan(
+                SessionStatus.IN_PROGRESS,
+                AwaitingAction.ENGINE_RESPONSE,
+                null,
+                null,
+                null,
+                SessionProcessingStage.NEXT_TURN,
+                true,
+                true);
+    }
+
     private TransitionPlan systemPlan(
             InterviewSession session,
             SessionEvent event,
@@ -361,7 +385,8 @@ public class SessionStateMachine {
             UUID processingToken) {
         requireStatus(session, SessionStatus.IN_PROGRESS);
         verifyClaim(session, SessionProcessingStage.NEXT_TURN, processingToken);
-        if (session.getAwaitingAction() != AwaitingAction.ENGINE_RESPONSE
+        if ((session.getAwaitingAction() != AwaitingAction.ENGINE_RESPONSE
+                && session.getAwaitingAction() != AwaitingAction.ENGINE_RETRY)
                 || session.getTotalQuestionCount() == 0
                 || session.getAnsweredQuestionCount() != session.getTotalQuestionCount()) {
             throw invalidState();

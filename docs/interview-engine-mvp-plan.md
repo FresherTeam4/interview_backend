@@ -1,6 +1,6 @@
 # Interview Engine MVP — Kịch bản sản phẩm và kế hoạch triển khai
 
-> Trạng thái: M00–M07 đã approved; M08 implementation review candidate
+> Trạng thái: M00–M08 đã approved; M09 implementation review candidate
 > Ngày cập nhật: 2026-08-27
 > Phạm vi: Interview Engine, JD, text interview, voice turn-based và scoring
 
@@ -1542,10 +1542,10 @@ nhận session `READY` hoặc lỗi retry được.
 11. `get` là `@Transactional(readOnly = true)` + `findByIdAndUserId`, map qua
     `InterviewSessionMapper.toResponse`. Response chỉ có counters, status, `statusMessage` và
     reference profile/JD; chưa có turns hay câu hỏi tương lai.
-12. `retry` gọi `SessionStateMachine.retryUserStage` với `findOwnedByIdForUpdate`, so
-    `expectedVersion`, và chỉ cho phép khi `status = FAILED` và `failure_stage = SCRIPT_GENERATION`.
-    Retry plan reset `processing_attempts` về `0` trước khi claim lại và dispatch, nên user được
-    thêm đủ hai lần thử provider.
+12. Ở M06, `retry` khóa ownership-scoped session, so `expectedVersion`, và chỉ cho phép khi
+    `status = FAILED` cùng `failure_stage = SCRIPT_GENERATION`. M09 đã mở rộng đường này thành
+    `SessionStateMachine.retryUserWorkflow` cho cả next-turn; retry plan vẫn reset
+    `processing_attempts` về `0` trước khi claim lại và dispatch.
 
 **Idempotency và retry invariant M06**
 
@@ -1560,7 +1560,7 @@ nhận session `READY` hoặc lỗi retry được.
 | Provider lỗi non-retryable hoặc hết attempts | `WORKFLOW_FAILED` | `FAILED` + `failure_stage = SCRIPT_GENERATION` |
 | Worker mất claim (stale token) | `ownsScriptClaim` | Bỏ qua, không ghi gì |
 | Retry với `expectedVersion` cũ | `verifyVersion` | `409 SESSION_VERSION_CONFLICT` |
-| Retry khi session không `FAILED` | `retryUserStage` | `409 SESSION_RETRY_NOT_ALLOWED` |
+| Retry ngoài state/stage được module hiện tại hỗ trợ | `retryUserWorkflow` | `409 SESSION_RETRY_NOT_ALLOWED` |
 | Session/profile/JD của user khác | Query scope theo `(id, userId)` | `404`, không tiết lộ tồn tại |
 
 **Acceptance để approve**
@@ -1771,7 +1771,7 @@ trước command tiếp theo; các ví dụ ID dưới đây chỉ mang tính mi
 
 ### M08 — Text answer và base-question progression
 
-**Trạng thái:** implementation đã hoàn thành, chờ `APPROVED M08`.
+**Trạng thái:** đã nhận `APPROVED M08`.
 
 **Kết quả người dùng**
 
@@ -1884,11 +1884,13 @@ Chuẩn bị session đã start theo M07. Từ `GET /api/sessions/{sessionId}`, 
 - Không tạo hoặc chạy test mới theo review override M03–M16. Không sửa schema và không gọi Gemini;
   policy progression của M08 hoàn toàn deterministic trong backend.
 
-**Điểm dừng:** chờ `APPROVED M08`.
+**Điểm dừng:** đã nhận `APPROVED M08`.
 
 ---
 
 ### M09 — Adaptive follow-up
+
+**Trạng thái:** implementation đã hoàn thành, chờ `APPROVED M09`.
 
 **Kết quả người dùng**
 
@@ -1924,6 +1926,97 @@ cho AI làm hỏng state machine.
 - Follow-up depth 2 bắt buộc chuyển base question tiếp.
 - Tổng follow-up không vượt global budget.
 - Timeout/restart đưa session về trạng thái retry được, không sinh turn trùng.
+
+**Luồng implementation M09**
+
+1. Transaction lưu answer của M08 được giữ nguyên. Nếu prompt hiện tại là follow-up, candidate turn
+   mới vẫn append-only nhưng `answeredQuestionCount` không tăng lần hai; session tạo claim
+   `NEXT_TURN` mới rồi mới commit và dispatch worker.
+2. Worker đọc snapshot, base question, candidate answer mới nhất và tối đa sáu turn thuộc đúng base
+   question hiện tại trong read transaction. Context AI chỉ có project/skill/JD excerpt gắn với câu
+   đó cùng budget còn lại; không gửi toàn bộ profile hoặc history của các base question khác.
+3. `InterviewFollowUpDecider` gọi Gemini ngoài database transaction với prompt/schema follow-up v1.
+   Output có `FOLLOW_UP | NEXT_QUESTION | END_INTERVIEW`, question text, evidence quote và reason;
+   prompt coi CV/JD/answer là untrusted data và yêu cầu giọng hỏi trung lập, chuyên nghiệp.
+4. Backend validate prompt version/metadata và chỉ chấp nhận `FOLLOW_UP` khi question/evidence là
+   plain text, evidence là exact substring của candidate answer, depth hiện tại nhỏ hơn 2 và tổng
+   follow-up nhỏ hơn 5. Evidence sai, budget hết hoặc `END_INTERVIEW` sớm đều fallback
+   `NEXT_QUESTION`; model không được quyền đổi state/counter.
+5. Transaction persist khóa session và kiểm lại processing token, candidate turn và question ID.
+   Follow-up hợp lệ cấp index từ `nextTurnIndex`, gắn cùng `questionId`, `parentTurnId` là candidate
+   vừa nhận, `isFollowUp=true`, depth 1–2, latency provider; đồng thời tăng counter và chuyển về
+   `CANDIDATE_ANSWER`. Nhánh còn lại chuyển base question hoặc vào `SCORING` như M08.
+6. Next-turn provider có tối đa ba attempt với backoff 1s/3s. Lỗi retryable nhả token, ghi
+   `ENGINE_RETRY`, `nextRetryAt` và status message an toàn; scheduler/recovery claim token mới.
+   `POST /retry` có thể bỏ thời gian chờ này. Hết attempt chuyển
+   `FAILED + failureStage=NEXT_TURN`; retry reset stage rồi claim/dispatch lại. Mọi commit đều kiểm
+   token nên worker cũ sau lease không thể tạo turn trùng.
+7. Fixture evaluation versioned gồm bốn case: answer đầy đủ, answer chưa đủ, prompt injection và
+   professional tone. Fixture không chứa dữ liệu CV/JD thật và dùng cho review thủ công prompt v1.
+
+**Kiểm tra local M09 (Swagger checklist)**
+
+Chuẩn bị session `IN_PROGRESS + CANDIDATE_ANSWER` theo M07/M08. Từ
+`GET /api/sessions/{sessionId}`, lấy cùng lúc `version` và `currentPrompt.turnId`.
+
+1. `POST /api/sessions/{sessionId}/answers` với:
+
+   ```json
+   {
+     "promptTurnId": 205,
+     "content": "Em dùng Redis để hệ thống nhanh hơn.",
+     "clientTurnId": "m09-answer-q1-01",
+     "expectedVersion": 8
+   }
+   ```
+
+   Kỳ vọng `202 Accepted`, cùng response contract M08: có `candidateTurnId`,
+   `status: IN_PROGRESS`, `awaitingAction: ENGINE_RESPONSE` và version mới. Poll detail; nếu AI chọn
+   follow-up thì `currentPrompt.isFollowUp=true`, `followUpDepth=1`, history có interviewer turn mới
+   ngay sau candidate và session trở lại `CANDIDATE_ANSWER`. Nếu AI chọn next, ordinal tăng như M08.
+2. Trả lời follow-up bằng chính endpoint/body shape trên nhưng dùng turn ID/version/client ID mới.
+   Kỳ vọng candidate append đúng một lần, `answeredQuestionCount` không tăng lần hai cho cùng base
+   question. Follow-up thứ hai tối đa có depth 2; sau khi trả lời depth 2, engine bắt buộc chuyển base
+   question hoặc `SCORING` dù provider đề xuất hỏi tiếp.
+3. Tiếp tục với nhiều base question. Tổng số interviewer turn có `isFollowUp=true` không vượt 5.
+   Mỗi follow-up phải có cùng `baseQuestionId` với chain hiện tại; kiểm database read-only nếu cần:
+   `parent_turn_id` trỏ candidate turn ngay trước nó, không trỏ prompt hoặc turn session khác.
+4. Với provider timeout/rate-limit giả lập, poll detail kỳ vọng session giữ candidate answer và
+   chuyển `ENGINE_RETRY` trong lúc chờ backoff. Sau tối đa ba lỗi, detail trả `FAILED`, status message
+   an toàn và không lộ provider body. Gọi `POST /api/sessions/{sessionId}/retry`:
+
+   ```json
+   {
+     "expectedVersion": 12
+   }
+   ```
+
+   Kỳ vọng `202 Accepted`, `status: IN_PROGRESS`, `awaitingAction: ENGINE_RESPONSE`; poll tiếp tới
+   follow-up/base question kế. Cũng có thể gọi payload tương tự ngay khi detail đang
+   `IN_PROGRESS + ENGINE_RETRY` để bỏ backoff. Retry với version cũ trả
+   `409 SESSION_VERSION_CONFLICT`; retry session không ở `IN_PROGRESS/ENGINE_RETRY`,
+   `FAILED/NEXT_TURN` hoặc `FAILED/SCRIPT_GENERATION` trả `409 SESSION_RETRY_NOT_ALLOWED`.
+5. Các guard M08 vẫn giữ nguyên: replay cùng `clientTurnId`/payload trả cùng candidate turn; đổi
+   content/prompt với cùng ID trả `409 IDEMPOTENCY_KEY_REUSED`; prompt cũ/sai trả
+   `409 CURRENT_PROMPT_MISMATCH`; submit khi `ENGINE_RESPONSE`, `ENGINE_RETRY`, `FAILED` hoặc
+   `SCORING` trả `409 SESSION_INVALID_STATE`.
+6. Review fixture
+   `src/main/resources/ai/interview-follow-up-evaluation-v1.json`: output FOLLOW_UP phải có quote
+   exact substring, case injection không được làm theo lệnh trong answer, và question text phải là
+   một câu hỏi trung lập. Output có evidence tự bịa phải fallback next question và không persist
+   follow-up đó.
+
+**Kết quả verification đã chạy cho M09**
+
+- `.\mvnw.cmd -DskipTests compile` thành công trên 242 source với Java release 17.
+- Application start trên cổng ngẫu nhiên thành công với MySQL local: Spring Data parse đủ 15
+  repository, Liquibase xác nhận 15 changeset hiện có, Hibernate `ddl-auto=validate` khởi tạo
+  `EntityManagerFactory`, prompt/schema follow-up v1 được nạp và Tomcat start hoàn chỉnh.
+- `git diff --check` không phát hiện whitespace error; warning CRLF chỉ phản ánh cấu hình line
+  ending hiện có trên Windows.
+- Không tạo hoặc chạy test mới theo review override M03–M16. M09 không có migration; schema `028`
+  và `030` đã chứa counter, processing claim, parent turn và follow-up fields cần thiết. Không gọi
+  Gemini hoặc gửi dữ liệu ứng viên thật trong verification.
 
 **Điểm dừng:** chờ `APPROVED M09`.
 

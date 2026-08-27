@@ -77,7 +77,9 @@ app:
     ai:
       model: ${INTERVIEW_AI_MODEL:${GEMINI_MODEL:gemini-3.5-flash-lite}}
       script-prompt-version: ${INTERVIEW_SCRIPT_PROMPT_VERSION:v1}
+      follow-up-prompt-version: ${INTERVIEW_FOLLOW_UP_PROMPT_VERSION:v1}
       script-timeout-ms: ${INTERVIEW_SCRIPT_TIMEOUT_MS:12000}
+      follow-up-timeout-ms: ${INTERVIEW_FOLLOW_UP_TIMEOUT_MS:8000}
   storage:
     endpoint: ${STORAGE_ENDPOINT:http://localhost:9000}
     public-endpoint: ${STORAGE_PUBLIC_ENDPOINT:http://localhost:9000}

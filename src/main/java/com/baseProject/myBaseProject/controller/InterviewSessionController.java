@@ -131,7 +131,7 @@ public class InterviewSessionController {
     }
 
     @PostMapping("/{sessionId}/answers")
-    @Operation(summary = "Lưu câu trả lời text và chuyển engine sang câu hỏi tiếp theo")
+    @Operation(summary = "Lưu câu trả lời text và để engine quyết định follow-up hoặc câu tiếp theo")
     @ApiResponses({
             @ApiResponse(responseCode = "202", description = "Câu trả lời đã được lưu"),
             @ApiResponse(responseCode = "400", description = "Payload câu trả lời không hợp lệ"),
@@ -151,7 +151,7 @@ public class InterviewSessionController {
     }
 
     @PostMapping("/{sessionId}/retry")
-    @Operation(summary = "Thử lại bước sinh bộ câu hỏi đã thất bại")
+    @Operation(summary = "Thử lại bước AI của session đã thất bại")
     public ResponseEntity<InterviewSessionAcceptedResponse> retry(
             @CurrentUser CustomUserDetails currentUser,
             @PathVariable Long sessionId,

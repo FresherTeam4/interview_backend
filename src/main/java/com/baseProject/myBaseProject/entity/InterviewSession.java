@@ -66,6 +66,9 @@ import java.util.UUID;
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class InterviewSession {
 
+    private static final short MAX_FOLLOW_UPS_PER_QUESTION = 2;
+    private static final short MAX_FOLLOW_UPS_PER_SESSION = 5;
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -257,6 +260,7 @@ public class InterviewSession {
                 || processingStage != null
                 || this.processingToken != null
                 || currentQuestionOrdinal == null
+                || currentFollowupDepth != 0
                 || currentQuestionOrdinal.shortValue() != answeredQuestionCount + 1
                 || answeredQuestionCount >= totalQuestionCount) {
             throw new IllegalStateException(
@@ -278,6 +282,70 @@ public class InterviewSession {
         return turnIndex;
     }
 
+    /** Commits an answer to the current follow-up without counting the base question twice. */
+    public int acceptFollowUpAnswer(UUID processingToken, Instant now) {
+        Objects.requireNonNull(processingToken);
+        Objects.requireNonNull(now);
+        if (status != SessionStatus.IN_PROGRESS
+                || awaitingAction != AwaitingAction.CANDIDATE_ANSWER
+                || processingStage != null
+                || this.processingToken != null
+                || currentQuestionOrdinal == null
+                || answeredQuestionCount != currentQuestionOrdinal.shortValue()
+                || currentFollowupDepth < 1
+                || currentFollowupDepth > MAX_FOLLOW_UPS_PER_QUESTION
+                || totalFollowupCount < currentFollowupDepth
+                || totalFollowupCount > MAX_FOLLOW_UPS_PER_SESSION) {
+            throw new IllegalStateException("Interview session cannot accept a follow-up answer");
+        }
+
+        int turnIndex = nextTurnIndex++;
+        awaitingAction = AwaitingAction.ENGINE_RESPONSE;
+        processingStage = SessionProcessingStage.NEXT_TURN;
+        this.processingToken = processingToken.toString();
+        processingStartedAt = now;
+        processingAttempts = 1;
+        nextRetryAt = null;
+        failureStage = null;
+        statusMessage = null;
+        lastActivityAt = now;
+        updatedAt = now;
+        return turnIndex;
+    }
+
+    /** Persists a server-approved adaptive follow-up while retaining user-activity time. */
+    public int advanceToFollowUp(
+            short nextFollowUpDepth,
+            UUID ownedProcessingToken,
+            Instant now) {
+        Objects.requireNonNull(ownedProcessingToken);
+        Objects.requireNonNull(now);
+        if (status != SessionStatus.IN_PROGRESS
+                || (awaitingAction != AwaitingAction.ENGINE_RESPONSE
+                        && awaitingAction != AwaitingAction.ENGINE_RETRY)
+                || processingStage != SessionProcessingStage.NEXT_TURN
+                || !ownedProcessingToken.toString().equals(processingToken)
+                || currentQuestionOrdinal == null
+                || answeredQuestionCount != currentQuestionOrdinal.shortValue()
+                || currentFollowupDepth >= MAX_FOLLOW_UPS_PER_QUESTION
+                || totalFollowupCount >= MAX_FOLLOW_UPS_PER_SESSION
+                || nextFollowUpDepth != currentFollowupDepth + 1) {
+            throw new IllegalStateException("Interview session cannot advance to a follow-up");
+        }
+
+        int turnIndex = nextTurnIndex++;
+        currentFollowupDepth = nextFollowUpDepth;
+        totalFollowupCount++;
+        awaitingAction = AwaitingAction.CANDIDATE_ANSWER;
+        processingStage = null;
+        processingToken = null;
+        processingStartedAt = null;
+        nextRetryAt = null;
+        statusMessage = null;
+        updatedAt = now;
+        return turnIndex;
+    }
+
     /** Persists the base prompt following an answer while retaining user-activity time. */
     public int advanceToBaseQuestion(
             short nextQuestionOrdinal,
@@ -286,7 +354,8 @@ public class InterviewSession {
         Objects.requireNonNull(ownedProcessingToken);
         Objects.requireNonNull(now);
         if (status != SessionStatus.IN_PROGRESS
-                || awaitingAction != AwaitingAction.ENGINE_RESPONSE
+                || (awaitingAction != AwaitingAction.ENGINE_RESPONSE
+                        && awaitingAction != AwaitingAction.ENGINE_RETRY)
                 || processingStage != SessionProcessingStage.NEXT_TURN
                 || !ownedProcessingToken.toString().equals(processingToken)
                 || currentQuestionOrdinal == null

@@ -1,0 +1,29 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "decision",
+    "questionText",
+    "evidenceQuote",
+    "reason"
+  ],
+  "properties": {
+    "decision": {
+      "type": "string",
+      "enum": ["FOLLOW_UP", "NEXT_QUESTION", "END_INTERVIEW"]
+    },
+    "questionText": {
+      "type": ["string", "null"],
+      "maxLength": 2000
+    },
+    "evidenceQuote": {
+      "type": ["string", "null"],
+      "maxLength": 2000
+    },
+    "reason": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 500
+    }
+  }
+}

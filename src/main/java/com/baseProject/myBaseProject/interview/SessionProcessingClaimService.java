@@ -1,6 +1,7 @@
 package com.baseProject.myBaseProject.interview;
 
 import com.baseProject.myBaseProject.enums.SessionProcessingStage;
+import com.baseProject.myBaseProject.enums.AwaitingAction;
 import com.baseProject.myBaseProject.repository.InterviewSessionRepository;
 
 import lombok.RequiredArgsConstructor;
@@ -63,6 +64,27 @@ public class SessionProcessingClaimService {
                         sessionId,
                         stage,
                         token.toString(),
+                        nextRetryAt,
+                        normalizeStatusMessage(statusMessage),
+                        now)
+                == 1;
+    }
+
+    @Transactional
+    public boolean releaseNextTurnForRetry(
+            Long sessionId,
+            UUID token,
+            Instant nextRetryAt,
+            String statusMessage) {
+        Instant now = clock.instant();
+        if (nextRetryAt == null || nextRetryAt.isBefore(now)) {
+            throw new IllegalArgumentException("Next-turn retry must be scheduled in the future");
+        }
+        return sessionRepository.releaseNextTurnProcessingClaimForRetry(
+                        sessionId,
+                        SessionProcessingStage.NEXT_TURN,
+                        token.toString(),
+                        AwaitingAction.ENGINE_RETRY,
                         nextRetryAt,
                         normalizeStatusMessage(statusMessage),
                         now)

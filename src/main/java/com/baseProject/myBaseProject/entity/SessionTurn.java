@@ -141,6 +141,46 @@ public class SessionTurn {
         return turn;
     }
 
+    public static SessionTurn followUpPrompt(
+            InterviewSession session,
+            SessionQuestion question,
+            SessionTurn parentCandidateTurn,
+            int turnIndex,
+            String content,
+            short followUpDepth,
+            int latencyMs,
+            Instant now) {
+        validateQuestionOwnership(session, question);
+        Objects.requireNonNull(parentCandidateTurn);
+        if (parentCandidateTurn.getRole() != TurnRole.CANDIDATE
+                || !Objects.equals(parentCandidateTurn.getSession().getId(), session.getId())
+                || parentCandidateTurn.getQuestion() == null
+                || !Objects.equals(parentCandidateTurn.getQuestion().getId(), question.getId())
+                || followUpDepth < 1
+                || followUpDepth > 2
+                || latencyMs < 0
+                || content == null
+                || content.isBlank()) {
+            throw new IllegalArgumentException("Follow-up prompt context is invalid");
+        }
+
+        SessionTurn turn = new SessionTurn();
+        turn.session = Objects.requireNonNull(session);
+        turn.question = Objects.requireNonNull(question);
+        turn.parentTurn = parentCandidateTurn;
+        turn.turnIndex = turnIndex;
+        turn.role = TurnRole.INTERVIEWER;
+        turn.inputMode = TurnInputMode.TEXT;
+        turn.contentText = content;
+        turn.followUp = true;
+        turn.followUpDepth = followUpDepth;
+        turn.latencyMs = latencyMs;
+        turn.startedAt = Objects.requireNonNull(now);
+        turn.endedAt = now;
+        turn.createdAt = now;
+        return turn;
+    }
+
     private static SessionTurn baseQuestionPrompt(
             InterviewSession session,
             SessionQuestion question,
