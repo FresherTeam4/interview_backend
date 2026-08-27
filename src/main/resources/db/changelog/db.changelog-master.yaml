@@ -41,3 +41,6 @@ databaseChangeLog:
   - include:
       file: 027-seed-interview-rubric-v1.sql
       relativeToChangelogFile: true
+  - include:
+      file: 028-create-interview-session-foundation.sql
+      relativeToChangelogFile: true

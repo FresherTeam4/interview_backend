@@ -93,5 +93,11 @@ public enum ErrorCode {
 
     // ---- Interview Engine ----
     /** 503 — rubric MVP không có current published version hợp lệ. */
-    RUBRIC_NOT_AVAILABLE
+    RUBRIC_NOT_AVAILABLE,
+    /** 404 — session không tồn tại hoặc không thuộc người gọi. */
+    SESSION_NOT_FOUND,
+    /** 409 — event không hợp lệ với trạng thái session hiện tại. */
+    SESSION_INVALID_STATE,
+    /** 409 — expectedVersion không còn là phiên bản hiện tại. */
+    SESSION_VERSION_CONFLICT
 }

@@ -70,6 +70,11 @@ public final class Message {
     // ---- Interview Engine ----
     public static final String RUBRIC_NOT_AVAILABLE =
             "Rubric phỏng vấn hiện chưa sẵn sàng, vui lòng thử lại sau";
+    public static final String SESSION_NOT_FOUND = "Không tìm thấy phiên phỏng vấn này";
+    public static final String SESSION_INVALID_STATE =
+            "Thao tác này không hợp lệ với trạng thái hiện tại của phiên phỏng vấn";
+    public static final String SESSION_VERSION_CONFLICT =
+            "Phiên phỏng vấn đã thay đổi; vui lòng tải lại trạng thái mới nhất";
 
     // ---- status_message của lần bóc tách CV ----
     // Không trả qua HTTP: bóc tách chạy sau khi request đã kết thúc, nên chỗ đọc được là

@@ -1,6 +1,6 @@
 # Interview Engine MVP — Kịch bản sản phẩm và kế hoạch triển khai
 
-> Trạng thái: M00–M02 đã approved; M03 implementation review candidate
+> Trạng thái: M00–M03 đã approved; M04 implementation review candidate
 > Ngày cập nhật: 2026-08-27
 > Phạm vi: Interview Engine, JD, text interview, voice turn-based và scoring
 
@@ -1112,7 +1112,7 @@ Swagger; M03 được phép bắt đầu.
 
 ### M03 — Rubric v1 foundation
 
-**Trạng thái:** implementation đã hoàn thành, chờ `APPROVED M03`.
+**Trạng thái:** `APPROVED M03` ngày 2026-08-27; M04 được phép bắt đầu.
 
 **Kết quả sản phẩm**
 
@@ -1207,11 +1207,13 @@ Hệ thống có một rubric công khai, versioned và bất biến để mọi
    Kết quả phải có năm dòng theo thứ tự `1..5`; mỗi dòng có `max_score = 4`, `level_count = 4`,
    `min_level = 1` và `max_level = 4`.
 
-**Điểm dừng:** chờ `APPROVED M03`.
+**Review gate:** đã qua với `APPROVED M03` ngày 2026-08-27; M04 được phép bắt đầu.
 
 ---
 
 ### M04 — Session persistence và state-machine foundation
+
+**Trạng thái:** implementation đã hoàn thành, chờ `APPROVED M04`.
 
 **Kết quả kỹ thuật**
 
@@ -1241,6 +1243,48 @@ processing claim; chưa public luồng tạo session.
 - Index phục vụ home, history, timeout và recovery.
 - Hai worker không claim cùng work.
 
+**Luồng implementation M04**
+
+1. Liquibase `028` tạo `interview_sessions`, snapshot 1-1 và transition log append-only cùng toàn bộ
+   FK, unique key, check constraint và index đã khóa trong M00.
+2. `SessionStateMachine.create(...)` ghi session `CREATED`, profile/JD snapshot và transition
+   `NULL -> CREATED` trong cùng transaction dùng `Clock` UTC.
+3. User transition luôn lock bằng query `(sessionId, userId)`; system/scheduler lock theo ID nội bộ.
+   State machine kiểm `expectedVersion`, ma trận event, `AwaitingAction`, claim token khi có rồi cập
+   nhật session và thêm đúng một transition log trước khi flush.
+4. Snapshot là `@Immutable`, chỉ chấp nhận các nhóm field profile cần cho interview và từ chối tên
+   field nhạy cảm như email, password, token, secret, storage key hoặc raw CV. JD snapshot chỉ chứa
+   confirmed text và SHA-256 của chính text đó.
+5. `SessionProcessingClaimService` claim bằng một atomic update: chỉ claim work tới hạn và chưa có
+   owner hoặc lease đã stale, gắn UUID token/timestamp, tăng attempt và optimistic version. Worker
+   thứ hai nhận `false`; worker hoàn tất transition chỉ được commit nếu token vẫn khớp.
+6. Repository trả summary projection hoặc danh sách ID cho active/history, timeout và recovery;
+   ownership được đặt ngay trong query đọc session/snapshot/transition của user.
+
+**Ma trận event M04**
+
+Mỗi dòng dưới đây là toàn bộ tập trạng thái nguồn hợp lệ của event. Gọi event từ bất kỳ trạng thái
+khác đều trả `SESSION_INVALID_STATE`; terminal state không có outgoing transition.
+
+| Event code | From hợp lệ | To | Actor | AwaitingAction sau transition |
+|---|---|---|---|---|
+| Khởi tạo row | `NULL` | `CREATED` | `USER` | `NONE` |
+| `DISPATCH_SCRIPT_GENERATION` | `CREATED` | `SCRIPT_GENERATING` | `SYSTEM` | `NONE` |
+| `SCRIPT_PERSISTED` | `SCRIPT_GENERATING` | `READY` | `SYSTEM` | `START_SESSION` |
+| `WORKFLOW_FAILED` | `SCRIPT_GENERATING`, `IN_PROGRESS`, `SCORING` | `FAILED` | `SYSTEM` | `ENGINE_RETRY` |
+| `START` | `READY` | `IN_PROGRESS` | `USER` | `CANDIDATE_ANSWER` |
+| `PAUSE` | `IN_PROGRESS` không chờ engine | `PAUSED` | `USER` | `NONE` |
+| `RESUME` | `PAUSED` | `IN_PROGRESS` | `USER` | Khôi phục từ turn/draft |
+| `ALL_QUESTIONS_ANSWERED` | `IN_PROGRESS` | `SCORING` | `SYSTEM` | `REPORT` |
+| `COMPLETE_EARLY` | `IN_PROGRESS` | `SCORING` | `USER` | `REPORT` |
+| `TIMEOUT` | `READY`, `IN_PROGRESS`, `PAUSED` | `SCORING` | `SCHEDULER` | `REPORT` |
+| `REPORT_COMMITTED` | `SCORING` | `COMPLETED` | `SYSTEM` | `NONE` |
+| `ABANDON` | `READY`, `IN_PROGRESS`, `PAUSED`, `FAILED` | `ABANDONED` | `USER` | `NONE` |
+| `RETRY` | `FAILED` | Stage của `failureStage` | `USER` | Theo stage được khôi phục |
+
+`SCRIPT_PERSISTED`, `REPORT_COMMITTED` và `WORKFLOW_FAILED` bắt buộc token của worker hiện đang giữ
+claim.
+
 **Acceptance để approve**
 
 - Có bảng ma trận để người dùng đối chiếu toàn bộ transition hợp lệ/bất hợp lệ.
@@ -1248,6 +1292,48 @@ processing claim; chưa public luồng tạo session.
 - Stale version bị từ chối.
 - Claim/reclaim stale work có kiểm soát.
 - Query của user không thấy session user khác.
+
+**Kiểm tra local M04 (không có Swagger API)**
+
+1. Chạy `\.\mvnw.cmd spring-boot:run`. Lần đầu log phải có changeset
+   `028-create-interview-session-foundation`; Hibernate phải khởi tạo được `EntityManagerFactory`
+   và application start. MinIO không bắt buộc cho module này.
+2. Kiểm tra migration và ba bảng bằng query read-only:
+
+   ```sql
+   SELECT id, author, filename
+   FROM databasechangelog
+   WHERE id = '028-create-interview-session-foundation';
+
+   SHOW CREATE TABLE interview_sessions;
+   SHOW CREATE TABLE session_context_snapshots;
+   SHOW CREATE TABLE session_state_transitions;
+   ```
+
+   Đối chiếu `UNIQUE (user_id, creation_key)`, `@Version`, awaiting/claim/counter checks; session FK
+   tới profile/JD/rubric version phải `RESTRICT`, còn user/snapshot/transition dùng `CASCADE` như
+   contract.
+3. Kiểm tra index mà không sửa dữ liệu:
+
+   ```sql
+   SELECT table_name,
+          index_name,
+          GROUP_CONCAT(column_name ORDER BY seq_in_index) AS columns_list
+   FROM information_schema.statistics
+   WHERE table_schema = DATABASE()
+     AND table_name IN (
+       'interview_sessions',
+       'session_context_snapshots',
+       'session_state_transitions'
+     )
+   GROUP BY table_name, index_name
+   ORDER BY table_name, index_name;
+   ```
+
+4. Smoke check nội bộ đã chạy với fixture tổng hợp trong transaction rollback: create tạo một
+   snapshot và một log; chuỗi dispatch/fail/retry tạo tổng bốn log; claim đầu thành công, claim thứ
+   hai thất bại; stale version bị từ chối; query user khác không thấy session; work sau retry xuất
+   hiện trong recovery query. Sau rollback không còn fixture user/session trong database.
 
 **Điểm dừng:** chờ `APPROVED M04`.
 
