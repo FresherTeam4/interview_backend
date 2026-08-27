@@ -1,7 +1,7 @@
 # Interview Engine MVP — Kịch bản sản phẩm và kế hoạch triển khai
 
-> Trạng thái: M00–M01 đã approved; M02 implementation review candidate
-> Ngày cập nhật: 2026-08-26  
+> Trạng thái: M00–M02 đã approved; M03 implementation review candidate
+> Ngày cập nhật: 2026-08-27
 > Phạm vi: Interview Engine, JD, text interview, voice turn-based và scoring
 
 Tài liệu này chốt lại luồng sản phẩm, phạm vi MVP, quy tắc nghiệp vụ, state machine, mô hình dữ
@@ -1007,7 +1007,7 @@ Người dùng có thể tạo JD bằng text, xem, sửa bản draft, xác nh�
 
 ### M02 — Job Description file ingestion
 
-**Trạng thái:** implementation đã hoàn thành, chờ `APPROVED M02`.
+**Trạng thái:** `APPROVED M02` ngày 2026-08-26; M03 được phép bắt đầu.
 
 **Kết quả người dùng**
 
@@ -1105,11 +1105,14 @@ Các failure case nên thử trên Swagger:
 trả `503 STORAGE_UNAVAILABLE` và không tạo JD mới. Không cố tình phá database để thử compensation;
 nhánh này được giải thích trong review code vì không có cách Swagger an toàn để ép commit DB fail.
 
-**Điểm dừng:** chờ `APPROVED M02`.
+**Review gate:** đã qua với `APPROVED M02` ngày 2026-08-26 sau khi người dùng kiểm tra tay trên
+Swagger; M03 được phép bắt đầu.
 
 ---
 
 ### M03 — Rubric v1 foundation
+
+**Trạng thái:** implementation đã hoàn thành, chờ `APPROVED M03`.
 
 **Kết quả sản phẩm**
 
@@ -1135,12 +1138,74 @@ Hệ thống có một rubric công khai, versioned và bất biến để mọi
 - Version immutability và FK `RESTRICT` dự kiến.
 - Weight, max score và display order.
 
+**Luồng implementation M03**
+
+1. Liquibase `026` tạo rubric root, version, criterion và level; sau khi bảng version tồn tại mới
+   thêm FK `rubrics.current_version_id` với `ON DELETE RESTRICT`.
+2. Liquibase `027` seed rubric `TECH_INTERVIEW_FRESHER`, version 1 đã publish, năm criterion và
+   bốn descriptor do con người soạn cho từng criterion; cuối changeset mới trỏ current version.
+3. `RubricRepository` resolve current version bằng chính con trỏ này và fetch toàn bộ criteria/level
+   trong một query; điều kiện query cũng chặn con trỏ trỏ sang version của rubric khác.
+4. `RubricService` kiểm version đã publish, có criterion, tổng weight đúng `1.000`, display order
+   không trùng, số level bằng max score, level number liên tục và score nằm trong giới hạn.
+5. Version, criterion và level dùng Hibernate `@Immutable`, không có setter/mutation method hay
+   repository ghi; M04 chỉ nhận graph đã validate để khóa version vào session.
+6. Nếu current graph thiếu hoặc sai invariant, service ném `RUBRIC_NOT_AVAILABLE` (`503`) thay vì
+   để một session mới chốt rubric lỗi. M03 chưa public endpoint nên mã này được dùng từ module tạo
+   session sau.
+
 **Acceptance để approve**
 
 - Seed load đúng một current published version.
 - Mỗi criterion có đúng bốn level hợp lệ.
 - Repository lấy current version deterministically.
 - Không có đường code sửa đè published version.
+
+**Kiểm tra local M03 (không có Swagger API)**
+
+1. Chạy `\.\mvnw.cmd spring-boot:run`. Log phải cho thấy changeset `026` và `027` thành công,
+   Hibernate khởi tạo được `EntityManagerFactory`, rồi application start. Lần chạy sau phải báo
+   database đã up to date. MinIO không bắt buộc cho rubric.
+2. Chạy query read-only sau trong MySQL Workbench hoặc MySQL CLI:
+
+   ```sql
+   SELECT r.code,
+          v.version_no,
+          v.published_at IS NOT NULL AS published,
+          COUNT(c.id) AS criterion_count,
+          CAST(SUM(c.weight) AS DECIMAL(4,3)) AS total_weight
+   FROM rubrics r
+   JOIN rubric_versions v
+     ON v.id = r.current_version_id
+    AND v.rubric_id = r.id
+   JOIN rubric_criteria c ON c.rubric_version_id = v.id
+   WHERE r.code = 'TECH_INTERVIEW_FRESHER'
+   GROUP BY r.code, v.version_no, v.published_at;
+   ```
+
+   Kết quả phải là đúng một dòng: version `1`, `published = 1`, `criterion_count = 5` và
+   `total_weight = 1.000`.
+3. Kiểm tra level và thứ tự hiển thị:
+
+   ```sql
+   SELECT c.code,
+          c.display_order,
+          c.weight,
+          c.max_score,
+          COUNT(l.id) AS level_count,
+          MIN(l.level_no) AS min_level,
+          MAX(l.level_no) AS max_level
+   FROM rubric_criteria c
+   JOIN rubric_versions v ON v.id = c.rubric_version_id
+   JOIN rubrics r ON r.current_version_id = v.id
+   JOIN rubric_criterion_levels l ON l.criterion_id = c.id
+   WHERE r.code = 'TECH_INTERVIEW_FRESHER'
+   GROUP BY c.id, c.code, c.display_order, c.weight, c.max_score
+   ORDER BY c.display_order;
+   ```
+
+   Kết quả phải có năm dòng theo thứ tự `1..5`; mỗi dòng có `max_score = 4`, `level_count = 4`,
+   `min_level = 1` và `max_level = 4`.
 
 **Điểm dừng:** chờ `APPROVED M03`.
 

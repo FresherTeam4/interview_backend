@@ -67,6 +67,10 @@ public final class Message {
             "File JD có %d trang, tối đa %d trang";
     public static final String JD_HAS_NO_FILE = "JD dạng text không có file gốc để xem lại";
 
+    // ---- Interview Engine ----
+    public static final String RUBRIC_NOT_AVAILABLE =
+            "Rubric phỏng vấn hiện chưa sẵn sàng, vui lòng thử lại sau";
+
     // ---- status_message của lần bóc tách CV ----
     // Không trả qua HTTP: bóc tách chạy sau khi request đã kết thúc, nên chỗ đọc được là
     // cột status_message. Viết cho người dùng, không đổ stacktrace hay message thô của Gemini.

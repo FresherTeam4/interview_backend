@@ -2320,5 +2320,5 @@ tới đúng module gate, không phải blocker của M00.
 - [x] Người dùng/team đã phát hành `APPROVED M00` ngày 2026-08-26.
 
 Sau `APPROVED M00`, thiết kế database/API được xem là khóa cho MVP. Mọi thay đổi sau đó phải nêu
-decision ID/module bị ảnh hưởng và đi bằng migration/API revision có chủ đích. M01 đã được approve;
-M02 đang ở review gate.
+decision ID/module bị ảnh hưởng và đi bằng migration/API revision có chủ đích. M01–M02 đã được
+approve; M03 đang ở implementation review gate.

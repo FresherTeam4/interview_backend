@@ -89,5 +89,9 @@ public enum ErrorCode {
     /** 400 — PDF vượt {@code app.jd.max-pages}. */
     JD_TOO_MANY_PAGES,
     /** 409 — yêu cầu file URL cho một JD source TEXT. */
-    JD_HAS_NO_FILE
+    JD_HAS_NO_FILE,
+
+    // ---- Interview Engine ----
+    /** 503 — rubric MVP không có current published version hợp lệ. */
+    RUBRIC_NOT_AVAILABLE
 }

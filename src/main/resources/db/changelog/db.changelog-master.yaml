@@ -35,3 +35,9 @@ databaseChangeLog:
   - include:
       file: 025-create-job-descriptions.sql
       relativeToChangelogFile: true
+  - include:
+      file: 026-create-rubric-tables.sql
+      relativeToChangelogFile: true
+  - include:
+      file: 027-seed-interview-rubric-v1.sql
+      relativeToChangelogFile: true
