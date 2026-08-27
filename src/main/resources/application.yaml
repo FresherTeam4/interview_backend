@@ -38,7 +38,7 @@ springdoc:
 app:
   jwt:
     secret: ${JWT_SECRET:eventhub-dev-only-secret-key-2026-doi-truoc-khi-deploy}
-    expiration-ms: ${JWT_EXPIRATION_MS:900000}
+    expiration-ms: ${JWT_EXPIRATION_MS:9000000}
   refresh-token:
     expiration-ms: ${REFRESH_TOKEN_EXPIRATION_MS:604800000}
     cookie-name: ${REFRESH_TOKEN_COOKIE_NAME:refresh_token}

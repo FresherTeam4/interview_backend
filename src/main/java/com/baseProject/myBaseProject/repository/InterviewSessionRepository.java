@@ -46,6 +46,10 @@ public interface InterviewSessionRepository extends JpaRepository<InterviewSessi
     @Query("""
             select new com.baseProject.myBaseProject.repository.projection.SessionSummaryProjection(
                 session.id,
+                session.profile.id,
+                session.profile.headline,
+                session.jobDescription.id,
+                session.jobDescription.title,
                 session.difficulty,
                 session.mode,
                 session.status,
@@ -65,6 +69,20 @@ public interface InterviewSessionRepository extends JpaRepository<InterviewSessi
             @Param("userId") Long userId,
             @Param("statuses") Collection<SessionStatus> statuses,
             Pageable pageable);
+
+    @Query("""
+            select distinct session
+            from InterviewSession session
+            join fetch session.rubricVersion rubricVersion
+            join fetch rubricVersion.rubric
+            left join fetch rubricVersion.criteria criterion
+            left join fetch criterion.levels
+            where session.id = :sessionId
+              and session.user.id = :userId
+            """)
+    Optional<InterviewSession> findOwnedWithLockedRubric(
+            @Param("sessionId") Long sessionId,
+            @Param("userId") Long userId);
 
     @Query("""
             select session.id

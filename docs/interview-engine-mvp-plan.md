@@ -1,6 +1,6 @@
 # Interview Engine MVP — Kịch bản sản phẩm và kế hoạch triển khai
 
-> Trạng thái: M00–M04 đã approved; M05 implementation review candidate
+> Trạng thái: M00–M06 đã approved; M07 implementation review candidate
 > Ngày cập nhật: 2026-08-27
 > Phạm vi: Interview Engine, JD, text interview, voice turn-based và scoring
 
@@ -906,7 +906,7 @@ Migration sequence chính thức đã được khóa cho review M00:
 027-seed-interview-rubric-v1.sql            [M03]
 028-create-interview-session-foundation.sql [M04]
 029-create-session-questions.sql            [M05]
-030-create-session-turns.sql                [M08]
+030-create-session-turns.sql                [M07]
 031-create-interview-report-tables.sql      [M10]
 032-create-voice-answer-attempts.sql        [M12]
 033-create-turn-audio-assets.sql            [M15]
@@ -1341,7 +1341,7 @@ claim.
 
 ### M05 — Question generation core
 
-**Trạng thái:** implementation đã hoàn thành, chờ `APPROVED M05`.
+**Trạng thái:** `APPROVED M05` ngày 2026-08-27; M06 đã được phép bắt đầu.
 
 **Kết quả kỹ thuật**
 
@@ -1452,13 +1452,13 @@ kịch bản hợp lệ; chưa mở create-session API cho frontend.
 5. Không gọi Gemini thật bằng CV/JD thật khi review. Nếu cần thử provider, chỉ dùng dữ liệu giả và
    đối chiếu log model/prompt version/duration; log không được chứa full prompt/output.
 
-**Điểm dừng:** chờ `APPROVED M05`.
+**Điểm dừng:** đã nhận `APPROVED M05`.
 
 ---
 
 ### M06 — Create session, async generation và polling
 
-**Trạng thái:** implementation đã hoàn thành, chờ `APPROVED M06`.
+**Trạng thái:** `APPROVED M06` ngày 2026-08-27; M07 được phép bắt đầu.
 
 **Kết quả người dùng**
 
@@ -1640,11 +1640,13 @@ Chuẩn bị: đã có ít nhất một profile đã confirm và một JD `READY
   đếm về `0`.
 - Không gọi Gemini thật và không dùng CV/JD thật trong lần verification này.
 
-**Điểm dừng:** chờ `APPROVED M06`.
+**Điểm dừng:** đã nhận `APPROVED M06`.
 
 ---
 
 ### M07 — Start, đọc trạng thái, pause/resume và home list
+
+**Trạng thái:** implementation đã hoàn thành, chờ `APPROVED M07`.
 
 **Kết quả người dùng**
 
@@ -1674,12 +1676,94 @@ chủ hiển thị phiên đang dở.
 - Active list chỉ dùng projection, không load conversation.
 - Network disconnect không tự pause.
 
+**Làm rõ contract migration M07**
+
+`session_turns` được chuyển ownership từ M08 sang M07 vì acceptance của M07 yêu cầu start tạo
+interviewer turn đầu tiên atomically và detail phục hồi từ dữ liệu hội thoại đã persist. Số thứ tự
+file vẫn là `030`; M08 chỉ append candidate/base-question turns lên schema này và không có migration
+riêng. Đây là sửa lệch module ownership trong tài liệu, không đổi shape schema đã khóa ở M00.
+
+**Luồng implementation M07**
+
+1. Liquibase `030` tạo `session_turns` append-only, FK session `CASCADE`, FK question/parent turn
+   `SET NULL`, unique `(session_id, turn_index)` và `(session_id, client_turn_id)`, index cho hai FK
+   cùng check constraint cho role/input mode/follow-up/time. Entity không có mutation API.
+2. `POST /start` khóa session theo `(sessionId, userId)`, kiểm `expectedVersion` và trạng thái
+   `READY`, ghi transition `READY -> IN_PROGRESS`, lấy duy nhất base question ordinal 1, cấp index
+   từ `nextTurnIndex`, đặt `currentQuestionOrdinal = 1` và insert interviewer turn trong cùng
+   transaction. Nếu thiếu question hoặc insert lỗi, cả transition/session cursor đều rollback.
+3. Detail chỉ query `session_turns` đã persist theo `turnIndex`; `currentPrompt` được dựng từ
+   interviewer turn mới nhất. Service không query toàn bộ `session_questions`, vì vậy session
+   `READY` không lộ script và session đang chạy không lộ future questions. `voiceDraft` và
+   `audioStatus` là `null` trong M07 vì STT/TTS thuộc module sau.
+4. Pause chỉ đi từ `IN_PROGRESS` khi không chờ engine, ghi transition và giữ nguyên cursor/turns;
+   không có hành vi tự pause khi client mất mạng. Resume chỉ đi từ `PAUSED`, suy ra
+   `CANDIDATE_ANSWER` từ interviewer turn cuối rồi ghi transition trở lại `IN_PROGRESS`.
+5. Home list dùng constructor projection chứa đúng profile/JD summary và counter, không fetch
+   conversation. `ACTIVE` gồm các trạng thái tính quota, `HISTORY` gồm `COMPLETED/ABANDONED`, còn
+   `ALL` gồm tất cả; pagination dùng giới hạn chung 1–50.
+6. Rubric endpoint fetch graph qua chính `interview_sessions.rubric_version_id`, không resolve
+   current version mới. Criteria và levels được sắp theo display order/level number; endpoint chỉ
+   mở khi session đã có script hoàn chỉnh.
+
 **Acceptance để approve**
 
 - Start chỉ từ `READY`, tạo đúng một turn index 0.
 - Reload/detail trả current prompt và locked rubric.
 - Pause/resume ghi transition và giữ current prompt.
 - Session user khác trả `SESSION_NOT_FOUND`.
+
+**Kiểm tra local M07 (Swagger checklist)**
+
+Chuẩn bị một session đã poll tới `READY` bằng flow M06. Luôn lấy `version` mới nhất từ response
+trước command tiếp theo; các ví dụ ID dưới đây chỉ mang tính minh họa.
+
+1. `GET /api/sessions?scope=ACTIVE&page=0&size=20` — kỳ vọng `200 OK`, mỗi item chỉ có summary
+   (`profileId/profileHeadline`, `jobDescriptionId/jobDescriptionTitle`, status, counters và
+   timestamps), sắp xếp `lastActivityAt DESC`; không có `turns`, question text hoặc storage key.
+   Thử `HISTORY` và `ALL`; `page < 0`, `size = 0` hoặc `size > 50` phải trả
+   `400 VALIDATION_FAILED`.
+2. `GET /api/sessions/{sessionId}/rubric` khi session `READY` — kỳ vọng `200 OK` với rubric
+   `TECH_INTERVIEW_FRESHER`, `version: 1`, năm criteria theo `displayOrder` và bốn levels mỗi
+   criterion. Gọi lúc còn `SCRIPT_GENERATING` trả `409 SESSION_INVALID_STATE`; ID của user khác trả
+   `404 SESSION_NOT_FOUND`. Response phải là version đã khóa vào session, không đổi nếu current
+   rubric được phát hành version mới.
+3. `POST /api/sessions/{sessionId}/start` với body lấy từ detail gần nhất:
+
+   ```json
+   {
+     "expectedVersion": 3
+   }
+   ```
+
+   Kỳ vọng `200 OK`, `status: IN_PROGRESS`, `awaitingAction: CANDIDATE_ANSWER`,
+   `currentPrompt.ordinal: 1`, đúng một item `turns[0]` có `turnIndex: 0`,
+   `role: INTERVIEWER`, `inputMode: TEXT`; `audioStatus` và `voiceDraft` là `null`. Gửi lại cùng body
+   cũ trả `409 SESSION_VERSION_CONFLICT` và không tạo turn thứ hai; dùng version mới nhưng start lần
+   hai trả `409 SESSION_INVALID_STATE`; ID user khác trả `404 SESSION_NOT_FOUND`.
+4. `GET /api/sessions/{sessionId}` sau start hoặc reload — kỳ vọng cùng `currentPrompt`/turn ID và
+   chỉ các turns đã persist. Không có base question ordinal 2 trở đi. Poll GET không thay đổi
+   `version` hoặc `lastActivityAt`.
+5. `POST /api/sessions/{sessionId}/pause` với `{ "expectedVersion": <version mới nhất> }` — kỳ vọng
+   `200 OK`, `status: PAUSED`, `awaitingAction: NONE`; `currentPrompt` và turn index 0 giữ nguyên.
+   Pause lần hai/stale version trả lần lượt `409 SESSION_INVALID_STATE` hoặc
+   `409 SESSION_VERSION_CONFLICT`.
+6. `POST /api/sessions/{sessionId}/resume` với `{ "expectedVersion": <version PAUSED> }` — kỳ vọng
+   `200 OK`, `status: IN_PROGRESS`, `awaitingAction: CANDIDATE_ANSWER` và vẫn cùng prompt/turn.
+   Resume khi không `PAUSED` trả `409 SESSION_INVALID_STATE`; ID user khác trả
+   `404 SESSION_NOT_FOUND`.
+
+**Kết quả verification đã chạy cho M07**
+
+- `\.\mvnw.cmd -DskipTests compile` thành công trên 222 source với Java release 17.
+- Application start trên MySQL local thành công; Liquibase apply
+  `030-create-session-turns.sql`, Hibernate `ddl-auto=validate` khởi tạo `EntityManagerFactory` và
+  Spring Data parse toàn bộ repository query mới.
+- `SHOW CREATE TABLE session_turns` xác nhận hai unique key, hai index, ba FK cùng toàn bộ check
+  constraint; `databasechangelog` có đúng changeset `030-create-session-turns`.
+- OpenAPI được sinh thành công và có đủ bảy route session hiện tại: create/list/detail,
+  start/pause/resume, locked rubric và retry. Chưa gọi authenticated happy path bằng dữ liệu người
+  dùng thật; checklist Swagger phía trên là review gate thủ công của module.
 
 **Điểm dừng:** chờ `APPROVED M07`.
 

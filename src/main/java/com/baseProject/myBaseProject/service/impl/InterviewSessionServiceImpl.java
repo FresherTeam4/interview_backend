@@ -1,19 +1,28 @@
 package com.baseProject.myBaseProject.service.impl;
 
 import com.baseProject.myBaseProject.config.properites.InterviewProperties;
+import com.baseProject.myBaseProject.dto.common.PageResponse;
 import com.baseProject.myBaseProject.dto.interview.CreateInterviewSessionRequest;
 import com.baseProject.myBaseProject.dto.interview.InterviewSessionAcceptedResponse;
+import com.baseProject.myBaseProject.dto.interview.InterviewRubricResponse;
 import com.baseProject.myBaseProject.dto.interview.InterviewSessionResponse;
+import com.baseProject.myBaseProject.dto.interview.InterviewSessionSummaryResponse;
 import com.baseProject.myBaseProject.dto.interview.RetryInterviewSessionRequest;
+import com.baseProject.myBaseProject.dto.interview.SessionVersionRequest;
 import com.baseProject.myBaseProject.entity.CandidateProfile;
 import com.baseProject.myBaseProject.entity.InterviewSession;
 import com.baseProject.myBaseProject.entity.JobDescription;
 import com.baseProject.myBaseProject.entity.RubricVersion;
+import com.baseProject.myBaseProject.entity.SessionQuestion;
+import com.baseProject.myBaseProject.entity.SessionTurn;
 import com.baseProject.myBaseProject.entity.UserAccount;
+import com.baseProject.myBaseProject.enums.AwaitingAction;
 import com.baseProject.myBaseProject.enums.JobDescriptionStatus;
+import com.baseProject.myBaseProject.enums.SessionListScope;
 import com.baseProject.myBaseProject.enums.SessionFailureStage;
 import com.baseProject.myBaseProject.enums.SessionProcessingStage;
 import com.baseProject.myBaseProject.enums.SessionStatus;
+import com.baseProject.myBaseProject.enums.TurnRole;
 import com.baseProject.myBaseProject.exception.IdempotencyKeyRequiredException;
 import com.baseProject.myBaseProject.exception.IdempotencyKeyReusedException;
 import com.baseProject.myBaseProject.exception.InterviewAiUnavailableException;
@@ -22,6 +31,7 @@ import com.baseProject.myBaseProject.exception.JobDescriptionNotFoundException;
 import com.baseProject.myBaseProject.exception.ProfileNotConfirmedException;
 import com.baseProject.myBaseProject.exception.ProfileNotFoundException;
 import com.baseProject.myBaseProject.exception.SessionLimitReachedException;
+import com.baseProject.myBaseProject.exception.SessionInvalidStateException;
 import com.baseProject.myBaseProject.exception.SessionNotFoundException;
 import com.baseProject.myBaseProject.interview.InterviewScriptWorkflowDispatcher;
 import com.baseProject.myBaseProject.interview.NewInterviewSession;
@@ -30,13 +40,17 @@ import com.baseProject.myBaseProject.interview.SessionEvent;
 import com.baseProject.myBaseProject.interview.SessionProcessingClaimService;
 import com.baseProject.myBaseProject.interview.SessionStateMachine;
 import com.baseProject.myBaseProject.mapper.InterviewSessionMapper;
+import com.baseProject.myBaseProject.mapper.RubricMapper;
 import com.baseProject.myBaseProject.repository.CandidateProfileRepository;
 import com.baseProject.myBaseProject.repository.InterviewSessionRepository;
 import com.baseProject.myBaseProject.repository.JobDescriptionRepository;
 import com.baseProject.myBaseProject.repository.ProfileEducationRepository;
 import com.baseProject.myBaseProject.repository.ProfileProjectRepository;
 import com.baseProject.myBaseProject.repository.ProfileSkillRepository;
+import com.baseProject.myBaseProject.repository.SessionQuestionRepository;
+import com.baseProject.myBaseProject.repository.SessionTurnRepository;
 import com.baseProject.myBaseProject.repository.UserAccountRepository;
+import com.baseProject.myBaseProject.repository.projection.SessionSummaryProjection;
 import com.baseProject.myBaseProject.service.InterviewSessionService;
 import com.baseProject.myBaseProject.service.RubricService;
 
@@ -44,13 +58,19 @@ import lombok.RequiredArgsConstructor;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.util.Collection;
 import java.util.EnumSet;
 import java.util.HexFormat;
+import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 import java.util.UUID;
 
 @Service
@@ -61,14 +81,20 @@ public class InterviewSessionServiceImpl implements InterviewSessionService {
     private static final int IDEMPOTENCY_KEY_MAX_LENGTH = 128;
     private static final String CREATE_TRANSITION_REASON = "Session accepted for script generation";
     private static final String RETRY_TRANSITION_REASON = "User retried script generation";
-    private static final EnumSet<SessionStatus> ACTIVE_STATUSES = EnumSet.of(
+    private static final String START_TRANSITION_REASON = "User started interview";
+    private static final String PAUSE_TRANSITION_REASON = "User paused interview";
+    private static final String RESUME_TRANSITION_REASON = "User resumed interview";
+    private static final Set<SessionStatus> ACTIVE_STATUSES = Set.copyOf(EnumSet.of(
             SessionStatus.CREATED,
             SessionStatus.SCRIPT_GENERATING,
             SessionStatus.READY,
             SessionStatus.IN_PROGRESS,
             SessionStatus.PAUSED,
             SessionStatus.SCORING,
-            SessionStatus.FAILED);
+            SessionStatus.FAILED));
+    private static final Set<SessionStatus> HISTORY_STATUSES = Set.of(
+            SessionStatus.COMPLETED,
+            SessionStatus.ABANDONED);
 
     private final InterviewProperties properties;
     private final UserAccountRepository userAccountRepository;
@@ -78,12 +104,15 @@ public class InterviewSessionServiceImpl implements InterviewSessionService {
     private final ProfileSkillRepository skillRepository;
     private final ProfileProjectRepository projectRepository;
     private final InterviewSessionRepository sessionRepository;
+    private final SessionQuestionRepository questionRepository;
+    private final SessionTurnRepository turnRepository;
     private final RubricService rubricService;
     private final ProfileSnapshotFactory snapshotFactory;
     private final SessionStateMachine stateMachine;
     private final SessionProcessingClaimService claimService;
     private final InterviewScriptWorkflowDispatcher workflowDispatcher;
     private final InterviewSessionMapper sessionMapper;
+    private final RubricMapper rubricMapper;
 
     @Override
     @Transactional
@@ -176,7 +205,98 @@ public class InterviewSessionServiceImpl implements InterviewSessionService {
     public InterviewSessionResponse get(Long userId, Long sessionId) {
         InterviewSession session = sessionRepository.findByIdAndUserId(sessionId, userId)
                 .orElseThrow(SessionNotFoundException::new);
-        return sessionMapper.toResponse(session);
+        return sessionMapper.toResponse(session, turnRepository.findOwnedHistory(sessionId, userId));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public PageResponse<InterviewSessionSummaryResponse> list(
+            Long userId,
+            SessionListScope scope,
+            int page,
+            int size) {
+        Collection<SessionStatus> statuses = statusesFor(scope);
+        PageRequest pageable = PageRequest.of(page, size, sortFor(scope));
+        Page<SessionSummaryProjection> summaries = sessionRepository
+                .findSummariesByUserIdAndStatuses(userId, statuses, pageable);
+        return PageResponse.from(summaries.map(sessionMapper::toSummaryResponse));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public InterviewRubricResponse getRubric(Long userId, Long sessionId) {
+        InterviewSession session = sessionRepository.findOwnedWithLockedRubric(sessionId, userId)
+                .orElseThrow(SessionNotFoundException::new);
+        if (session.getTotalQuestionCount() == 0
+                || session.getStatus() == SessionStatus.CREATED
+                || session.getStatus() == SessionStatus.SCRIPT_GENERATING) {
+            throw new SessionInvalidStateException();
+        }
+        return rubricMapper.toResponse(session.getRubricVersion());
+    }
+
+    @Override
+    @Transactional
+    public InterviewSessionResponse start(
+            Long userId,
+            Long sessionId,
+            SessionVersionRequest request) {
+        InterviewSession started = stateMachine.transitionUser(
+                userId,
+                sessionId,
+                request.expectedVersion(),
+                SessionEvent.START,
+                null,
+                START_TRANSITION_REASON);
+        SessionQuestion firstQuestion = questionRepository.findBySessionIdAndOrdinal(
+                        sessionId, (short) 1)
+                .orElseThrow(() -> new IllegalStateException(
+                        "READY session has no first question, sessionId=" + sessionId));
+        int turnIndex = started.beginAtQuestion(firstQuestion.getOrdinal());
+        SessionTurn firstPrompt = turnRepository.save(SessionTurn.firstInterviewerPrompt(
+                started,
+                firstQuestion,
+                turnIndex,
+                started.getStartedAt()));
+        sessionRepository.saveAndFlush(started);
+        return sessionMapper.toResponse(started, List.of(firstPrompt));
+    }
+
+    @Override
+    @Transactional
+    public InterviewSessionResponse pause(
+            Long userId,
+            Long sessionId,
+            SessionVersionRequest request) {
+        InterviewSession paused = stateMachine.transitionUser(
+                userId,
+                sessionId,
+                request.expectedVersion(),
+                SessionEvent.PAUSE,
+                null,
+                PAUSE_TRANSITION_REASON);
+        return sessionMapper.toResponse(
+                paused,
+                turnRepository.findOwnedHistory(sessionId, userId));
+    }
+
+    @Override
+    @Transactional
+    public InterviewSessionResponse resume(
+            Long userId,
+            Long sessionId,
+            SessionVersionRequest request) {
+        AwaitingAction restoredAction = resolveAwaitingAction(userId, sessionId);
+        InterviewSession resumed = stateMachine.transitionUser(
+                userId,
+                sessionId,
+                request.expectedVersion(),
+                SessionEvent.RESUME,
+                restoredAction,
+                RESUME_TRANSITION_REASON);
+        return sessionMapper.toResponse(
+                resumed,
+                turnRepository.findOwnedHistory(sessionId, userId));
     }
 
     @Override
@@ -221,6 +341,41 @@ public class InterviewSessionServiceImpl implements InterviewSessionService {
                 >= properties.maxActivePerUser()) {
             throw new SessionLimitReachedException(properties.maxActivePerUser());
         }
+    }
+
+    private Collection<SessionStatus> statusesFor(SessionListScope scope) {
+        return switch (scope) {
+            case ACTIVE -> ACTIVE_STATUSES;
+            case HISTORY -> HISTORY_STATUSES;
+            case ALL -> EnumSet.allOf(SessionStatus.class);
+        };
+    }
+
+    private Sort sortFor(SessionListScope scope) {
+        return switch (scope) {
+            case ACTIVE, ALL -> Sort.by(
+                    Sort.Order.desc("lastActivityAt"),
+                    Sort.Order.desc("id"));
+            case HISTORY -> Sort.by(
+                    Sort.Order.desc("completedAt"),
+                    Sort.Order.desc("updatedAt"),
+                    Sort.Order.desc("id"));
+        };
+    }
+
+    private AwaitingAction resolveAwaitingAction(Long userId, Long sessionId) {
+        InterviewSession session = sessionRepository.findByIdAndUserId(sessionId, userId)
+                .orElseThrow(SessionNotFoundException::new);
+        if (session.getStatus() != SessionStatus.PAUSED) {
+            throw new SessionInvalidStateException();
+        }
+        SessionTurn latestTurn = turnRepository
+                .findFirstBySessionIdAndSessionUserIdOrderByTurnIndexDesc(sessionId, userId)
+                .orElseThrow(SessionInvalidStateException::new);
+        if (latestTurn.getRole() != TurnRole.INTERVIEWER) {
+            throw new SessionInvalidStateException();
+        }
+        return AwaitingAction.CANDIDATE_ANSWER;
     }
 
     private String normalizeIdempotencyKey(String idempotencyKey) {

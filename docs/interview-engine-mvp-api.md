@@ -1,6 +1,6 @@
 # Interview Engine MVP — Thiết kế kỹ thuật và API
 
-> Trạng thái: M00–M04 đã approved; M05 implementation review candidate
+> Trạng thái: M00–M06 đã approved; M07 implementation review candidate
 > Tài liệu sản phẩm liên quan: [interview-engine-mvp-plan.md](./interview-engine-mvp-plan.md)  
 > Baseline: Java 17, Spring Boot 4.1.x, Spring MVC, Spring Security, Spring Data JPA,
 > MySQL, Liquibase, MinIO/S3, Spring AI và Gemini
@@ -220,7 +220,7 @@ ReportHighlightType = STRENGTH | IMPROVEMENT | NEXT_ACTION
 027-seed-interview-rubric-v1.sql            [M03]
 028-create-interview-session-foundation.sql [M04]
 029-create-session-questions.sql            [M05]
-030-create-session-turns.sql                [M08]
+030-create-session-turns.sql                [M07]
 031-create-interview-report-tables.sql      [M10]
 032-create-voice-answer-attempts.sql        [M12]
 033-create-turn-audio-assets.sql            [M15]
@@ -1075,6 +1075,7 @@ Sắp xếp:
 
 - Active: `lastActivityAt DESC`.
 - History: `completedAt DESC`, fallback `updatedAt DESC`.
+- All: `lastActivityAt DESC`.
 
 Summary response:
 
@@ -1154,6 +1155,8 @@ Không trả các câu hỏi tương lai chưa được hỏi. Response:
 ```
 
 `turns` nhỏ và bị giới hạn bởi số câu/follow-up của MVP nên trả toàn bộ, không cần pagination.
+Trong runtime M07, `voiceDraft` và `currentPrompt.audioStatus` luôn `null`; hai field chỉ có dữ liệu
+khi các module voice tương ứng được triển khai.
 
 ### 8.4. Xem rubric đã chốt
 
@@ -1187,6 +1190,9 @@ Chỉ hợp lệ ở `READY`:
 6. Tạo TTS asset `PENDING` nếu mode voice.
 7. Commit, sau đó dispatch TTS.
 
+M07 triển khai atomically các bước 1–5. Bước 6–7 thuộc M15 nên chưa tạo asset hoặc dispatch TTS;
+interviewer turn vẫn có `inputMode = TEXT` và luôn hiển thị được câu hỏi.
+
 Trả `200 OK` với session detail. Gọi lại với session đã bắt đầu và cùng version cũ trả conflict;
 frontend dùng detail mới nhất để resume, không tạo lại turn đầu tiên.
 
@@ -1210,6 +1216,20 @@ Body:
 - Resume chỉ từ `PAUSED`.
 - Resume phục hồi `awaitingAction` từ last turn/voice attempt trong transaction.
 - Cả hai cập nhật `lastActivityAt` và transition log.
+
+#### 8.6.1. Runtime contract đã triển khai trong M07
+
+- Migration `030` thuộc M07 vì start cần persist interviewer turn đầu tiên; M08 dùng lại schema này
+  cho candidate answer và base-question progression, không tạo migration mới.
+- Start khóa ownership-scoped session, kiểm version/state, ghi transition, đặt session cursor và
+  insert turn index `0` trong cùng transaction. Retry với version cũ hoặc start lần hai không thể tạo
+  duplicate nhờ lock, version check và unique `(session_id, turn_index)`.
+- Detail/current prompt chỉ được dựng từ turns đã persist; không fetch hoặc serialize future base
+  questions.
+- Pause giữ nguyên cursor/current prompt. M07 resume suy ra `CANDIDATE_ANSWER` từ interviewer turn
+  cuối; resolver sẽ được mở rộng bằng voice draft ở M13.
+- Session list dùng constructor projection, không load conversation graph. Rubric endpoint fetch
+  graph qua locked `rubric_version_id`, không resolve current rubric tại thời điểm đọc.
 
 ### 8.7. Submit text answer
 
@@ -2282,8 +2302,9 @@ Mỗi module dừng ở review gate. Chỉ `APPROVED Mxx` mới cho phép bắt 
 | `M03` | `026-create-rubric-tables.sql`, `027-seed-interview-rubric-v1.sql` | Tách schema và seed |
 | `M04` | `028-create-interview-session-foundation.sql` | Session, context snapshot, transition log |
 | `M05` | `029-create-session-questions.sql` | Script thuộc session |
-| `M06–M07` | Không | Workflow/API trên schema hiện có |
-| `M08` | `030-create-session-turns.sql` | Conversation append-only |
+| `M06` | Không | Create/generation workflow trên schema hiện có |
+| `M07` | `030-create-session-turns.sql` | Conversation append-only để start/resume |
+| `M08` | Không | Text answer dùng session turns đã tạo ở M07 |
 | `M09` | Không | Follow-up dùng session turns |
 | `M10` | `031-create-interview-report-tables.sql` | Score, evidence, report, highlight |
 | `M11` | Không | Timeout/recovery dùng session/report tables |
@@ -2351,4 +2372,4 @@ tới đúng module gate, không phải blocker của M00.
 
 Sau `APPROVED M00`, thiết kế database/API được xem là khóa cho MVP. Mọi thay đổi sau đó phải nêu
 decision ID/module bị ảnh hưởng và đi bằng migration/API revision có chủ đích. M01–M04 đã được
-approve; M05 đang ở implementation review gate và M06 chưa được phép bắt đầu.
+approve; M05 và M06 đã được approve, M07 đang ở implementation review gate.

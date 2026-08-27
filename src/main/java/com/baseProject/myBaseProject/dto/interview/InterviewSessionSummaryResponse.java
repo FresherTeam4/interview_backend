@@ -1,4 +1,4 @@
-package com.baseProject.myBaseProject.repository.projection;
+package com.baseProject.myBaseProject.dto.interview;
 
 import com.baseProject.myBaseProject.enums.AwaitingAction;
 import com.baseProject.myBaseProject.enums.InterviewDifficulty;
@@ -8,7 +8,7 @@ import com.baseProject.myBaseProject.enums.SessionStatus;
 import java.math.BigDecimal;
 import java.time.Instant;
 
-public record SessionSummaryProjection(
+public record InterviewSessionSummaryResponse(
         Long id,
         Long profileId,
         String profileHeadline,
@@ -22,7 +22,5 @@ public record SessionSummaryProjection(
         short totalQuestionCount,
         BigDecimal overallScore,
         Instant lastActivityAt,
-        Instant completedAt,
-        Instant createdAt,
-        Instant updatedAt) {
+        Instant createdAt) {
 }

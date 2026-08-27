@@ -10,12 +10,15 @@ import org.springframework.data.repository.query.Param;
 
 import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
 
 public interface SessionQuestionRepository extends Repository<SessionQuestion, Long> {
 
     List<SessionQuestion> saveAll(Iterable<SessionQuestion> questions);
 
     long countBySessionId(Long sessionId);
+
+    Optional<SessionQuestion> findBySessionIdAndOrdinal(Long sessionId, short ordinal);
 
     List<SessionQuestion> findBySessionIdAndSessionUserIdOrderByOrdinalAsc(
             Long sessionId,

@@ -233,6 +233,21 @@ public class InterviewSession {
         totalQuestionCount = (short) questionCount;
     }
 
+    /** Initializes the persisted conversation cursor together with the first interviewer turn. */
+    public int beginAtQuestion(short questionOrdinal) {
+        if (status != SessionStatus.IN_PROGRESS
+                || awaitingAction != AwaitingAction.CANDIDATE_ANSWER
+                || currentQuestionOrdinal != null
+                || nextTurnIndex != 0
+                || startedAt == null
+                || questionOrdinal != 1
+                || questionOrdinal > totalQuestionCount) {
+            throw new IllegalStateException("Interview session cannot initialize its first prompt");
+        }
+        currentQuestionOrdinal = questionOrdinal;
+        return nextTurnIndex++;
+    }
+
     /** State mutation entry point; production callers go through SessionStateMachine. */
     public void applyStateTransition(
             SessionStatus targetStatus,

@@ -4,8 +4,11 @@ import com.baseProject.myBaseProject.enums.AwaitingAction;
 import com.baseProject.myBaseProject.enums.InterviewDifficulty;
 import com.baseProject.myBaseProject.enums.SessionMode;
 import com.baseProject.myBaseProject.enums.SessionStatus;
+import com.baseProject.myBaseProject.enums.TurnInputMode;
+import com.baseProject.myBaseProject.enums.TurnRole;
 
 import java.time.Instant;
+import java.util.List;
 
 public record InterviewSessionResponse(
         Long id,
@@ -19,6 +22,9 @@ public record InterviewSessionResponse(
         long version,
         short answeredQuestionCount,
         short totalQuestionCount,
+        CurrentPrompt currentPrompt,
+        List<Turn> turns,
+        Object voiceDraft,
         String statusMessage,
         Instant lastActivityAt,
         Instant startedAt,
@@ -30,5 +36,26 @@ public record InterviewSessionResponse(
     }
 
     public record JobDescriptionReference(Long id, String title) {
+    }
+
+    public record CurrentPrompt(
+            Long turnId,
+            Long baseQuestionId,
+            short ordinal,
+            String text,
+            boolean isFollowUp,
+            short followUpDepth,
+            String audioStatus) {
+    }
+
+    public record Turn(
+            Long id,
+            int turnIndex,
+            TurnRole role,
+            TurnInputMode inputMode,
+            String content,
+            boolean isFollowUp,
+            short followUpDepth,
+            Instant createdAt) {
     }
 }
