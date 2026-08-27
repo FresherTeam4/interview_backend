@@ -1,10 +1,13 @@
 package com.baseProject.myBaseProject.scheduler;
 
 import com.baseProject.myBaseProject.config.properites.InterviewProperties;
+import com.baseProject.myBaseProject.enums.AwaitingAction;
 import com.baseProject.myBaseProject.enums.SessionProcessingStage;
 import com.baseProject.myBaseProject.enums.SessionStatus;
+import com.baseProject.myBaseProject.interview.InterviewNextTurnWorkflowDispatcher;
 import com.baseProject.myBaseProject.interview.InterviewScriptWorkflowDispatcher;
 import com.baseProject.myBaseProject.repository.InterviewSessionRepository;
+import com.baseProject.myBaseProject.repository.SessionTurnRepository;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -28,17 +31,21 @@ public class InterviewWorkflowRecoveryJob {
 
     private final InterviewProperties properties;
     private final InterviewSessionRepository sessionRepository;
+    private final SessionTurnRepository turnRepository;
     private final InterviewScriptWorkflowDispatcher workflowDispatcher;
+    private final InterviewNextTurnWorkflowDispatcher nextTurnWorkflowDispatcher;
     private final Clock clock;
 
     @EventListener(ApplicationReadyEvent.class)
     public void recoverWhenApplicationIsReady() {
         recoverScriptGeneration();
+        recoverNextTurn();
     }
 
     @Scheduled(cron = "${app.interview.recovery-cron}")
     public void recoverPeriodically() {
         recoverScriptGeneration();
+        recoverNextTurn();
     }
 
     private void recoverScriptGeneration() {
@@ -68,6 +75,38 @@ public class InterviewWorkflowRecoveryJob {
         } catch (RuntimeException exception) {
             log.error(
                     "Interview script recovery failed: exceptionType={}",
+                    exception.getClass().getSimpleName());
+        }
+    }
+
+    private void recoverNextTurn() {
+        if (!properties.enabled()) {
+            return;
+        }
+        Instant now = clock.instant();
+        try {
+            List<Long> sessionIds = turnRepository.findRecoverableNextTurnSessionIds(
+                    SessionStatus.IN_PROGRESS,
+                    List.of(AwaitingAction.ENGINE_RESPONSE, AwaitingAction.ENGINE_RETRY),
+                    SessionProcessingStage.NEXT_TURN,
+                    now,
+                    now.minus(properties.processingLease()),
+                    PageRequest.of(0, RECOVERY_BATCH_SIZE));
+            int claimed = 0;
+            for (Long sessionId : sessionIds) {
+                if (nextTurnWorkflowDispatcher.claimAndDispatch(sessionId)) {
+                    claimed++;
+                }
+            }
+            if (!sessionIds.isEmpty()) {
+                log.info(
+                        "Interview next-turn recovery scanned: candidates={}, claimed={}",
+                        sessionIds.size(),
+                        claimed);
+            }
+        } catch (RuntimeException exception) {
+            log.error(
+                    "Interview next-turn recovery failed: exceptionType={}",
                     exception.getClass().getSimpleName());
         }
     }

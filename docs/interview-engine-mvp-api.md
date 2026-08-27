@@ -1,6 +1,6 @@
 # Interview Engine MVP — Thiết kế kỹ thuật và API
 
-> Trạng thái: M00–M06 đã approved; M07 implementation review candidate
+> Trạng thái: M00–M07 đã approved; M08 implementation review candidate
 > Tài liệu sản phẩm liên quan: [interview-engine-mvp-plan.md](./interview-engine-mvp-plan.md)  
 > Baseline: Java 17, Spring Boot 4.1.x, Spring MVC, Spring Security, Spring Data JPA,
 > MySQL, Liquibase, MinIO/S3, Spring AI và Gemini
@@ -1282,6 +1282,27 @@ Transaction B sau AI:
 - Nếu hết câu, chuyển `IN_PROGRESS -> SCORING` và dispatch scoring sau commit.
 - Clear processing claim và cập nhật awaiting action.
 
+#### 8.7.1. Runtime contract đã triển khai trong M08
+
+- M08 giữ nguyên response/transaction boundary ở trên nhưng chưa gọi follow-up AI. Worker áp dụng
+  policy deterministic `NEXT_QUESTION`; AI decision/evidence/retry được mở ở M09.
+- Transaction A khóa ownership-scoped session. `clientTurnId` replay được xử lý trước version/state:
+  cùng content/prompt trả lại candidate turn cũ cùng phase session hiện tại; khác content/prompt trả
+  `409 IDEMPOTENCY_KEY_REUSED`. Request mới mới phải qua version/state/current-prompt checks.
+- Candidate turn được insert với `inputMode = TEXT` trong cùng transaction tăng
+  `answeredQuestionCount`, cấp `nextTurnIndex`, đặt `ENGINE_RESPONSE + NEXT_TURN`, processing token
+  và `lastActivityAt`. Response chỉ được gửi sau khi transaction này commit; vì vậy answer không
+  phụ thuộc worker có chạy thành công ngay hay không.
+- Transaction B khóa session và chỉ commit khi còn sở hữu token. Nếu còn base question, nó cấp
+  index kế tiếp từ cursor và insert một interviewer turn rồi clear claim; nếu đã hết, state machine
+  ghi transition `IN_PROGRESS -> SCORING`, `endReason = USER_COMPLETED`. Scoring claim/report thuộc
+  M10 nên M08 dừng ở `SCORING + REPORT`.
+- Dispatcher chạy sau commit trên `interviewAiExecutor`. Recovery lúc startup/cron chỉ claim lại
+  `NEXT_TURN` stale có candidate chưa có interviewer phía sau. Hai dispatch cùng token bị session
+  lock serialize; dispatch thứ hai thấy claim đã clear và không ghi duplicate.
+- `app.interview.max-answer-chars` mặc định 10.000; service strip content và đếm Unicode code point.
+  Session `VOICE_TURN_BASED` dùng cùng endpoint làm text fallback mà không đổi session mode.
+
 ### 8.8. Complete sớm
 
 ```http
@@ -1990,7 +2011,7 @@ Các code mới được thêm vào `ErrorCode`, message người dùng vào `Me
 | 409 | `SESSION_RETRY_REQUIRED` | Workflow đã fail và cần retry |
 | 409 | `CURRENT_PROMPT_MISMATCH` | Answer nhắm prompt cũ/sai |
 | 400 | `IDEMPOTENCY_KEY_REQUIRED` | Create session thiếu/rỗng idempotency key |
-| 409 | `IDEMPOTENCY_KEY_REUSED` | Cùng key nhưng request khác |
+| 409 | `IDEMPOTENCY_KEY_REUSED` | Cùng create key/clientTurnId nhưng request khác |
 | 400 | `ANSWER_REQUIRED` | Text answer rỗng |
 | 400 | `ANSWER_TOO_LONG` | Vượt giới hạn ký tự |
 | 503 | `RUBRIC_NOT_AVAILABLE` | Không có current published rubric |

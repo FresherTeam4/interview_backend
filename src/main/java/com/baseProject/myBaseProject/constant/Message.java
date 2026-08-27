@@ -85,6 +85,13 @@ public final class Message {
             "Idempotency-Key là bắt buộc khi tạo phiên phỏng vấn";
     public static final String IDEMPOTENCY_KEY_REUSED =
             "Idempotency-Key này đã được dùng cho một yêu cầu tạo phiên khác";
+    public static final String CLIENT_TURN_ID_REUSED =
+            "clientTurnId này đã được dùng cho một câu trả lời khác";
+    public static final String CURRENT_PROMPT_MISMATCH =
+            "Câu trả lời không thuộc câu hỏi hiện tại của phiên phỏng vấn";
+    public static final String ANSWER_REQUIRED = "Câu trả lời không được để trống";
+    public static final String ANSWER_TOO_LONG =
+            "Câu trả lời tối đa %d ký tự";
     public static final String INTERVIEW_AI_UNAVAILABLE =
             "Tính năng sinh câu hỏi phỏng vấn hiện chưa sẵn sàng";
     public static final String SCRIPT_GENERATION_FAILED_NO_API_KEY =

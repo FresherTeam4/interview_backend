@@ -10,6 +10,8 @@ import com.baseProject.myBaseProject.dto.interview.InterviewSessionResponse;
 import com.baseProject.myBaseProject.dto.interview.InterviewSessionSummaryResponse;
 import com.baseProject.myBaseProject.dto.interview.RetryInterviewSessionRequest;
 import com.baseProject.myBaseProject.dto.interview.SessionVersionRequest;
+import com.baseProject.myBaseProject.dto.interview.SubmitTextAnswerRequest;
+import com.baseProject.myBaseProject.dto.interview.TextAnswerAcceptedResponse;
 import com.baseProject.myBaseProject.enums.SessionListScope;
 import com.baseProject.myBaseProject.security.CustomUserDetails;
 import com.baseProject.myBaseProject.security.authorization.CurrentUser;
@@ -18,6 +20,8 @@ import com.baseProject.myBaseProject.service.InterviewSessionService;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 
@@ -124,6 +128,26 @@ public class InterviewSessionController {
             @PathVariable Long sessionId,
             @Valid @RequestBody SessionVersionRequest request) {
         return interviewSessionService.resume(currentUser.getId(), sessionId, request);
+    }
+
+    @PostMapping("/{sessionId}/answers")
+    @Operation(summary = "Lưu câu trả lời text và chuyển engine sang câu hỏi tiếp theo")
+    @ApiResponses({
+            @ApiResponse(responseCode = "202", description = "Câu trả lời đã được lưu"),
+            @ApiResponse(responseCode = "400", description = "Payload câu trả lời không hợp lệ"),
+            @ApiResponse(responseCode = "404", description = "Không tìm thấy session của user"),
+            @ApiResponse(responseCode = "409", description = "Version, prompt hoặc state xung đột")
+    })
+    public ResponseEntity<TextAnswerAcceptedResponse> submitTextAnswer(
+            @CurrentUser CustomUserDetails currentUser,
+            @PathVariable Long sessionId,
+            @Valid @RequestBody SubmitTextAnswerRequest request) {
+        TextAnswerAcceptedResponse response = interviewSessionService.submitTextAnswer(
+                currentUser.getId(), sessionId, request);
+        return ResponseEntity.status(HttpStatus.ACCEPTED)
+                .location(URI.create("/api/sessions/" + response.sessionId()))
+                .header(HttpHeaders.RETRY_AFTER, POLL_RETRY_AFTER_SECONDS)
+                .body(response);
     }
 
     @PostMapping("/{sessionId}/retry")

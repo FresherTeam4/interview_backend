@@ -248,6 +248,68 @@ public class InterviewSession {
         return nextTurnIndex++;
     }
 
+    /** Commits one base-question answer and the recoverable claim for its next-turn work. */
+    public int acceptBaseQuestionAnswer(UUID processingToken, Instant now) {
+        Objects.requireNonNull(processingToken);
+        Objects.requireNonNull(now);
+        if (status != SessionStatus.IN_PROGRESS
+                || awaitingAction != AwaitingAction.CANDIDATE_ANSWER
+                || processingStage != null
+                || this.processingToken != null
+                || currentQuestionOrdinal == null
+                || currentQuestionOrdinal.shortValue() != answeredQuestionCount + 1
+                || answeredQuestionCount >= totalQuestionCount) {
+            throw new IllegalStateException(
+                    "Interview session cannot accept a base-question answer");
+        }
+
+        int turnIndex = nextTurnIndex++;
+        answeredQuestionCount++;
+        awaitingAction = AwaitingAction.ENGINE_RESPONSE;
+        processingStage = SessionProcessingStage.NEXT_TURN;
+        this.processingToken = processingToken.toString();
+        processingStartedAt = now;
+        processingAttempts = 1;
+        nextRetryAt = null;
+        failureStage = null;
+        statusMessage = null;
+        lastActivityAt = now;
+        updatedAt = now;
+        return turnIndex;
+    }
+
+    /** Persists the base prompt following an answer while retaining user-activity time. */
+    public int advanceToBaseQuestion(
+            short nextQuestionOrdinal,
+            UUID ownedProcessingToken,
+            Instant now) {
+        Objects.requireNonNull(ownedProcessingToken);
+        Objects.requireNonNull(now);
+        if (status != SessionStatus.IN_PROGRESS
+                || awaitingAction != AwaitingAction.ENGINE_RESPONSE
+                || processingStage != SessionProcessingStage.NEXT_TURN
+                || !ownedProcessingToken.toString().equals(processingToken)
+                || currentQuestionOrdinal == null
+                || answeredQuestionCount != currentQuestionOrdinal.shortValue()
+                || answeredQuestionCount >= totalQuestionCount
+                || nextQuestionOrdinal != currentQuestionOrdinal.shortValue() + 1) {
+            throw new IllegalStateException(
+                    "Interview session cannot advance to the next base question");
+        }
+
+        int turnIndex = nextTurnIndex++;
+        currentQuestionOrdinal = nextQuestionOrdinal;
+        currentFollowupDepth = 0;
+        awaitingAction = AwaitingAction.CANDIDATE_ANSWER;
+        processingStage = null;
+        processingToken = null;
+        processingStartedAt = null;
+        nextRetryAt = null;
+        statusMessage = null;
+        updatedAt = now;
+        return turnIndex;
+    }
+
     /** State mutation entry point; production callers go through SessionStateMachine. */
     public void applyStateTransition(
             SessionStatus targetStatus,

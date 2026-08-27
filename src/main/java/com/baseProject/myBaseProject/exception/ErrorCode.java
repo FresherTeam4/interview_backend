@@ -108,8 +108,14 @@ public enum ErrorCode {
     SESSION_RETRY_NOT_ALLOWED,
     /** 400 — create session thiếu hoặc gửi key chỉ có whitespace. */
     IDEMPOTENCY_KEY_REQUIRED,
-    /** 409 — cùng key create session được dùng cho request có nội dung khác. */
+    /** 409 — cùng create key/clientTurnId được dùng cho request có nội dung khác. */
     IDEMPOTENCY_KEY_REUSED,
+    /** 409 — answer nhắm tới interviewer turn không còn là prompt hiện tại. */
+    CURRENT_PROMPT_MISMATCH,
+    /** 400 — text answer rỗng hoặc chỉ có whitespace. */
+    ANSWER_REQUIRED,
+    /** 400 — text answer vượt giới hạn ký tự cấu hình. */
+    ANSWER_TOO_LONG,
     /** 503 — provider hoặc credential sinh nội dung phỏng vấn không dùng được. */
     INTERVIEW_AI_UNAVAILABLE
 }

@@ -8,6 +8,8 @@ import com.baseProject.myBaseProject.dto.interview.InterviewSessionResponse;
 import com.baseProject.myBaseProject.dto.interview.InterviewSessionSummaryResponse;
 import com.baseProject.myBaseProject.dto.interview.RetryInterviewSessionRequest;
 import com.baseProject.myBaseProject.dto.interview.SessionVersionRequest;
+import com.baseProject.myBaseProject.dto.interview.SubmitTextAnswerRequest;
+import com.baseProject.myBaseProject.dto.interview.TextAnswerAcceptedResponse;
 import com.baseProject.myBaseProject.enums.SessionListScope;
 
 public interface InterviewSessionService {
@@ -41,6 +43,11 @@ public interface InterviewSessionService {
             Long userId,
             Long sessionId,
             SessionVersionRequest request);
+
+    TextAnswerAcceptedResponse submitTextAnswer(
+            Long userId,
+            Long sessionId,
+            SubmitTextAnswerRequest request);
 
     InterviewSessionAcceptedResponse retry(
             Long userId,

@@ -9,6 +9,8 @@ import com.baseProject.myBaseProject.dto.interview.InterviewSessionResponse;
 import com.baseProject.myBaseProject.dto.interview.InterviewSessionSummaryResponse;
 import com.baseProject.myBaseProject.dto.interview.RetryInterviewSessionRequest;
 import com.baseProject.myBaseProject.dto.interview.SessionVersionRequest;
+import com.baseProject.myBaseProject.dto.interview.SubmitTextAnswerRequest;
+import com.baseProject.myBaseProject.dto.interview.TextAnswerAcceptedResponse;
 import com.baseProject.myBaseProject.entity.CandidateProfile;
 import com.baseProject.myBaseProject.entity.InterviewSession;
 import com.baseProject.myBaseProject.entity.JobDescription;
@@ -26,6 +28,10 @@ import com.baseProject.myBaseProject.enums.TurnRole;
 import com.baseProject.myBaseProject.exception.IdempotencyKeyRequiredException;
 import com.baseProject.myBaseProject.exception.IdempotencyKeyReusedException;
 import com.baseProject.myBaseProject.exception.InterviewAiUnavailableException;
+import com.baseProject.myBaseProject.exception.AnswerRequiredException;
+import com.baseProject.myBaseProject.exception.AnswerTooLongException;
+import com.baseProject.myBaseProject.exception.ClientTurnIdReusedException;
+import com.baseProject.myBaseProject.exception.CurrentPromptMismatchException;
 import com.baseProject.myBaseProject.exception.JobDescriptionNotConfirmedException;
 import com.baseProject.myBaseProject.exception.JobDescriptionNotFoundException;
 import com.baseProject.myBaseProject.exception.ProfileNotConfirmedException;
@@ -33,6 +39,8 @@ import com.baseProject.myBaseProject.exception.ProfileNotFoundException;
 import com.baseProject.myBaseProject.exception.SessionLimitReachedException;
 import com.baseProject.myBaseProject.exception.SessionInvalidStateException;
 import com.baseProject.myBaseProject.exception.SessionNotFoundException;
+import com.baseProject.myBaseProject.exception.SessionVersionConflictException;
+import com.baseProject.myBaseProject.interview.InterviewNextTurnWorkflowDispatcher;
 import com.baseProject.myBaseProject.interview.InterviewScriptWorkflowDispatcher;
 import com.baseProject.myBaseProject.interview.NewInterviewSession;
 import com.baseProject.myBaseProject.interview.ProfileSnapshotFactory;
@@ -65,11 +73,14 @@ import org.springframework.data.domain.Sort;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.time.Clock;
+import java.time.Instant;
 import java.util.Collection;
 import java.util.EnumSet;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Locale;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 
@@ -111,8 +122,10 @@ public class InterviewSessionServiceImpl implements InterviewSessionService {
     private final SessionStateMachine stateMachine;
     private final SessionProcessingClaimService claimService;
     private final InterviewScriptWorkflowDispatcher workflowDispatcher;
+    private final InterviewNextTurnWorkflowDispatcher nextTurnWorkflowDispatcher;
     private final InterviewSessionMapper sessionMapper;
     private final RubricMapper rubricMapper;
+    private final Clock clock;
 
     @Override
     @Transactional
@@ -301,6 +314,62 @@ public class InterviewSessionServiceImpl implements InterviewSessionService {
 
     @Override
     @Transactional
+    public TextAnswerAcceptedResponse submitTextAnswer(
+            Long userId,
+            Long sessionId,
+            SubmitTextAnswerRequest request) {
+        String content = normalizeAnswer(request.content());
+        String clientTurnId = normalizeClientTurnId(request.clientTurnId());
+        InterviewSession session = sessionRepository
+                .findOwnedByIdForUpdate(sessionId, userId)
+                .orElseThrow(SessionNotFoundException::new);
+
+        SessionTurn existing = turnRepository.findBySessionIdAndClientTurnId(
+                        sessionId,
+                        clientTurnId)
+                .orElse(null);
+        if (existing != null) {
+            ensureSameAnswerRequest(existing, sessionId, request.promptTurnId(), content);
+            redispatchPendingNextTurn(session);
+            return toTextAnswerAccepted(session, existing);
+        }
+
+        verifyVersion(session, request.expectedVersion());
+        if (session.getStatus() != SessionStatus.IN_PROGRESS
+                || session.getAwaitingAction() != AwaitingAction.CANDIDATE_ANSWER) {
+            throw new SessionInvalidStateException();
+        }
+
+        SessionTurn currentPrompt = turnRepository
+                .findFirstBySessionIdAndSessionUserIdOrderByTurnIndexDesc(sessionId, userId)
+                .orElseThrow(CurrentPromptMismatchException::new);
+        if (!Objects.equals(currentPrompt.getId(), request.promptTurnId())
+                || currentPrompt.getRole() != TurnRole.INTERVIEWER
+                || currentPrompt.getQuestion() == null
+                || session.getCurrentQuestionOrdinal() == null
+                || currentPrompt.getTurnIndex() != session.getNextTurnIndex() - 1
+                || currentPrompt.getQuestion().getOrdinal()
+                        != session.getCurrentQuestionOrdinal()) {
+            throw new CurrentPromptMismatchException();
+        }
+
+        Instant now = clock.instant();
+        UUID processingToken = UUID.randomUUID();
+        int turnIndex = session.acceptBaseQuestionAnswer(processingToken, now);
+        SessionTurn candidateTurn = turnRepository.save(SessionTurn.candidateTextAnswer(
+                session,
+                currentPrompt.getQuestion(),
+                turnIndex,
+                content,
+                clientTurnId,
+                now));
+        sessionRepository.saveAndFlush(session);
+        nextTurnWorkflowDispatcher.dispatchAfterCommit(sessionId, processingToken);
+        return toTextAnswerAccepted(session, candidateTurn);
+    }
+
+    @Override
+    @Transactional
     public InterviewSessionAcceptedResponse retry(
             Long userId,
             Long sessionId,
@@ -376,6 +445,79 @@ public class InterviewSessionServiceImpl implements InterviewSessionService {
             throw new SessionInvalidStateException();
         }
         return AwaitingAction.CANDIDATE_ANSWER;
+    }
+
+    private String normalizeAnswer(String content) {
+        if (content == null || content.isBlank()) {
+            throw new AnswerRequiredException();
+        }
+        String normalized = content.strip();
+        if (normalized.codePointCount(0, normalized.length()) > properties.maxAnswerChars()) {
+            throw new AnswerTooLongException(properties.maxAnswerChars());
+        }
+        return normalized;
+    }
+
+    private String normalizeClientTurnId(String clientTurnId) {
+        if (clientTurnId == null || clientTurnId.isBlank()) {
+            throw new IllegalArgumentException("clientTurnId must not be blank");
+        }
+        String normalized = clientTurnId.strip();
+        if (normalized.length() > 64) {
+            throw new IllegalArgumentException("clientTurnId must not exceed 64 characters");
+        }
+        return normalized;
+    }
+
+    private void ensureSameAnswerRequest(
+            SessionTurn existing,
+            Long sessionId,
+            Long promptTurnId,
+            String content) {
+        SessionTurn originalPrompt = turnRepository.findWithQuestionByIdAndSessionId(
+                        promptTurnId,
+                        sessionId)
+                .orElse(null);
+        if (!existing.getContentText().equals(content)
+                || existing.getRole() != TurnRole.CANDIDATE
+                || existing.getQuestion() == null
+                || originalPrompt == null
+                || originalPrompt.getRole() != TurnRole.INTERVIEWER
+                || originalPrompt.getQuestion() == null
+                || !Objects.equals(
+                        existing.getQuestion().getId(),
+                        originalPrompt.getQuestion().getId())
+                || existing.getTurnIndex() != originalPrompt.getTurnIndex() + 1) {
+            throw new ClientTurnIdReusedException();
+        }
+    }
+
+    private void redispatchPendingNextTurn(InterviewSession session) {
+        if (session.getStatus() == SessionStatus.IN_PROGRESS
+                && session.getAwaitingAction() == AwaitingAction.ENGINE_RESPONSE
+                && session.getProcessingStage() == SessionProcessingStage.NEXT_TURN
+                && session.getProcessingToken() != null) {
+            nextTurnWorkflowDispatcher.dispatchAfterCommit(
+                    session.getId(),
+                    UUID.fromString(session.getProcessingToken()));
+        }
+    }
+
+    private TextAnswerAcceptedResponse toTextAnswerAccepted(
+            InterviewSession session,
+            SessionTurn candidateTurn) {
+        return new TextAnswerAcceptedResponse(
+                session.getId(),
+                candidateTurn.getId(),
+                session.getStatus(),
+                session.getAwaitingAction(),
+                session.getVersion());
+    }
+
+    private void verifyVersion(InterviewSession session, long expectedVersion) {
+        if (expectedVersion < 0 || session.getVersion() != expectedVersion) {
+            throw new SessionVersionConflictException();
+        }
     }
 
     private String normalizeIdempotencyKey(String idempotencyKey) {

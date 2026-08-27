@@ -1,6 +1,6 @@
 # Interview Engine MVP — Kịch bản sản phẩm và kế hoạch triển khai
 
-> Trạng thái: M00–M06 đã approved; M07 implementation review candidate
+> Trạng thái: M00–M07 đã approved; M08 implementation review candidate
 > Ngày cập nhật: 2026-08-27
 > Phạm vi: Interview Engine, JD, text interview, voice turn-based và scoring
 
@@ -1646,7 +1646,7 @@ Chuẩn bị: đã có ít nhất một profile đã confirm và một JD `READY
 
 ### M07 — Start, đọc trạng thái, pause/resume và home list
 
-**Trạng thái:** implementation đã hoàn thành, chờ `APPROVED M07`.
+**Trạng thái:** đã nhận `APPROVED M07`.
 
 **Kết quả người dùng**
 
@@ -1765,11 +1765,13 @@ trước command tiếp theo; các ví dụ ID dưới đây chỉ mang tính mi
   start/pause/resume, locked rubric và retry. Chưa gọi authenticated happy path bằng dữ liệu người
   dùng thật; checklist Swagger phía trên là review gate thủ công của module.
 
-**Điểm dừng:** chờ `APPROVED M07`.
+**Điểm dừng:** đã nhận `APPROVED M07`.
 
 ---
 
 ### M08 — Text answer và base-question progression
+
+**Trạng thái:** implementation đã hoàn thành, chờ `APPROVED M08`.
 
 **Kết quả người dùng**
 
@@ -1805,6 +1807,82 @@ questions. Module này tạo đường hội thoại text ổn định trước 
 - Same `clientTurnId` trả kết quả cũ; cùng ID/nội dung khác trả conflict.
 - Wrong prompt/version/state bị từ chối.
 - Recovery tạo đúng một interviewer turn nếu crash sau candidate commit.
+
+**Luồng implementation M08**
+
+1. `POST /answers` khóa session theo `(sessionId, userId)`, chuẩn hóa content/client ID và kiểm tra
+   replay trước version/state. Replay đúng request trả cùng `candidateTurnId` và snapshot phase hiện
+   tại; cùng `clientTurnId` nhưng content/prompt khác trả conflict, không ghi thêm turn.
+2. Request mới phải dùng version hiện tại, session `IN_PROGRESS + CANDIDATE_ANSWER` và
+   `promptTurnId` đúng interviewer turn mới nhất. Trong một transaction, session cấp
+   `nextTurnIndex`, insert candidate `TEXT`, tăng `answeredQuestionCount`, đặt
+   `ENGINE_RESPONSE + NEXT_TURN`, ghi processing token và activity time rồi mới trả `202`.
+3. Sau commit, next-turn worker dùng chính processing token để khóa session. Policy M08 không gọi
+   AI: nếu còn base question, worker insert interviewer turn kế tiếp và atomically chuyển lại
+   `CANDIDATE_ANSWER`; nếu đã trả lời hết, state machine ghi transition
+   `IN_PROGRESS -> SCORING`, `endReason = USER_COMPLETED` và chờ report của M10.
+4. Candidate commit và interviewer/scoring commit là hai transaction riêng. Hai worker cùng token
+   bị serialize bởi session lock; worker đến sau thấy claim đã clear và bỏ qua. Không có đường nào
+   dùng `COUNT(*)` để sinh index.
+5. Recovery lúc application ready và theo cron chỉ claim lại session
+   `IN_PROGRESS + ENGINE_RESPONSE/ENGINE_RETRY + NEXT_TURN` có candidate chưa có interviewer phía
+   sau và claim đã stale/chưa có. Queue rejection hoặc restart vì vậy không làm mất answer hoặc tạo
+   hai prompt.
+6. `content` được strip và giới hạn bằng `app.interview.max-answer-chars` (mặc định 10.000 code
+   point). Endpoint dùng được cho cả session `TEXT` lẫn text fallback của
+   `VOICE_TURN_BASED`; text chưa submit không được persist.
+
+**Kiểm tra local M08 (Swagger checklist)**
+
+Chuẩn bị session đã start theo M07. Từ `GET /api/sessions/{sessionId}`, lấy đồng thời
+`version` và `currentPrompt.turnId`; mỗi answer mới phải có `clientTurnId` mới.
+
+1. `POST /api/sessions/{sessionId}/answers` với:
+
+   ```json
+   {
+     "promptTurnId": 205,
+     "content": "Trong dự án đó em chọn Redis để giảm tải truy vấn lặp lại...",
+     "clientTurnId": "answer-42-q1-01",
+     "expectedVersion": 8
+   }
+   ```
+
+   Kỳ vọng `202 Accepted`, header `Location: /api/sessions/{sessionId}`, `Retry-After: 1` và body có
+   cùng `sessionId`, một `candidateTurnId`, `status: IN_PROGRESS`,
+   `awaitingAction: ENGINE_RESPONSE`, `version` mới. Vì worker chạy ngay sau commit, response GET
+   đầu tiên có thể đã chuyển sang boundary kế tiếp.
+2. Poll `GET /api/sessions/{sessionId}` — candidate turn phải tồn tại đúng một lần với
+   `role: CANDIDATE`, `inputMode: TEXT` và content đã trim. Khi progression hoàn tất, GET trả
+   `CANDIDATE_ANSWER`, `answeredQuestionCount` tăng một, `currentPrompt.ordinal` tăng một và history
+   có index liên tục interviewer/candidate/interviewer; không lộ question tương lai sau prompt mới.
+3. Gửi lại nguyên body ở bước 1, kể cả dùng `expectedVersion` cũ — kỳ vọng vẫn `202`, cùng
+   `candidateTurnId`, không tăng counter/index và không tạo turn mới. Đổi `content` hoặc
+   `promptTurnId` nhưng giữ `clientTurnId` trả `409 IDEMPOTENCY_KEY_REUSED`.
+4. Với `clientTurnId` mới, dùng version cũ trả `409 SESSION_VERSION_CONFLICT`; dùng version hiện tại
+   nhưng `promptTurnId` cũ/sai trả `409 CURRENT_PROMPT_MISMATCH`; submit khi session đang
+   `PAUSED`, `READY`, `SCORING` hoặc đang `ENGINE_RESPONSE` trả `409 SESSION_INVALID_STATE`; ID user
+   khác trả `404 SESSION_NOT_FOUND`.
+5. `content` rỗng/whitespace trả `400 ANSWER_REQUIRED`; vượt 10.000 ký tự mặc định trả
+   `400 ANSWER_TOO_LONG`; thiếu ID/version, ID không dương, `clientTurnId` rỗng hoặc dài hơn 64 ký tự
+   trả `400 VALIDATION_FAILED`.
+6. Lặp đến base question cuối — answer cuối vẫn trả `202` và persist candidate trước; poll GET sau
+   đó trả `status: SCORING`, `awaitingAction: REPORT`,
+   `answeredQuestionCount == totalQuestionCount`. M08 chưa tạo report/score; phần đó thuộc M10.
+7. Thực hiện cùng payload trên session `VOICE_TURN_BASED` — kỳ vọng candidate turn vẫn có
+   `inputMode: TEXT`, xác nhận text fallback không đổi mode của session.
+
+**Kết quả verification đã chạy cho M08**
+
+- `.\mvnw.cmd -DskipTests compile` thành công trên 231 source với Java release 17.
+- Application start trên MySQL local thành công; Liquibase xác nhận schema hiện tại đã đủ 15
+  changeset, Hibernate `ddl-auto=validate` khởi tạo `EntityManagerFactory`, và Spring Data parse
+  thành công repository query recovery `NEXT_TURN` mới.
+- OpenAPI sinh thành công route `POST /api/sessions/{sessionId}/answers`, khai báo Bearer security,
+  request bắt buộc đủ bốn field, giới hạn `content: 10000`/`clientTurnId: 64` và các response
+  `202/400/404/409`.
+- Không tạo hoặc chạy test mới theo review override M03–M16. Không sửa schema và không gọi Gemini;
+  policy progression của M08 hoàn toàn deterministic trong backend.
 
 **Điểm dừng:** chờ `APPROVED M08`.
 

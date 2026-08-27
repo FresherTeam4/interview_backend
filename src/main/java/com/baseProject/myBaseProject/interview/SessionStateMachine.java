@@ -175,6 +175,20 @@ public class SessionStateMachine {
         return apply(lockedSession, plan, SessionTransitionActor.SYSTEM, reason);
     }
 
+    /** Completes base-question progression without re-locking the caller's managed session. */
+    @Transactional
+    public InterviewSession completeAllQuestions(
+            InterviewSession lockedSession,
+            UUID processingToken,
+            String reason) {
+        Objects.requireNonNull(lockedSession);
+        if (lockedSession.getId() == null) {
+            throw new IllegalArgumentException("Next-turn session must be persisted");
+        }
+        TransitionPlan plan = allQuestionsAnsweredPlan(lockedSession, processingToken);
+        return apply(lockedSession, plan, SessionTransitionActor.SYSTEM, reason);
+    }
+
     @Transactional
     public InterviewSession timeout(Long sessionId, long expectedVersion, String reason) {
         InterviewSession session = sessionRepository.findByIdForUpdate(sessionId)
@@ -247,7 +261,7 @@ public class SessionStateMachine {
         return switch (event) {
             case DISPATCH_SCRIPT_GENERATION -> dispatchGenerationPlan(session);
             case SCRIPT_PERSISTED -> scriptPersistedPlan(session, processingToken);
-            case ALL_QUESTIONS_ANSWERED -> allQuestionsAnsweredPlan(session);
+            case ALL_QUESTIONS_ANSWERED -> allQuestionsAnsweredPlan(session, processingToken);
             case REPORT_COMMITTED -> reportCommittedPlan(session, processingToken);
             case WORKFLOW_FAILED -> failurePlan(
                     session, processingToken, failureStage, statusMessage);
@@ -342,9 +356,13 @@ public class SessionStateMachine {
                 true);
     }
 
-    private TransitionPlan allQuestionsAnsweredPlan(InterviewSession session) {
+    private TransitionPlan allQuestionsAnsweredPlan(
+            InterviewSession session,
+            UUID processingToken) {
         requireStatus(session, SessionStatus.IN_PROGRESS);
-        if (session.getTotalQuestionCount() == 0
+        verifyClaim(session, SessionProcessingStage.NEXT_TURN, processingToken);
+        if (session.getAwaitingAction() != AwaitingAction.ENGINE_RESPONSE
+                || session.getTotalQuestionCount() == 0
                 || session.getAnsweredQuestionCount() != session.getTotalQuestionCount()) {
             throw invalidState();
         }

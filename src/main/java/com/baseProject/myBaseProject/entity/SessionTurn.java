@@ -103,9 +103,50 @@ public class SessionTurn {
             SessionQuestion question,
             int turnIndex,
             Instant now) {
-        if (!Objects.equals(question.getSession().getId(), session.getId())) {
-            throw new IllegalArgumentException("Question must belong to the interview session");
+        return baseQuestionPrompt(session, question, turnIndex, now);
+    }
+
+    public static SessionTurn nextBaseQuestionPrompt(
+            InterviewSession session,
+            SessionQuestion question,
+            int turnIndex,
+            Instant now) {
+        return baseQuestionPrompt(session, question, turnIndex, now);
+    }
+
+    public static SessionTurn candidateTextAnswer(
+            InterviewSession session,
+            SessionQuestion question,
+            int turnIndex,
+            String content,
+            String clientTurnId,
+            Instant now) {
+        validateQuestionOwnership(session, question);
+        if (clientTurnId == null || clientTurnId.isBlank()) {
+            throw new IllegalArgumentException("Candidate turn requires a client turn ID");
         }
+        SessionTurn turn = new SessionTurn();
+        turn.session = Objects.requireNonNull(session);
+        turn.question = Objects.requireNonNull(question);
+        turn.turnIndex = turnIndex;
+        turn.role = TurnRole.CANDIDATE;
+        turn.inputMode = TurnInputMode.TEXT;
+        turn.contentText = Objects.requireNonNull(content);
+        turn.clientTurnId = clientTurnId;
+        turn.followUp = false;
+        turn.followUpDepth = 0;
+        turn.startedAt = Objects.requireNonNull(now);
+        turn.endedAt = now;
+        turn.createdAt = now;
+        return turn;
+    }
+
+    private static SessionTurn baseQuestionPrompt(
+            InterviewSession session,
+            SessionQuestion question,
+            int turnIndex,
+            Instant now) {
+        validateQuestionOwnership(session, question);
         SessionTurn turn = new SessionTurn();
         turn.session = Objects.requireNonNull(session);
         turn.question = Objects.requireNonNull(question);
@@ -120,5 +161,15 @@ public class SessionTurn {
         turn.endedAt = now;
         turn.createdAt = now;
         return turn;
+    }
+
+    private static void validateQuestionOwnership(
+            InterviewSession session,
+            SessionQuestion question) {
+        Objects.requireNonNull(session);
+        Objects.requireNonNull(question);
+        if (!Objects.equals(question.getSession().getId(), session.getId())) {
+            throw new IllegalArgumentException("Question must belong to the interview session");
+        }
     }
 }

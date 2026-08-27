@@ -13,7 +13,8 @@ import java.time.Duration;
 public record InterviewProperties(
         boolean enabled,
         @Min(1) @Max(3600) long processingLeaseSeconds,
-        @Min(1) @Max(100) int maxActivePerUser) {
+        @Min(1) @Max(100) int maxActivePerUser,
+        @Min(1) @Max(100000) int maxAnswerChars) {
 
     public Duration processingLease() {
         return Duration.ofSeconds(processingLeaseSeconds);
