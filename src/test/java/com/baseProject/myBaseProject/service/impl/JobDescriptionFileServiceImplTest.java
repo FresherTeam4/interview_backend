@@ -15,12 +15,14 @@ import com.baseProject.myBaseProject.config.properites.JobDescriptionProperties;
 import com.baseProject.myBaseProject.dto.jd.JobDescriptionFileUrlResponse;
 import com.baseProject.myBaseProject.dto.jd.JobDescriptionResponse;
 import com.baseProject.myBaseProject.entity.JobDescription;
+import com.baseProject.myBaseProject.entity.UserAccount;
 import com.baseProject.myBaseProject.enums.JobDescriptionSourceType;
 import com.baseProject.myBaseProject.enums.JobDescriptionStatus;
 import com.baseProject.myBaseProject.exception.JobDescriptionHasNoFileException;
 import com.baseProject.myBaseProject.exception.JobDescriptionInvalidTextException;
 import com.baseProject.myBaseProject.exception.JobDescriptionNotFoundException;
 import com.baseProject.myBaseProject.exception.StorageUnavailableException;
+import com.baseProject.myBaseProject.jd.JobDescriptionFingerprint;
 import com.baseProject.myBaseProject.jd.JobDescriptionFileProcessor;
 import com.baseProject.myBaseProject.jd.JobDescriptionFileProcessor.ProcessedFile;
 import com.baseProject.myBaseProject.mapper.JobDescriptionMapper;
@@ -37,6 +39,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.nio.charset.StandardCharsets;
 import java.time.Clock;
@@ -79,6 +82,7 @@ class JobDescriptionFileServiceImplTest {
                 fileProcessor,
                 fileStorage,
                 filePersistenceService,
+                new JobDescriptionFingerprint(),
                 Clock.fixed(NOW, ZoneOffset.UTC));
         upload = new MockMultipartFile(
                 "file", "backend.pdf", "application/pdf", FILE_CONTENT);
@@ -205,10 +209,12 @@ class JobDescriptionFileServiceImplTest {
 
     @Test
     void fileUrlRejectsTextSourceWithoutCallingStorage() {
-        JobDescription jobDescription = JobDescription.builder()
-                .id(JD_ID)
-                .sourceType(JobDescriptionSourceType.TEXT)
-                .build();
+        JobDescription jobDescription = withId(JobDescription.createText(
+                UserAccount.builder().id(USER_ID).build(),
+                "Text JD",
+                "a".repeat(64),
+                EXTRACTED_TEXT,
+                NOW), JD_ID);
         when(jobDescriptionRepository.findByIdAndUserIdAndActiveTrue(JD_ID, USER_ID))
                 .thenReturn(Optional.of(jobDescription));
 
@@ -236,29 +242,35 @@ class JobDescriptionFileServiceImplTest {
 
     private static JobDescription persisted(
             JobDescriptionFilePersistenceService.FileDraft draft) {
-        return JobDescription.builder()
-                .id(JD_ID)
-                .title(draft.title())
-                .sourceType(JobDescriptionSourceType.FILE)
-                .status(JobDescriptionStatus.DRAFT)
-                .originalFilename(draft.originalFilename())
-                .storageKey(draft.storageKey())
-                .contentType(draft.contentType())
-                .fileSizeBytes(draft.fileSizeBytes())
-                .checksumSha256(draft.checksumSha256())
-                .rawText(draft.text())
-                .confirmedText(draft.text())
-                .active(true)
-                .createdAt(draft.now())
-                .updatedAt(draft.now())
-                .build();
+        return withId(JobDescription.createFile(
+                UserAccount.builder().id(USER_ID).build(),
+                draft.title(),
+                new JobDescription.FileMetadata(
+                        draft.originalFilename(),
+                        draft.storageKey(),
+                        draft.contentType(),
+                        draft.fileSizeBytes()),
+                draft.checksumSha256(),
+                draft.text(),
+                draft.now()), JD_ID);
     }
 
     private static JobDescription fileJobDescription(String storageKey) {
-        return JobDescription.builder()
-                .id(JD_ID)
-                .sourceType(JobDescriptionSourceType.FILE)
-                .storageKey(storageKey)
-                .build();
+        return withId(JobDescription.createFile(
+                UserAccount.builder().id(USER_ID).build(),
+                "File JD",
+                new JobDescription.FileMetadata(
+                        "backend.pdf",
+                        storageKey,
+                        "application/pdf",
+                        FILE_CONTENT.length),
+                "a".repeat(64),
+                EXTRACTED_TEXT,
+                NOW), JD_ID);
+    }
+
+    private static JobDescription withId(JobDescription jobDescription, Long id) {
+        ReflectionTestUtils.setField(jobDescription, "id", id);
+        return jobDescription;
     }
 }

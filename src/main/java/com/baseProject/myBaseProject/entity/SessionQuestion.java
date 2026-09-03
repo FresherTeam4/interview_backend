@@ -23,7 +23,6 @@ import lombok.NoArgsConstructor;
 import org.hibernate.annotations.Immutable;
 
 import java.time.Instant;
-import java.util.Objects;
 import java.util.UUID;
 
 @Entity
@@ -114,8 +113,32 @@ public class SessionQuestion {
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
+    /** Khởi tạo một base question bất biến từ dữ liệu đã được AI validator chấp nhận. */
     public static SessionQuestion create(
             InterviewSession session,
+            CreationData data,
+            Instant createdAt) {
+        SessionQuestion question = new SessionQuestion();
+        question.session = session;
+        question.ordinal = data.ordinal();
+        question.questionText = data.questionText();
+        question.topic = data.topic();
+        question.competency = data.competency();
+        question.difficulty = data.difficulty();
+        question.sourceType = data.sourceType();
+        question.sourceProject = data.sourceProject();
+        question.sourceSkill = data.sourceSkill();
+        question.sourceJdExcerpt = data.sourceJdExcerpt();
+        question.questionSignature = data.questionSignature();
+        question.generationSeed = data.generationSeed().toString();
+        question.promptVersion = data.promptVersion();
+        question.modelName = data.modelName();
+        question.createdAt = createdAt;
+        return question;
+    }
+
+    /** Gom dữ liệu đầu vào để tránh factory của entity có quá nhiều tham số rời rạc. */
+    public record CreationData(
             short ordinal,
             String questionText,
             String topic,
@@ -128,24 +151,6 @@ public class SessionQuestion {
             String questionSignature,
             UUID generationSeed,
             String promptVersion,
-            String modelName,
-            Instant createdAt) {
-        SessionQuestion question = new SessionQuestion();
-        question.session = Objects.requireNonNull(session);
-        question.ordinal = ordinal;
-        question.questionText = Objects.requireNonNull(questionText);
-        question.topic = Objects.requireNonNull(topic);
-        question.competency = Objects.requireNonNull(competency);
-        question.difficulty = difficulty;
-        question.sourceType = Objects.requireNonNull(sourceType);
-        question.sourceProject = sourceProject;
-        question.sourceSkill = sourceSkill;
-        question.sourceJdExcerpt = sourceJdExcerpt;
-        question.questionSignature = Objects.requireNonNull(questionSignature);
-        question.generationSeed = Objects.requireNonNull(generationSeed).toString();
-        question.promptVersion = Objects.requireNonNull(promptVersion);
-        question.modelName = Objects.requireNonNull(modelName);
-        question.createdAt = Objects.requireNonNull(createdAt);
-        return question;
+            String modelName) {
     }
 }

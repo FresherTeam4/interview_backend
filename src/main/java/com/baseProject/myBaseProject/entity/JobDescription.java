@@ -16,8 +16,7 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 
-import lombok.AllArgsConstructor;
-import lombok.Builder;
+import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
@@ -36,9 +35,7 @@ import java.time.Instant;
         }
 )
 @Getter
-@NoArgsConstructor
-@AllArgsConstructor
-@Builder
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class JobDescription {
 
     @Id
@@ -58,8 +55,7 @@ public class JobDescription {
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 10)
-    @Builder.Default
-    private JobDescriptionStatus status = JobDescriptionStatus.DRAFT;
+    private JobDescriptionStatus status;
 
     @Column(name = "original_filename", length = 255, updatable = false)
     private String originalFilename;
@@ -91,14 +87,77 @@ public class JobDescription {
     private Instant confirmedAt;
 
     @Column(name = "is_active", nullable = false)
-    @Builder.Default
-    private boolean active = true;
+    private boolean active;
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
+
+    /** Tạo JD dạng text ở trạng thái DRAFT. */
+    public static JobDescription createText(
+            UserAccount user,
+            String title,
+            String checksumSha256,
+            String text,
+            Instant now) {
+        return createDraft(
+                user,
+                title,
+                JobDescriptionSourceType.TEXT,
+                null,
+                checksumSha256,
+                text,
+                now);
+    }
+
+    /** Tạo JD dạng file ở trạng thái DRAFT cùng metadata của object đã upload. */
+    public static JobDescription createFile(
+            UserAccount user,
+            String title,
+            FileMetadata file,
+            String checksumSha256,
+            String text,
+            Instant now) {
+        return createDraft(
+                user,
+                title,
+                JobDescriptionSourceType.FILE,
+                file,
+                checksumSha256,
+                text,
+                now);
+    }
+
+    /** Khởi tạo các field chung của một JD mới. */
+    private static JobDescription createDraft(
+            UserAccount user,
+            String title,
+            JobDescriptionSourceType sourceType,
+            FileMetadata file,
+            String checksumSha256,
+            String text,
+            Instant now) {
+        JobDescription jobDescription = new JobDescription();
+        jobDescription.user = user;
+        jobDescription.title = title;
+        jobDescription.sourceType = sourceType;
+        jobDescription.status = JobDescriptionStatus.DRAFT;
+        if (file != null) {
+            jobDescription.originalFilename = file.originalFilename();
+            jobDescription.storageKey = file.storageKey();
+            jobDescription.contentType = file.contentType();
+            jobDescription.fileSizeBytes = file.fileSizeBytes();
+        }
+        jobDescription.checksumSha256 = checksumSha256;
+        jobDescription.rawText = text;
+        jobDescription.confirmedText = text;
+        jobDescription.active = true;
+        jobDescription.createdAt = now;
+        jobDescription.updatedAt = now;
+        return jobDescription;
+    }
 
     public boolean isDraft() {
         return status == JobDescriptionStatus.DRAFT;
@@ -122,5 +181,12 @@ public class JobDescription {
     public void deactivate(Instant now) {
         active = false;
         updatedAt = now;
+    }
+
+    public record FileMetadata(
+            String originalFilename,
+            String storageKey,
+            String contentType,
+            long fileSizeBytes) {
     }
 }

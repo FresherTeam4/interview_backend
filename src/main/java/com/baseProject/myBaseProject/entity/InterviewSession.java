@@ -7,6 +7,7 @@ import com.baseProject.myBaseProject.enums.SessionFailureStage;
 import com.baseProject.myBaseProject.enums.SessionMode;
 import com.baseProject.myBaseProject.enums.SessionProcessingStage;
 import com.baseProject.myBaseProject.enums.SessionStatus;
+import com.baseProject.myBaseProject.interview.SessionStateChange;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -29,7 +30,6 @@ import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
 import java.time.Instant;
-import java.util.Objects;
 import java.util.UUID;
 
 @Entity
@@ -65,9 +65,6 @@ import java.util.UUID;
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class InterviewSession {
-
-    private static final short MAX_FOLLOW_UPS_PER_QUESTION = 2;
-    private static final short MAX_FOLLOW_UPS_PER_SESSION = 5;
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -193,6 +190,7 @@ public class InterviewSession {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
+    /** Khởi tạo session ở trạng thái CREATED với các tài nguyên đầu vào đã được khóa. */
     public static InterviewSession create(
             UserAccount user,
             CandidateProfile profile,
@@ -206,168 +204,85 @@ public class InterviewSession {
             UUID generationSeed,
             Instant now) {
         InterviewSession session = new InterviewSession();
-        session.user = Objects.requireNonNull(user);
-        session.profile = Objects.requireNonNull(profile);
-        session.jobDescription = Objects.requireNonNull(jobDescription);
-        session.rubricVersion = Objects.requireNonNull(rubricVersion);
-        session.creationKey = Objects.requireNonNull(creationKey);
-        session.creationRequestHash = Objects.requireNonNull(creationRequestHash);
-        session.difficulty = Objects.requireNonNull(difficulty);
-        session.mode = Objects.requireNonNull(mode);
-        session.languageCode = Objects.requireNonNull(languageCode);
+        session.user = user;
+        session.profile = profile;
+        session.jobDescription = jobDescription;
+        session.rubricVersion = rubricVersion;
+        session.creationKey = creationKey;
+        session.creationRequestHash = creationRequestHash;
+        session.difficulty = difficulty;
+        session.mode = mode;
+        session.languageCode = languageCode;
         session.status = SessionStatus.CREATED;
         session.awaitingAction = AwaitingAction.NONE;
-        session.generationSeed = Objects.requireNonNull(generationSeed).toString();
-        session.lastActivityAt = Objects.requireNonNull(now);
+        session.generationSeed = generationSeed.toString();
+        session.lastActivityAt = now;
         session.createdAt = now;
         session.updatedAt = now;
         return session;
     }
 
-    /** Records the all-or-nothing base script size immediately before the READY transition. */
+    /** Ghi tổng số base question đã persist trước khi chuyển session sang READY. */
     public void recordGeneratedQuestionCount(int questionCount) {
-        if (status != SessionStatus.SCRIPT_GENERATING
-                || totalQuestionCount != 0
-                || questionCount < 5
-                || questionCount > 7) {
-            throw new IllegalStateException("Generated question count cannot be recorded");
-        }
         totalQuestionCount = (short) questionCount;
     }
 
-    /** Initializes the persisted conversation cursor together with the first interviewer turn. */
+    /** Khởi tạo con trỏ hội thoại tại base question đầu tiên. */
     public int beginAtQuestion(short questionOrdinal) {
-        if (status != SessionStatus.IN_PROGRESS
-                || awaitingAction != AwaitingAction.CANDIDATE_ANSWER
-                || currentQuestionOrdinal != null
-                || nextTurnIndex != 0
-                || startedAt == null
-                || questionOrdinal != 1
-                || questionOrdinal > totalQuestionCount) {
-            throw new IllegalStateException("Interview session cannot initialize its first prompt");
-        }
         currentQuestionOrdinal = questionOrdinal;
         return nextTurnIndex++;
     }
 
-    /** Commits one base-question answer and the recoverable claim for its next-turn work. */
+    /** Nhận answer của base question và mở processing claim cho turn tiếp theo. */
     public int acceptBaseQuestionAnswer(UUID processingToken, Instant now) {
-        Objects.requireNonNull(processingToken);
-        Objects.requireNonNull(now);
-        if (status != SessionStatus.IN_PROGRESS
-                || awaitingAction != AwaitingAction.CANDIDATE_ANSWER
-                || processingStage != null
-                || this.processingToken != null
-                || currentQuestionOrdinal == null
-                || currentFollowupDepth != 0
-                || currentQuestionOrdinal.shortValue() != answeredQuestionCount + 1
-                || answeredQuestionCount >= totalQuestionCount) {
-            throw new IllegalStateException(
-                    "Interview session cannot accept a base-question answer");
-        }
-
-        int turnIndex = nextTurnIndex++;
         answeredQuestionCount++;
-        awaitingAction = AwaitingAction.ENGINE_RESPONSE;
-        processingStage = SessionProcessingStage.NEXT_TURN;
-        this.processingToken = processingToken.toString();
-        processingStartedAt = now;
-        processingAttempts = 1;
-        nextRetryAt = null;
-        failureStage = null;
-        statusMessage = null;
-        lastActivityAt = now;
-        updatedAt = now;
-        return turnIndex;
+        return beginNextTurnProcessing(processingToken, now);
     }
 
-    /** Commits an answer to the current follow-up without counting the base question twice. */
+    /** Nhận answer của follow-up mà không tăng lại số base question đã trả lời. */
     public int acceptFollowUpAnswer(UUID processingToken, Instant now) {
-        Objects.requireNonNull(processingToken);
-        Objects.requireNonNull(now);
-        if (status != SessionStatus.IN_PROGRESS
-                || awaitingAction != AwaitingAction.CANDIDATE_ANSWER
-                || processingStage != null
-                || this.processingToken != null
-                || currentQuestionOrdinal == null
-                || answeredQuestionCount != currentQuestionOrdinal.shortValue()
-                || currentFollowupDepth < 1
-                || currentFollowupDepth > MAX_FOLLOW_UPS_PER_QUESTION
-                || totalFollowupCount < currentFollowupDepth
-                || totalFollowupCount > MAX_FOLLOW_UPS_PER_SESSION) {
-            throw new IllegalStateException("Interview session cannot accept a follow-up answer");
-        }
-
-        int turnIndex = nextTurnIndex++;
-        awaitingAction = AwaitingAction.ENGINE_RESPONSE;
-        processingStage = SessionProcessingStage.NEXT_TURN;
-        this.processingToken = processingToken.toString();
-        processingStartedAt = now;
-        processingAttempts = 1;
-        nextRetryAt = null;
-        failureStage = null;
-        statusMessage = null;
-        lastActivityAt = now;
-        updatedAt = now;
-        return turnIndex;
+        return beginNextTurnProcessing(processingToken, now);
     }
 
-    /** Persists a server-approved adaptive follow-up while retaining user-activity time. */
+    /** Chuyển con trỏ sang follow-up tiếp theo đã được backend chấp nhận. */
     public int advanceToFollowUp(
             short nextFollowUpDepth,
             UUID ownedProcessingToken,
             Instant now) {
-        Objects.requireNonNull(ownedProcessingToken);
-        Objects.requireNonNull(now);
-        if (status != SessionStatus.IN_PROGRESS
-                || (awaitingAction != AwaitingAction.ENGINE_RESPONSE
-                        && awaitingAction != AwaitingAction.ENGINE_RETRY)
-                || processingStage != SessionProcessingStage.NEXT_TURN
-                || !ownedProcessingToken.toString().equals(processingToken)
-                || currentQuestionOrdinal == null
-                || answeredQuestionCount != currentQuestionOrdinal.shortValue()
-                || currentFollowupDepth >= MAX_FOLLOW_UPS_PER_QUESTION
-                || totalFollowupCount >= MAX_FOLLOW_UPS_PER_SESSION
-                || nextFollowUpDepth != currentFollowupDepth + 1) {
-            throw new IllegalStateException("Interview session cannot advance to a follow-up");
-        }
-
-        int turnIndex = nextTurnIndex++;
         currentFollowupDepth = nextFollowUpDepth;
         totalFollowupCount++;
-        awaitingAction = AwaitingAction.CANDIDATE_ANSWER;
-        processingStage = null;
-        processingToken = null;
-        processingStartedAt = null;
-        nextRetryAt = null;
-        statusMessage = null;
-        updatedAt = now;
-        return turnIndex;
+        return finishNextTurnProcessing(now);
     }
 
-    /** Persists the base prompt following an answer while retaining user-activity time. */
+    /** Chuyển con trỏ sang base question kế tiếp sau khi xử lý xong answer. */
     public int advanceToBaseQuestion(
             short nextQuestionOrdinal,
             UUID ownedProcessingToken,
             Instant now) {
-        Objects.requireNonNull(ownedProcessingToken);
-        Objects.requireNonNull(now);
-        if (status != SessionStatus.IN_PROGRESS
-                || (awaitingAction != AwaitingAction.ENGINE_RESPONSE
-                        && awaitingAction != AwaitingAction.ENGINE_RETRY)
-                || processingStage != SessionProcessingStage.NEXT_TURN
-                || !ownedProcessingToken.toString().equals(processingToken)
-                || currentQuestionOrdinal == null
-                || answeredQuestionCount != currentQuestionOrdinal.shortValue()
-                || answeredQuestionCount >= totalQuestionCount
-                || nextQuestionOrdinal != currentQuestionOrdinal.shortValue() + 1) {
-            throw new IllegalStateException(
-                    "Interview session cannot advance to the next base question");
-        }
-
-        int turnIndex = nextTurnIndex++;
         currentQuestionOrdinal = nextQuestionOrdinal;
         currentFollowupDepth = 0;
+        return finishNextTurnProcessing(now);
+    }
+
+    /** Cấp turn index và đánh dấu session đang chờ engine xử lý next turn. */
+    private int beginNextTurnProcessing(UUID token, Instant now) {
+        int turnIndex = nextTurnIndex++;
+        awaitingAction = AwaitingAction.ENGINE_RESPONSE;
+        processingStage = SessionProcessingStage.NEXT_TURN;
+        processingToken = token.toString();
+        processingStartedAt = now;
+        processingAttempts = 1;
+        nextRetryAt = null;
+        failureStage = null;
+        statusMessage = null;
+        lastActivityAt = now;
+        updatedAt = now;
+        return turnIndex;
+    }
+
+    /** Cấp turn index, nhả processing claim và chờ candidate trả lời prompt mới. */
+    private int finishNextTurnProcessing(Instant now) {
+        int turnIndex = nextTurnIndex++;
         awaitingAction = AwaitingAction.CANDIDATE_ANSWER;
         processingStage = null;
         processingToken = null;
@@ -378,39 +293,33 @@ public class InterviewSession {
         return turnIndex;
     }
 
-    /** State mutation entry point; production callers go through SessionStateMachine. */
+    /** Áp dụng một state transition đã được SessionStateMachine kiểm tra. */
     public void applyStateTransition(
-            SessionStatus targetStatus,
-            AwaitingAction targetAwaitingAction,
-            SessionEndReason targetEndReason,
-            SessionFailureStage targetFailureStage,
-            String targetStatusMessage,
-            SessionProcessingStage targetProcessingStage,
-            boolean resetProcessingAttempts,
-            boolean updateLastActivity,
+            SessionStateChange change,
             Instant now) {
         SessionStatus previousStatus = status;
-        status = Objects.requireNonNull(targetStatus);
-        awaitingAction = Objects.requireNonNull(targetAwaitingAction);
-        endReason = targetEndReason;
-        failureStage = targetFailureStage;
-        statusMessage = targetStatusMessage;
-        processingStage = targetProcessingStage;
+        status = change.targetStatus();
+        awaitingAction = change.awaitingAction();
+        endReason = change.endReason();
+        failureStage = change.failureStage();
+        statusMessage = change.statusMessage();
+        processingStage = change.processingStage();
         processingToken = null;
         processingStartedAt = null;
         nextRetryAt = null;
-        if (resetProcessingAttempts) {
+        if (change.resetProcessingAttempts()) {
             processingAttempts = 0;
         }
-        if (previousStatus == SessionStatus.READY && targetStatus == SessionStatus.IN_PROGRESS) {
+        if (previousStatus == SessionStatus.READY
+                && change.targetStatus() == SessionStatus.IN_PROGRESS) {
             startedAt = now;
         }
-        if (targetStatus.isTerminal()) {
+        if (change.targetStatus().isTerminal()) {
             completedAt = now;
         } else {
             completedAt = null;
         }
-        if (updateLastActivity) {
+        if (change.updateLastActivity()) {
             lastActivityAt = now;
         }
         updatedAt = now;

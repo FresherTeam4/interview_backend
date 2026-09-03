@@ -1,7 +1,9 @@
 package com.baseProject.myBaseProject.interview;
 
+import static com.baseProject.myBaseProject.constant.InterviewConstraints.MAX_BASE_QUESTION_COUNT;
+import static com.baseProject.myBaseProject.constant.InterviewConstraints.MIN_BASE_QUESTION_COUNT;
+
 import com.baseProject.myBaseProject.entity.InterviewSession;
-import com.baseProject.myBaseProject.entity.SessionContextSnapshot;
 import com.baseProject.myBaseProject.entity.SessionStateTransition;
 import com.baseProject.myBaseProject.enums.AwaitingAction;
 import com.baseProject.myBaseProject.enums.JobDescriptionStatus;
@@ -14,6 +16,7 @@ import com.baseProject.myBaseProject.exception.SessionInvalidStateException;
 import com.baseProject.myBaseProject.exception.SessionNotFoundException;
 import com.baseProject.myBaseProject.exception.SessionRetryNotAllowedException;
 import com.baseProject.myBaseProject.exception.SessionVersionConflictException;
+import com.baseProject.myBaseProject.interview.snapshot.SessionContextSnapshotFactory;
 import com.baseProject.myBaseProject.repository.InterviewSessionRepository;
 import com.baseProject.myBaseProject.repository.SessionContextSnapshotRepository;
 import com.baseProject.myBaseProject.repository.SessionStateTransitionRepository;
@@ -53,6 +56,7 @@ public class SessionStateMachine {
     private final InterviewSessionRepository sessionRepository;
     private final SessionContextSnapshotRepository snapshotRepository;
     private final SessionStateTransitionRepository transitionRepository;
+    private final SessionContextSnapshotFactory snapshotFactory;
     private final Clock clock;
 
     @Transactional
@@ -74,7 +78,7 @@ public class SessionStateMachine {
                 command.generationSeed(),
                 now);
         sessionRepository.save(session);
-        snapshotRepository.save(SessionContextSnapshot.create(
+        snapshotRepository.save(snapshotFactory.create(
                 session,
                 command.snapshotSchemaVersion(),
                 command.profileSnapshot(),
@@ -106,7 +110,7 @@ public class SessionStateMachine {
                 .orElseThrow(SessionNotFoundException::new);
         verifyVersion(session, expectedVersion);
 
-        TransitionPlan plan = userPlan(session, event, restoredAwaitingAction);
+        SessionStateChange plan = userPlan(session, event, restoredAwaitingAction);
         return apply(session, plan, SessionTransitionActor.USER, reason);
     }
 
@@ -160,7 +164,7 @@ public class SessionStateMachine {
                 .orElseThrow(SessionNotFoundException::new);
         verifyVersion(session, expectedVersion);
 
-        TransitionPlan plan = systemPlan(
+        SessionStateChange plan = systemPlan(
                 session,
                 event,
                 processingToken,
@@ -183,7 +187,7 @@ public class SessionStateMachine {
         if (lockedSession.getId() == null) {
             throw new IllegalArgumentException("Script generation session must be persisted");
         }
-        TransitionPlan plan = scriptPersistedPlan(lockedSession, processingToken);
+        SessionStateChange plan = scriptPersistedPlan(lockedSession, processingToken);
         return apply(lockedSession, plan, SessionTransitionActor.SYSTEM, reason);
     }
 
@@ -197,7 +201,7 @@ public class SessionStateMachine {
         if (lockedSession.getId() == null) {
             throw new IllegalArgumentException("Next-turn session must be persisted");
         }
-        TransitionPlan plan = allQuestionsAnsweredPlan(lockedSession, processingToken);
+        SessionStateChange plan = allQuestionsAnsweredPlan(lockedSession, processingToken);
         return apply(lockedSession, plan, SessionTransitionActor.SYSTEM, reason);
     }
 
@@ -208,7 +212,7 @@ public class SessionStateMachine {
         verifyVersion(session, expectedVersion);
         requireStatus(session, SessionStatus.READY, SessionStatus.IN_PROGRESS, SessionStatus.PAUSED);
 
-        TransitionPlan plan = new TransitionPlan(
+        SessionStateChange plan = new SessionStateChange(
                 SessionStatus.SCORING,
                 AwaitingAction.REPORT,
                 SessionEndReason.TIMEOUT_24H,
@@ -222,22 +226,13 @@ public class SessionStateMachine {
 
     private InterviewSession apply(
             InterviewSession session,
-            TransitionPlan plan,
+            SessionStateChange plan,
             SessionTransitionActor actor,
             String reason) {
         validateAwaitingAction(plan.targetStatus(), plan.awaitingAction());
         SessionStatus previousStatus = session.getStatus();
         Instant now = clock.instant();
-        session.applyStateTransition(
-                plan.targetStatus(),
-                plan.awaitingAction(),
-                plan.endReason(),
-                plan.failureStage(),
-                plan.statusMessage(),
-                plan.processingStage(),
-                plan.resetProcessingAttempts(),
-                plan.updateLastActivity(),
-                now);
+        session.applyStateTransition(plan, now);
         transitionRepository.save(SessionStateTransition.create(
                 session,
                 previousStatus,
@@ -248,7 +243,7 @@ public class SessionStateMachine {
         return sessionRepository.saveAndFlush(session);
     }
 
-    private TransitionPlan userPlan(
+    private SessionStateChange userPlan(
             InterviewSession session,
             SessionEvent event,
             AwaitingAction restoredAwaitingAction) {
@@ -264,8 +259,8 @@ public class SessionStateMachine {
         };
     }
 
-    private TransitionPlan nextTurnRetryPlan() {
-        return new TransitionPlan(
+    private SessionStateChange nextTurnRetryPlan() {
+        return new SessionStateChange(
                 SessionStatus.IN_PROGRESS,
                 AwaitingAction.ENGINE_RESPONSE,
                 null,
@@ -276,7 +271,7 @@ public class SessionStateMachine {
                 true);
     }
 
-    private TransitionPlan systemPlan(
+    private SessionStateChange systemPlan(
             InterviewSession session,
             SessionEvent event,
             UUID processingToken,
@@ -293,9 +288,9 @@ public class SessionStateMachine {
         };
     }
 
-    private TransitionPlan dispatchGenerationPlan(InterviewSession session) {
+    private SessionStateChange dispatchGenerationPlan(InterviewSession session) {
         requireStatus(session, SessionStatus.CREATED);
-        return new TransitionPlan(
+        return new SessionStateChange(
                 SessionStatus.SCRIPT_GENERATING,
                 AwaitingAction.NONE,
                 null,
@@ -306,15 +301,16 @@ public class SessionStateMachine {
                 false);
     }
 
-    private TransitionPlan scriptPersistedPlan(
+    private SessionStateChange scriptPersistedPlan(
             InterviewSession session,
             UUID processingToken) {
         requireStatus(session, SessionStatus.SCRIPT_GENERATING);
         verifyClaim(session, SessionProcessingStage.SCRIPT_GENERATION, processingToken);
-        if (session.getTotalQuestionCount() < 5 || session.getTotalQuestionCount() > 7) {
+        if (session.getTotalQuestionCount() < MIN_BASE_QUESTION_COUNT
+                || session.getTotalQuestionCount() > MAX_BASE_QUESTION_COUNT) {
             throw invalidState();
         }
-        return new TransitionPlan(
+        return new SessionStateChange(
                 SessionStatus.READY,
                 AwaitingAction.START_SESSION,
                 null,
@@ -325,12 +321,13 @@ public class SessionStateMachine {
                 false);
     }
 
-    private TransitionPlan startPlan(InterviewSession session) {
+    private SessionStateChange startPlan(InterviewSession session) {
         requireStatus(session, SessionStatus.READY);
-        if (session.getTotalQuestionCount() < 5 || session.getTotalQuestionCount() > 7) {
+        if (session.getTotalQuestionCount() < MIN_BASE_QUESTION_COUNT
+                || session.getTotalQuestionCount() > MAX_BASE_QUESTION_COUNT) {
             throw invalidState();
         }
-        return new TransitionPlan(
+        return new SessionStateChange(
                 SessionStatus.IN_PROGRESS,
                 AwaitingAction.CANDIDATE_ANSWER,
                 null,
@@ -341,13 +338,13 @@ public class SessionStateMachine {
                 true);
     }
 
-    private TransitionPlan pausePlan(InterviewSession session) {
+    private SessionStateChange pausePlan(InterviewSession session) {
         requireStatus(session, SessionStatus.IN_PROGRESS);
         if (session.getAwaitingAction() == AwaitingAction.ENGINE_RESPONSE
                 || session.getAwaitingAction() == AwaitingAction.ENGINE_RETRY) {
             throw invalidState();
         }
-        return new TransitionPlan(
+        return new SessionStateChange(
                 SessionStatus.PAUSED,
                 AwaitingAction.NONE,
                 session.getEndReason(),
@@ -358,7 +355,7 @@ public class SessionStateMachine {
                 true);
     }
 
-    private TransitionPlan resumePlan(
+    private SessionStateChange resumePlan(
             InterviewSession session,
             AwaitingAction restoredAwaitingAction) {
         requireStatus(session, SessionStatus.PAUSED);
@@ -369,7 +366,7 @@ public class SessionStateMachine {
                 || restoredAwaitingAction == AwaitingAction.ENGINE_RETRY
                 ? SessionProcessingStage.NEXT_TURN
                 : null;
-        return new TransitionPlan(
+        return new SessionStateChange(
                 SessionStatus.IN_PROGRESS,
                 restoredAwaitingAction,
                 session.getEndReason(),
@@ -380,7 +377,7 @@ public class SessionStateMachine {
                 true);
     }
 
-    private TransitionPlan allQuestionsAnsweredPlan(
+    private SessionStateChange allQuestionsAnsweredPlan(
             InterviewSession session,
             UUID processingToken) {
         requireStatus(session, SessionStatus.IN_PROGRESS);
@@ -394,12 +391,12 @@ public class SessionStateMachine {
         return scoringPlan(session, SessionEndReason.USER_COMPLETED, true);
     }
 
-    private TransitionPlan scoringPlan(
+    private SessionStateChange scoringPlan(
             InterviewSession session,
             SessionEndReason endReason,
             boolean updateLastActivity) {
         requireStatus(session, SessionStatus.IN_PROGRESS);
-        return new TransitionPlan(
+        return new SessionStateChange(
                 SessionStatus.SCORING,
                 AwaitingAction.REPORT,
                 endReason,
@@ -410,7 +407,7 @@ public class SessionStateMachine {
                 updateLastActivity);
     }
 
-    private TransitionPlan reportCommittedPlan(
+    private SessionStateChange reportCommittedPlan(
             InterviewSession session,
             UUID processingToken) {
         requireStatus(session, SessionStatus.SCORING);
@@ -418,7 +415,7 @@ public class SessionStateMachine {
         if (session.getEndReason() == null) {
             throw invalidState();
         }
-        return new TransitionPlan(
+        return new SessionStateChange(
                 SessionStatus.COMPLETED,
                 AwaitingAction.NONE,
                 session.getEndReason(),
@@ -429,7 +426,7 @@ public class SessionStateMachine {
                 false);
     }
 
-    private TransitionPlan failurePlan(
+    private SessionStateChange failurePlan(
             InterviewSession session,
             UUID processingToken,
             SessionFailureStage failureStage,
@@ -444,7 +441,7 @@ public class SessionStateMachine {
             throw invalidState();
         }
         verifyClaim(session, expectedStage, processingToken);
-        return new TransitionPlan(
+        return new SessionStateChange(
                 SessionStatus.FAILED,
                 AwaitingAction.ENGINE_RETRY,
                 session.getEndReason(),
@@ -455,14 +452,14 @@ public class SessionStateMachine {
                 false);
     }
 
-    private TransitionPlan abandonPlan(InterviewSession session) {
+    private SessionStateChange abandonPlan(InterviewSession session) {
         requireStatus(
                 session,
                 SessionStatus.READY,
                 SessionStatus.IN_PROGRESS,
                 SessionStatus.PAUSED,
                 SessionStatus.FAILED);
-        return new TransitionPlan(
+        return new SessionStateChange(
                 SessionStatus.ABANDONED,
                 AwaitingAction.NONE,
                 SessionEndReason.USER_ABANDONED,
@@ -473,13 +470,13 @@ public class SessionStateMachine {
                 true);
     }
 
-    private TransitionPlan retryPlan(InterviewSession session) {
+    private SessionStateChange retryPlan(InterviewSession session) {
         requireStatus(session, SessionStatus.FAILED);
         if (session.getFailureStage() == null) {
             throw invalidState();
         }
         return switch (session.getFailureStage()) {
-            case SCRIPT_GENERATION -> new TransitionPlan(
+            case SCRIPT_GENERATION -> new SessionStateChange(
                     SessionStatus.SCRIPT_GENERATING,
                     AwaitingAction.NONE,
                     null,
@@ -488,7 +485,7 @@ public class SessionStateMachine {
                     SessionProcessingStage.SCRIPT_GENERATION,
                     true,
                     true);
-            case NEXT_TURN -> new TransitionPlan(
+            case NEXT_TURN -> new SessionStateChange(
                     SessionStatus.IN_PROGRESS,
                     AwaitingAction.ENGINE_RESPONSE,
                     null,
@@ -497,7 +494,7 @@ public class SessionStateMachine {
                     SessionProcessingStage.NEXT_TURN,
                     true,
                     true);
-            case SCORING -> new TransitionPlan(
+            case SCORING -> new SessionStateChange(
                     SessionStatus.SCORING,
                     AwaitingAction.REPORT,
                     session.getEndReason(),
@@ -622,14 +619,4 @@ public class SessionStateMachine {
         return Map.copyOf(allowed);
     }
 
-    private record TransitionPlan(
-            SessionStatus targetStatus,
-            AwaitingAction awaitingAction,
-            SessionEndReason endReason,
-            SessionFailureStage failureStage,
-            String statusMessage,
-            SessionProcessingStage processingStage,
-            boolean resetProcessingAttempts,
-            boolean updateLastActivity) {
-    }
 }

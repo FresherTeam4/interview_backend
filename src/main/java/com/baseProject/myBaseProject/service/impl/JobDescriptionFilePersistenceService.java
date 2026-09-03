@@ -3,8 +3,6 @@ package com.baseProject.myBaseProject.service.impl;
 import com.baseProject.myBaseProject.config.properites.JobDescriptionProperties;
 import com.baseProject.myBaseProject.entity.JobDescription;
 import com.baseProject.myBaseProject.entity.UserAccount;
-import com.baseProject.myBaseProject.enums.JobDescriptionSourceType;
-import com.baseProject.myBaseProject.enums.JobDescriptionStatus;
 import com.baseProject.myBaseProject.exception.JobDescriptionLimitReachedException;
 import com.baseProject.myBaseProject.repository.JobDescriptionRepository;
 import com.baseProject.myBaseProject.repository.UserAccountRepository;
@@ -34,22 +32,17 @@ public class JobDescriptionFilePersistenceService {
             throw new JobDescriptionLimitReachedException(properties.maxPerUser());
         }
 
-        return jobDescriptionRepository.save(JobDescription.builder()
-                .user(user)
-                .title(draft.title())
-                .sourceType(JobDescriptionSourceType.FILE)
-                .status(JobDescriptionStatus.DRAFT)
-                .originalFilename(draft.originalFilename())
-                .storageKey(draft.storageKey())
-                .contentType(draft.contentType())
-                .fileSizeBytes(draft.fileSizeBytes())
-                .checksumSha256(draft.checksumSha256())
-                .rawText(draft.text())
-                .confirmedText(draft.text())
-                .active(true)
-                .createdAt(draft.now())
-                .updatedAt(draft.now())
-                .build());
+        return jobDescriptionRepository.save(JobDescription.createFile(
+                user,
+                draft.title(),
+                new JobDescription.FileMetadata(
+                        draft.originalFilename(),
+                        draft.storageKey(),
+                        draft.contentType(),
+                        draft.fileSizeBytes()),
+                draft.checksumSha256(),
+                draft.text(),
+                draft.now()));
     }
 
     public record FileDraft(

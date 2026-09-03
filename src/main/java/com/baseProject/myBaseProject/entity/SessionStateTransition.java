@@ -64,6 +64,7 @@ public class SessionStateTransition {
     @Column(name = "occurred_at", nullable = false, updatable = false)
     private Instant occurredAt;
 
+    /** Tạo bản ghi audit bất biến cho một lần đổi trạng thái session. */
     public static SessionStateTransition create(
             InterviewSession session,
             SessionStatus fromStatus,

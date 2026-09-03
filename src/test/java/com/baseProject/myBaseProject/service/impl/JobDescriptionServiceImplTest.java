@@ -24,6 +24,7 @@ import com.baseProject.myBaseProject.exception.JobDescriptionContentRequiredExce
 import com.baseProject.myBaseProject.exception.JobDescriptionInvalidTextException;
 import com.baseProject.myBaseProject.exception.JobDescriptionLimitReachedException;
 import com.baseProject.myBaseProject.exception.JobDescriptionNotFoundException;
+import com.baseProject.myBaseProject.jd.JobDescriptionFingerprint;
 import com.baseProject.myBaseProject.jd.JobDescriptionFileProcessor;
 import com.baseProject.myBaseProject.mapper.JobDescriptionMapper;
 import com.baseProject.myBaseProject.repository.JobDescriptionRepository;
@@ -40,6 +41,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.Clock;
 import java.time.Instant;
@@ -79,6 +81,7 @@ class JobDescriptionServiceImplTest {
                 fileProcessor,
                 fileStorage,
                 filePersistenceService,
+                new JobDescriptionFingerprint(),
                 Clock.fixed(NOW, ZoneOffset.UTC));
     }
 
@@ -215,18 +218,13 @@ class JobDescriptionServiceImplTest {
     void confirmIsIdempotentAndPreservesFirstConfirmationTimestamp() {
         Instant firstConfirmation = Instant.parse("2026-08-25T08:00:00Z");
         Instant firstUpdate = Instant.parse("2026-08-25T08:00:00Z");
-        JobDescription jobDescription = JobDescription.builder()
-                .id(JD_ID)
-                .sourceType(JobDescriptionSourceType.TEXT)
-                .status(JobDescriptionStatus.READY)
-                .checksumSha256("a".repeat(64))
-                .rawText(VALID_TEXT)
-                .confirmedText(VALID_TEXT)
-                .confirmedAt(firstConfirmation)
-                .active(true)
-                .createdAt(firstUpdate)
-                .updatedAt(firstUpdate)
-                .build();
+        JobDescription jobDescription = withId(JobDescription.createText(
+                UserAccount.builder().id(USER_ID).build(),
+                "Ready JD",
+                "a".repeat(64),
+                VALID_TEXT,
+                firstUpdate), JD_ID);
+        jobDescription.confirm(firstConfirmation);
         when(jobDescriptionRepository.findActiveOwnedByIdForUpdate(JD_ID, USER_ID))
                 .thenReturn(Optional.of(jobDescription));
 
@@ -264,34 +262,28 @@ class JobDescriptionServiceImplTest {
 
     private static JobDescription draft(Long id, String title, String rawText) {
         Instant createdAt = Instant.parse("2026-08-25T01:00:00Z");
-        return JobDescription.builder()
-                .id(id)
-                .title(title)
-                .sourceType(JobDescriptionSourceType.TEXT)
-                .status(JobDescriptionStatus.DRAFT)
-                .checksumSha256("a".repeat(64))
-                .rawText(rawText)
-                .confirmedText(rawText)
-                .active(true)
-                .createdAt(createdAt)
-                .updatedAt(createdAt)
-                .build();
+        return withId(JobDescription.createText(
+                UserAccount.builder().id(USER_ID).build(),
+                title,
+                "a".repeat(64),
+                rawText,
+                createdAt), id);
     }
 
     private static JobDescription ready(Long id) {
         Instant confirmedAt = Instant.parse("2026-08-25T02:00:00Z");
-        return JobDescription.builder()
-                .id(id)
-                .title("Ready JD")
-                .sourceType(JobDescriptionSourceType.TEXT)
-                .status(JobDescriptionStatus.READY)
-                .checksumSha256("a".repeat(64))
-                .rawText(VALID_TEXT)
-                .confirmedText(VALID_TEXT)
-                .confirmedAt(confirmedAt)
-                .active(true)
-                .createdAt(confirmedAt)
-                .updatedAt(confirmedAt)
-                .build();
+        JobDescription jobDescription = withId(JobDescription.createText(
+                UserAccount.builder().id(USER_ID).build(),
+                "Ready JD",
+                "a".repeat(64),
+                VALID_TEXT,
+                confirmedAt), id);
+        jobDescription.confirm(confirmedAt);
+        return jobDescription;
+    }
+
+    private static JobDescription withId(JobDescription jobDescription, Long id) {
+        ReflectionTestUtils.setField(jobDescription, "id", id);
+        return jobDescription;
     }
 }

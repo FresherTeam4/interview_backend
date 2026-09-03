@@ -24,7 +24,6 @@ import lombok.NoArgsConstructor;
 import org.hibernate.annotations.Immutable;
 
 import java.time.Instant;
-import java.util.Objects;
 
 @Entity
 @Table(
@@ -98,6 +97,7 @@ public class SessionTurn {
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
+    /** Tạo interviewer turn đầu tiên khi bắt đầu session. */
     public static SessionTurn firstInterviewerPrompt(
             InterviewSession session,
             SessionQuestion question,
@@ -106,6 +106,7 @@ public class SessionTurn {
         return baseQuestionPrompt(session, question, turnIndex, now);
     }
 
+    /** Tạo interviewer turn cho base question kế tiếp. */
     public static SessionTurn nextBaseQuestionPrompt(
             InterviewSession session,
             SessionQuestion question,
@@ -114,6 +115,7 @@ public class SessionTurn {
         return baseQuestionPrompt(session, question, turnIndex, now);
     }
 
+    /** Tạo candidate turn từ câu trả lời text đã được service kiểm tra. */
     public static SessionTurn candidateTextAnswer(
             InterviewSession session,
             SessionQuestion question,
@@ -121,26 +123,23 @@ public class SessionTurn {
             String content,
             String clientTurnId,
             Instant now) {
-        validateQuestionOwnership(session, question);
-        if (clientTurnId == null || clientTurnId.isBlank()) {
-            throw new IllegalArgumentException("Candidate turn requires a client turn ID");
-        }
         SessionTurn turn = new SessionTurn();
-        turn.session = Objects.requireNonNull(session);
-        turn.question = Objects.requireNonNull(question);
+        turn.session = session;
+        turn.question = question;
         turn.turnIndex = turnIndex;
         turn.role = TurnRole.CANDIDATE;
         turn.inputMode = TurnInputMode.TEXT;
-        turn.contentText = Objects.requireNonNull(content);
+        turn.contentText = content;
         turn.clientTurnId = clientTurnId;
         turn.followUp = false;
         turn.followUpDepth = 0;
-        turn.startedAt = Objects.requireNonNull(now);
+        turn.startedAt = now;
         turn.endedAt = now;
         turn.createdAt = now;
         return turn;
     }
 
+    /** Tạo follow-up turn và liên kết với candidate turn đã làm phát sinh câu hỏi. */
     public static SessionTurn followUpPrompt(
             InterviewSession session,
             SessionQuestion question,
@@ -150,23 +149,9 @@ public class SessionTurn {
             short followUpDepth,
             int latencyMs,
             Instant now) {
-        validateQuestionOwnership(session, question);
-        Objects.requireNonNull(parentCandidateTurn);
-        if (parentCandidateTurn.getRole() != TurnRole.CANDIDATE
-                || !Objects.equals(parentCandidateTurn.getSession().getId(), session.getId())
-                || parentCandidateTurn.getQuestion() == null
-                || !Objects.equals(parentCandidateTurn.getQuestion().getId(), question.getId())
-                || followUpDepth < 1
-                || followUpDepth > 2
-                || latencyMs < 0
-                || content == null
-                || content.isBlank()) {
-            throw new IllegalArgumentException("Follow-up prompt context is invalid");
-        }
-
         SessionTurn turn = new SessionTurn();
-        turn.session = Objects.requireNonNull(session);
-        turn.question = Objects.requireNonNull(question);
+        turn.session = session;
+        turn.question = question;
         turn.parentTurn = parentCandidateTurn;
         turn.turnIndex = turnIndex;
         turn.role = TurnRole.INTERVIEWER;
@@ -175,21 +160,21 @@ public class SessionTurn {
         turn.followUp = true;
         turn.followUpDepth = followUpDepth;
         turn.latencyMs = latencyMs;
-        turn.startedAt = Objects.requireNonNull(now);
+        turn.startedAt = now;
         turn.endedAt = now;
         turn.createdAt = now;
         return turn;
     }
 
+    /** Khởi tạo phần dữ liệu chung của một interviewer base-question turn. */
     private static SessionTurn baseQuestionPrompt(
             InterviewSession session,
             SessionQuestion question,
             int turnIndex,
             Instant now) {
-        validateQuestionOwnership(session, question);
         SessionTurn turn = new SessionTurn();
-        turn.session = Objects.requireNonNull(session);
-        turn.question = Objects.requireNonNull(question);
+        turn.session = session;
+        turn.question = question;
         turn.turnIndex = turnIndex;
         turn.role = TurnRole.INTERVIEWER;
         turn.inputMode = TurnInputMode.TEXT;
@@ -197,19 +182,10 @@ public class SessionTurn {
         turn.followUp = false;
         turn.followUpDepth = 0;
         turn.latencyMs = 0;
-        turn.startedAt = Objects.requireNonNull(now);
+        turn.startedAt = now;
         turn.endedAt = now;
         turn.createdAt = now;
         return turn;
     }
 
-    private static void validateQuestionOwnership(
-            InterviewSession session,
-            SessionQuestion question) {
-        Objects.requireNonNull(session);
-        Objects.requireNonNull(question);
-        if (!Objects.equals(question.getSession().getId(), session.getId())) {
-            throw new IllegalArgumentException("Question must belong to the interview session");
-        }
-    }
 }

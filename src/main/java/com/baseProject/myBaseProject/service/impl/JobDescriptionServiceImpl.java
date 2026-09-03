@@ -10,7 +10,6 @@ import com.baseProject.myBaseProject.dto.jd.UpdateJobDescriptionRequest;
 import com.baseProject.myBaseProject.entity.JobDescription;
 import com.baseProject.myBaseProject.entity.UserAccount;
 import com.baseProject.myBaseProject.enums.JobDescriptionSourceType;
-import com.baseProject.myBaseProject.enums.JobDescriptionStatus;
 import com.baseProject.myBaseProject.exception.JobDescriptionAlreadyConfirmedException;
 import com.baseProject.myBaseProject.exception.JobDescriptionContentRequiredException;
 import com.baseProject.myBaseProject.exception.JobDescriptionHasNoFileException;
@@ -19,6 +18,7 @@ import com.baseProject.myBaseProject.exception.JobDescriptionLimitReachedExcepti
 import com.baseProject.myBaseProject.exception.JobDescriptionNotFoundException;
 import com.baseProject.myBaseProject.jd.JobDescriptionFileProcessor;
 import com.baseProject.myBaseProject.jd.JobDescriptionFileProcessor.ProcessedFile;
+import com.baseProject.myBaseProject.jd.JobDescriptionFingerprint;
 import com.baseProject.myBaseProject.mapper.JobDescriptionMapper;
 import com.baseProject.myBaseProject.repository.JobDescriptionRepository;
 import com.baseProject.myBaseProject.repository.UserAccountRepository;
@@ -35,12 +35,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.time.Clock;
 import java.time.Instant;
-import java.util.HexFormat;
 import java.util.UUID;
 
 @Service
@@ -48,7 +44,6 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class JobDescriptionServiceImpl implements JobDescriptionService {
 
-    private static final String HASH_ALGORITHM = "SHA-256";
     private static final String STORAGE_KEY_FORMAT = "jd/%d/%s.%s";
     private static final int TITLE_MAX_LENGTH = 200;
 
@@ -59,6 +54,7 @@ public class JobDescriptionServiceImpl implements JobDescriptionService {
     private final JobDescriptionFileProcessor fileProcessor;
     private final FileStorageService fileStorage;
     private final JobDescriptionFilePersistenceService filePersistenceService;
+    private final JobDescriptionFingerprint jobDescriptionFingerprint;
     private final Clock clock;
 
     @Override
@@ -71,18 +67,12 @@ public class JobDescriptionServiceImpl implements JobDescriptionService {
         ensureCapacity(userId);
 
         Instant now = clock.instant();
-        JobDescription jobDescription = jobDescriptionRepository.save(JobDescription.builder()
-                .user(user)
-                .title(request.title().strip())
-                .sourceType(JobDescriptionSourceType.TEXT)
-                .status(JobDescriptionStatus.DRAFT)
-                .checksumSha256(sha256Hex(normalizeForChecksum(text)))
-                .rawText(text)
-                .confirmedText(text)
-                .active(true)
-                .createdAt(now)
-                .updatedAt(now)
-                .build());
+        JobDescription jobDescription = jobDescriptionRepository.save(JobDescription.createText(
+                user,
+                request.title().strip(),
+                jobDescriptionFingerprint.create(text),
+                text,
+                now));
 
         return jobDescriptionMapper.toResponse(jobDescription);
     }
@@ -92,7 +82,7 @@ public class JobDescriptionServiceImpl implements JobDescriptionService {
         ProcessedFile processedFile = fileProcessor.process(file);
         String extractedText = normalizeAndValidateExtractedText(processedFile.extractedText());
         String normalizedTitle = normalizeFileTitle(title, processedFile.originalFilename());
-        String checksum = sha256Hex(normalizeForChecksum(extractedText));
+        String checksum = jobDescriptionFingerprint.create(extractedText);
         String storageKey = STORAGE_KEY_FORMAT.formatted(
                 userId, UUID.randomUUID(), processedFile.extension());
 
@@ -254,16 +244,4 @@ public class JobDescriptionServiceImpl implements JobDescriptionService {
         }
     }
 
-    private String normalizeForChecksum(String text) {
-        return text.replace("\r\n", "\n").replace('\r', '\n');
-    }
-
-    private String sha256Hex(String text) {
-        try {
-            MessageDigest digest = MessageDigest.getInstance(HASH_ALGORITHM);
-            return HexFormat.of().formatHex(digest.digest(text.getBytes(StandardCharsets.UTF_8)));
-        } catch (NoSuchAlgorithmException e) {
-            throw new IllegalStateException(HASH_ALGORITHM + " is required but not available", e);
-        }
-    }
 }

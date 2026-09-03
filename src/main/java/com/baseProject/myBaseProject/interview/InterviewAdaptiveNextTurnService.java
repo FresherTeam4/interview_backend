@@ -1,5 +1,8 @@
 package com.baseProject.myBaseProject.interview;
 
+import static com.baseProject.myBaseProject.constant.InterviewConstraints.MAX_FOLLOW_UPS_PER_QUESTION;
+import static com.baseProject.myBaseProject.constant.InterviewConstraints.MAX_FOLLOW_UPS_PER_SESSION;
+
 import com.baseProject.myBaseProject.config.properites.InterviewAiProperties;
 import com.baseProject.myBaseProject.entity.InterviewSession;
 import com.baseProject.myBaseProject.entity.SessionContextSnapshot;
@@ -39,9 +42,8 @@ import java.util.UUID;
 @Service
 public class InterviewAdaptiveNextTurnService {
 
-    private static final short MAX_FOLLOW_UPS_PER_QUESTION = 2;
-    private static final short MAX_FOLLOW_UPS_PER_SESSION = 5;
-    private static final int MAX_CURRENT_QUESTION_TURNS = 6;
+    private static final int MAX_CURRENT_QUESTION_TURNS =
+            2 + MAX_FOLLOW_UPS_PER_QUESTION * 2;
     private static final String COMPLETED_TRANSITION_REASON = "All base questions answered";
 
     private final InterviewFollowUpDecider followUpDecider;

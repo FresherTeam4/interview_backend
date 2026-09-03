@@ -2,7 +2,6 @@ package com.baseProject.myBaseProject.entity;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.baseProject.myBaseProject.enums.JobDescriptionSourceType;
 import com.baseProject.myBaseProject.enums.JobDescriptionStatus;
 
 import org.junit.jupiter.api.Test;
@@ -16,16 +15,12 @@ class JobDescriptionTest {
         Instant createdAt = Instant.parse("2026-08-26T01:00:00Z");
         Instant updatedAt = Instant.parse("2026-08-26T02:00:00Z");
         Instant confirmedAt = Instant.parse("2026-08-26T03:00:00Z");
-        JobDescription jobDescription = JobDescription.builder()
-                .sourceType(JobDescriptionSourceType.TEXT)
-                .status(JobDescriptionStatus.DRAFT)
-                .checksumSha256("a".repeat(64))
-                .rawText("immutable raw")
-                .confirmedText("immutable raw")
-                .active(true)
-                .createdAt(createdAt)
-                .updatedAt(createdAt)
-                .build();
+        JobDescription jobDescription = JobDescription.createText(
+                UserAccount.builder().build(),
+                "Original title",
+                "a".repeat(64),
+                "immutable raw",
+                createdAt);
 
         jobDescription.updateDraft("Updated title", "edited transcript", updatedAt);
         jobDescription.confirm(confirmedAt);
@@ -42,9 +37,12 @@ class JobDescriptionTest {
     @Test
     void deactivateKeepsRowAndUpdatesActivityTimestamp() {
         Instant deletedAt = Instant.parse("2026-08-26T04:00:00Z");
-        JobDescription jobDescription = JobDescription.builder()
-                .active(true)
-                .build();
+        JobDescription jobDescription = JobDescription.createText(
+                UserAccount.builder().build(),
+                "JD",
+                "a".repeat(64),
+                "immutable raw",
+                deletedAt.minusSeconds(60));
 
         jobDescription.deactivate(deletedAt);
 

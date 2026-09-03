@@ -275,19 +275,20 @@ public class InterviewScriptGenerationService {
         ProfileSkill skill = resolveSource(question.sourceSkillId(), skills, "source skill");
         return SessionQuestion.create(
                 session,
-                question.ordinal(),
-                question.questionText(),
-                question.topic(),
-                question.competency(),
-                question.difficulty(),
-                question.sourceType(),
-                project,
-                skill,
-                question.sourceJdExcerpt(),
-                question.questionSignature(),
-                UUID.fromString(session.getGenerationSeed()),
-                promptVersion,
-                modelName,
+                new SessionQuestion.CreationData(
+                        question.ordinal(),
+                        question.questionText(),
+                        question.topic(),
+                        question.competency(),
+                        question.difficulty(),
+                        question.sourceType(),
+                        project,
+                        skill,
+                        question.sourceJdExcerpt(),
+                        question.questionSignature(),
+                        UUID.fromString(session.getGenerationSeed()),
+                        promptVersion,
+                        modelName),
                 now);
     }
 

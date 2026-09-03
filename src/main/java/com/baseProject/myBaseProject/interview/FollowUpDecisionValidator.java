@@ -1,5 +1,7 @@
 package com.baseProject.myBaseProject.interview;
 
+import static com.baseProject.myBaseProject.constant.InterviewConstraints.MAX_QUESTION_TEXT_LENGTH;
+
 import com.baseProject.myBaseProject.enums.FollowUpDecision;
 import com.baseProject.myBaseProject.exception.FollowUpDecisionException;
 import com.baseProject.myBaseProject.interview.ai.FollowUpDecisionInput;
@@ -11,7 +13,6 @@ import org.springframework.stereotype.Component;
 @Component
 class FollowUpDecisionValidator {
 
-    private static final int QUESTION_TEXT_MAX_LENGTH = 2000;
     private static final int EVIDENCE_QUOTE_MAX_LENGTH = 2000;
 
     ValidatedFollowUpDecision validate(
@@ -34,7 +35,7 @@ class FollowUpDecisionValidator {
         }
 
         String questionText = safePlainText(
-                generated.questionText(), QUESTION_TEXT_MAX_LENGTH);
+                generated.questionText(), MAX_QUESTION_TEXT_LENGTH);
         String evidenceQuote = safePlainText(
                 generated.evidenceQuote(), EVIDENCE_QUOTE_MAX_LENGTH);
         if (questionText == null

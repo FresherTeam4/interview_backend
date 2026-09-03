@@ -1,5 +1,7 @@
 package com.baseProject.myBaseProject.interview;
 
+import static com.baseProject.myBaseProject.constant.InterviewConstraints.MAX_QUESTION_TEXT_LENGTH;
+
 import com.baseProject.myBaseProject.enums.QuestionSourceType;
 import com.baseProject.myBaseProject.exception.ScriptGenerationException;
 import com.baseProject.myBaseProject.interview.ai.GeneratedQuestion;
@@ -23,7 +25,6 @@ import java.util.Set;
 @Component
 class QuestionScriptValidator {
 
-    private static final int QUESTION_TEXT_MAX_LENGTH = 2000;
     private static final int TOPIC_MAX_LENGTH = 150;
     private static final int COMPETENCY_MAX_LENGTH = 100;
     private static final int JD_EXCERPT_MAX_LENGTH = 2000;
@@ -68,7 +69,7 @@ class QuestionScriptValidator {
             }
 
             String questionText = requiredPlainText(
-                    question.questionText(), "questionText", QUESTION_TEXT_MAX_LENGTH);
+                    question.questionText(), "questionText", MAX_QUESTION_TEXT_LENGTH);
             String topic = requiredPlainText(question.topic(), "topic", TOPIC_MAX_LENGTH);
             String competency = requiredPlainText(
                     question.competency(), "competency", COMPETENCY_MAX_LENGTH);

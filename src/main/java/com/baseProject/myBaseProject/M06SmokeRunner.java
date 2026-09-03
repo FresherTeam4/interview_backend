@@ -15,7 +15,6 @@ import com.baseProject.myBaseProject.entity.ProfileSkill;
 import com.baseProject.myBaseProject.entity.UserAccount;
 import com.baseProject.myBaseProject.enums.CvDocumentStatus;
 import com.baseProject.myBaseProject.enums.InterviewDifficulty;
-import com.baseProject.myBaseProject.enums.JobDescriptionSourceType;
 import com.baseProject.myBaseProject.enums.JobDescriptionStatus;
 import com.baseProject.myBaseProject.enums.ProfileSource;
 import com.baseProject.myBaseProject.enums.QuestionSourceType;
@@ -458,19 +457,15 @@ class M06SmokeRunner implements ApplicationRunner {
             JobDescriptionStatus status,
             Instant confirmedAt,
             Instant now) {
-        JobDescription jobDescription = JobDescription.builder()
-                .user(user)
-                .title("Fresher Backend Developer")
-                .sourceType(JobDescriptionSourceType.TEXT)
-                .status(status)
-                .checksumSha256(randomChecksum())
-                .rawText(JD_TEXT)
-                .confirmedText(JD_TEXT)
-                .confirmedAt(confirmedAt)
-                .active(true)
-                .createdAt(now)
-                .updatedAt(now)
-                .build();
+        JobDescription jobDescription = JobDescription.createText(
+                user,
+                "Fresher Backend Developer",
+                randomChecksum(),
+                JD_TEXT,
+                now);
+        if (status == JobDescriptionStatus.READY) {
+            jobDescription.confirm(confirmedAt);
+        }
         entityManager.persist(jobDescription);
         return jobDescription;
     }

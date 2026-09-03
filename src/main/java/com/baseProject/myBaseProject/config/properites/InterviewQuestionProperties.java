@@ -1,5 +1,8 @@
 package com.baseProject.myBaseProject.config.properites;
 
+import static com.baseProject.myBaseProject.constant.InterviewConstraints.MAX_BASE_QUESTION_COUNT;
+import static com.baseProject.myBaseProject.constant.InterviewConstraints.MIN_BASE_QUESTION_COUNT;
+
 import com.baseProject.myBaseProject.enums.InterviewDifficulty;
 
 import jakarta.validation.constraints.Max;
@@ -11,9 +14,9 @@ import org.springframework.validation.annotation.Validated;
 @Validated
 @ConfigurationProperties(prefix = "app.interview.questions")
 public record InterviewQuestionProperties(
-        @Min(5) @Max(7) int easy,
-        @Min(5) @Max(7) int medium,
-        @Min(5) @Max(7) int hard) {
+        @Min(MIN_BASE_QUESTION_COUNT) @Max(MAX_BASE_QUESTION_COUNT) int easy,
+        @Min(MIN_BASE_QUESTION_COUNT) @Max(MAX_BASE_QUESTION_COUNT) int medium,
+        @Min(MIN_BASE_QUESTION_COUNT) @Max(MAX_BASE_QUESTION_COUNT) int hard) {
 
     public int countFor(InterviewDifficulty difficulty) {
         return switch (difficulty) {
