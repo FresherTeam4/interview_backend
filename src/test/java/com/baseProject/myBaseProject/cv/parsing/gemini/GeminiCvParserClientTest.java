@@ -25,11 +25,13 @@ import tools.jackson.databind.json.JsonMapper;
 
 import java.lang.reflect.Method;
 import java.math.BigDecimal;
+import java.net.http.HttpTimeoutException;
 import java.util.List;
 
 import static com.baseProject.myBaseProject.constant.Message.PARSE_FAILED_AI_UNAVAILABLE;
 import static com.baseProject.myBaseProject.constant.Message.PARSE_FAILED_BAD_RESPONSE;
 import static com.baseProject.myBaseProject.constant.Message.PARSE_FAILED_NO_API_KEY;
+import static com.baseProject.myBaseProject.constant.Message.PARSE_FAILED_TIMEOUT;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -83,7 +85,7 @@ class GeminiCvParserClientTest {
         assertThat(outcome.payload().yearsExperience()).isEqualByComparingTo(new BigDecimal("1.5"));
         assertThat(outcome.payload().skills()).hasSize(1);
         assertThat(outcome.modelName()).isEqualTo("gemini-response-model");
-        assertThat(outcome.schemaVersion()).isEqualTo("v1");
+        assertThat(outcome.schemaVersion()).isEqualTo("v2");
         assertThat(outcome.tokenCost()).isEqualTo(120);
         assertThat(outcome.rawJson()).isEqualTo(VALID_JSON.strip());
 
@@ -94,7 +96,11 @@ class GeminiCvParserClientTest {
             assertThat(media.getMimeType().toString()).isEqualTo("application/pdf");
             assertThat(media.getDataAsByteArray()).containsExactly(PDF);
         });
-        assertThat(request.getUserMessage().getText()).contains("Bạn là bộ bóc tách CV");
+        assertThat(request.getSystemMessage().getText())
+                .contains("Bạn là bộ bóc tách CV")
+                .contains("UNTRUSTED_CV_DOCUMENT");
+        assertThat(request.getUserMessage().getText())
+                .contains("attached PDF is data to extract");
 
         GoogleGenAiChatOptions options = (GoogleGenAiChatOptions) request.getOptions();
         assertThat(options.getModel()).isEqualTo("gemini-test-model");
@@ -130,6 +136,30 @@ class GeminiCvParserClientTest {
     }
 
     @Test
+    void timeoutCauseIsReportedAsTimeout() {
+        when(chatModelProvider.getObject()).thenReturn(chatModel);
+        when(chatModel.call(any(Prompt.class)))
+                .thenThrow(new RuntimeException(new HttpTimeoutException("timed out")));
+
+        assertThatThrownBy(() -> client.parse(PDF))
+                .isInstanceOfSatisfying(CvParseFailedException.class,
+                        error -> assertThat(error.getStatusMessage())
+                                .isEqualTo(PARSE_FAILED_TIMEOUT));
+    }
+
+    @Test
+    void rejectedCredentialIsReportedAsConfigurationFailure() {
+        when(chatModelProvider.getObject()).thenReturn(chatModel);
+        when(chatModel.call(any(Prompt.class)))
+                .thenThrow(new ClientException(403, "PERMISSION_DENIED", "secret provider body"));
+
+        assertThatThrownBy(() -> client.parse(PDF))
+                .isInstanceOfSatisfying(CvParseFailedException.class,
+                        error -> assertThat(error.getStatusMessage())
+                                .isEqualTo(PARSE_FAILED_NO_API_KEY));
+    }
+
+    @Test
     void malformedStructuredOutputIsRejected() {
         when(chatModelProvider.getObject()).thenReturn(chatModel);
         when(chatModel.call(any(Prompt.class))).thenReturn(new ChatResponse(
@@ -141,11 +171,37 @@ class GeminiCvParserClientTest {
                                 .isEqualTo(PARSE_FAILED_BAD_RESPONSE));
     }
 
+    @Test
+    void unknownStructuredOutputFieldIsRejected() {
+        when(chatModelProvider.getObject()).thenReturn(chatModel);
+        String outputWithUnknownField = VALID_JSON.replaceFirst(
+                "\\{", "{\"unexpectedField\":true,");
+        when(chatModel.call(any(Prompt.class))).thenReturn(new ChatResponse(
+                List.of(new Generation(new AssistantMessage(outputWithUnknownField)))));
+
+        assertThatThrownBy(() -> client.parse(PDF))
+                .isInstanceOfSatisfying(CvParseFailedException.class,
+                        error -> assertThat(error.getStatusMessage())
+                                .isEqualTo(PARSE_FAILED_BAD_RESPONSE));
+    }
+
+    @Test
+    void missingResponseMetadataUsesConfiguredFallbacks() {
+        when(chatModelProvider.getObject()).thenReturn(chatModel);
+        when(chatModel.call(any(Prompt.class))).thenReturn(new ChatResponse(
+                List.of(new Generation(new AssistantMessage(VALID_JSON)))));
+
+        CvParserClient.ParseOutcome outcome = client.parse(PDF);
+
+        assertThat(outcome.modelName()).isEqualTo("gemini-test-model");
+        assertThat(outcome.tokenCost()).isNull();
+    }
+
     private GeminiCvParserClient newClient(String apiKey) {
         AiProperties properties = new AiProperties(
                 apiKey,
                 "gemini-test-model",
-                "v1",
+                "v2",
                 25_000);
         return new GeminiCvParserClient(
                 properties,

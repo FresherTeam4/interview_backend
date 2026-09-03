@@ -227,7 +227,7 @@ POST /api/cvs   (multipart/form-data, field "file")
              │     (không giữ 5MB byte trong RAM chờ hàng đợi, và nhánh
              │      "thử lại" ở 4.6 cũng phải tải lại y như vậy)
              │
-             ├─ Gọi Gemini, timeout 25s, trả JSON theo schema v1 (mục 5)
+             ├─ Gọi Gemini, timeout 25s, trả JSON theo contract v2 (mục 5)
              │     timeout / JSON sai schema / Gemini 4xx-5xx
              │     → FAILED + status_message đọc được, cho thử lại
              │
@@ -384,8 +384,14 @@ GoogleGenAiChatOptions options = GoogleGenAiChatOptions.builder()
         .outputSchema(responseSchema)
         .build();
 
-ChatResponse response = chatModel.call(new Prompt(
-        UserMessage.builder().text(prompt).media(pdf).build(), options));
+SystemMessage instructions = new SystemMessage(prompt);
+UserMessage document = UserMessage.builder()
+        .text("<UNTRUSTED_CV_DOCUMENT>...</UNTRUSTED_CV_DOCUMENT>")
+        .media(pdf)
+        .build();
+
+ChatResponse response = chatModel.call(
+        new Prompt(List.of(instructions, document), options));
 ```
 
 `GoogleGenAiChatOptions.outputSchema(...)` gửi schema bằng structured output native của Gemini,
@@ -396,7 +402,11 @@ header API key hay parse response của provider.
 File schema trên đĩa vẫn là JSON Schema chuẩn. Trước khi đưa cho Spring AI 2.0, nullable dạng
 `type: ["string", "null"]` được chuyển sang OpenAPI `type: "string", nullable: true`, vì kiểu
 `Schema` của Google SDK dùng biểu diễn này. `additionalProperties` chưa có trường tương ứng trong
-kiểu SDK nên được bỏ ở bản gửi provider; ứng dụng vẫn parse phòng thủ vào DTO và bỏ trường lạ.
+kiểu SDK nên được bỏ ở bản gửi provider; ứng dụng vẫn parse strict vào DTO và từ chối trường lạ.
+
+Instruction nằm trong `SystemMessage`; PDF nằm trong `UserMessage` và được đánh dấu là untrusted
+data. Prompt v2 yêu cầu không làm theo câu lệnh xuất hiện trong PDF. Đây là trust boundary giảm nguy
+cơ prompt injection, không phải cam kết rằng model không bao giờ bị đánh lừa.
 
 ### 5.3. Response và cách đọc
 
@@ -414,11 +424,12 @@ không khớp DTO đều thành `CvParseFailedException.badResponse`. Lỗi 429/
 được phân loại riêng. Bean model để lazy nên thiếu API key không làm ứng dụng hoặc test khác
 không liên quan tới CV chết lúc khởi động.
 
-### 5.4. Schema JSON cố định — `v1`
+### 5.4. AI contract hiện tại — `v2`
 
-Lưu nguyên văn vào `cv_parse_results.raw_json` với `schema_version = "v1"`. Đây là hợp đồng:
-đổi cấu trúc thì tăng lên `v2`, không sửa tại chỗ. Cùng một object này vừa làm
-structured-output schema gửi cho Gemini, vừa làm DTO parse về.
+Lưu nguyên văn vào `cv_parse_results.raw_json` với `schema_version = "v2"`. Đây là hợp đồng gồm
+prompt và structured-output schema: thay đổi không tương thích phải tăng version, không sửa file cũ
+tại chỗ. V2 giữ nguyên JSON shape của v1 nhưng bổ sung trust-boundary chống prompt injection và
+strict parsing. Các record v1 đã persist vẫn giữ nguyên version lịch sử.
 
 ```json
 {
@@ -817,7 +828,7 @@ app:
   ai:
     api-key: ${GEMINI_API_KEY:}
     model: ${GEMINI_MODEL:gemini-3.5-flash}
-    schema-version: ${GEMINI_SCHEMA_VERSION:v1}
+    schema-version: ${GEMINI_SCHEMA_VERSION:v2}
     timeout-ms: ${GEMINI_TIMEOUT_MS:25000}
 ```
 
@@ -884,7 +895,7 @@ dto/cv/CvDocumentResponse.java          dto/cv/CvFileUrlResponse.java
 dto/profile/ProfileSummaryResponse.java dto/profile/CandidateProfileResponse.java
 dto/profile/ProfileUpdateRequest.java   dto/profile/ProfileEducationDto.java
 dto/profile/ProfileSkillDto.java        dto/profile/ProfileProjectDto.java
-dto/ai/CvParsedPayload.java             ← schema v1 mục 5.4, dùng cho cả request và response
+dto/ai/CvParsedPayload.java             ← schema v2 mục 5.4, dùng cho model output
 exception/ + các lớp theo bảng mục 8, thêm mã vào ErrorCode và Message
 exception/GlobalExceptionHandler.java   ← thêm handler MaxUploadSizeExceededException
 ```

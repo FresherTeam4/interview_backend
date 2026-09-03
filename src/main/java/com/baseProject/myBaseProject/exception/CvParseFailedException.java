@@ -47,6 +47,12 @@ public class CvParseFailedException extends RuntimeException {
                 "Thiếu cấu hình app.ai.api-key", null);
     }
 
+    /** Gemini từ chối khóa đã cấu hình; cùng nhóm lỗi cấu hình với trường hợp thiếu khóa. */
+    public static CvParseFailedException credentialRejected(Throwable cause) {
+        return new CvParseFailedException(Message.PARSE_FAILED_NO_API_KEY,
+                "Gemini từ chối app.ai.api-key đã cấu hình", cause);
+    }
+
     /** Gemini không trả lời trong {@code app.ai.timeout-ms}. */
     public static CvParseFailedException timeout(Throwable cause) {
         return new CvParseFailedException(Message.PARSE_FAILED_TIMEOUT,

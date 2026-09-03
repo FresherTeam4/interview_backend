@@ -1,5 +1,6 @@
 package com.baseProject.myBaseProject.interview.ai.gemini;
 
+import com.baseProject.myBaseProject.ai.gemini.GeminiAdapterSupport;
 import com.baseProject.myBaseProject.config.InterviewAiConfig;
 import com.baseProject.myBaseProject.config.properites.AiProperties;
 import com.baseProject.myBaseProject.config.properites.InterviewAiProperties;
@@ -56,11 +57,11 @@ public class GeminiInterviewFollowUpDecider implements InterviewFollowUpDecider 
         this.chatModelProvider = chatModelProvider;
 
         String version = properties.followUpPromptVersion();
-        this.promptTemplate = AiResourceReader.readClasspathResource(resourceLoader,
+        this.promptTemplate = GeminiAdapterSupport.readClasspathResource(resourceLoader,
                 "classpath:ai/interview-follow-up-prompt-%s.txt".formatted(version));
-        String schemaContract = AiResourceReader.readClasspathResource(resourceLoader,
+        String schemaContract = GeminiAdapterSupport.readClasspathResource(resourceLoader,
                 "classpath:ai/interview-follow-up-schema-%s.json".formatted(version));
-        this.responseSchema = GeminiSchemaConverter.toSpringAiSchema(jsonMapper, schemaContract);
+        this.responseSchema = GeminiAdapterSupport.toSpringAiSchema(jsonMapper, schemaContract);
     }
 
     @Override
@@ -122,7 +123,8 @@ public class GeminiInterviewFollowUpDecider implements InterviewFollowUpDecider 
         try {
             return chatModelProvider.getObject().call(request);
         } catch (RuntimeException exception) {
-            GeminiFailureClassifier.ClassifiedFailure failure = GeminiFailureClassifier.classify(exception);
+            GeminiAdapterSupport.ClassifiedFailure failure =
+                    GeminiAdapterSupport.classify(exception);
             switch (failure.kind()) {
                 case TIMEOUT -> throw FollowUpDecisionException.timeout(exception);
                 case RATE_LIMITED -> {
@@ -152,7 +154,7 @@ public class GeminiInterviewFollowUpDecider implements InterviewFollowUpDecider 
             throw FollowUpDecisionException.malformedOutput("empty response", null);
         }
 
-        String modelOutput = GeminiResponseExtractor.extractModelOutput(response);
+        String modelOutput = GeminiAdapterSupport.extractModelOutput(response);
         if (modelOutput == null || modelOutput.isBlank()) {
             throw FollowUpDecisionException.malformedOutput("empty model output", null);
         }
@@ -161,7 +163,7 @@ public class GeminiInterviewFollowUpDecider implements InterviewFollowUpDecider 
         try {
             result = jsonMapper.readerFor(GeneratedFollowUpDecision.class)
                     .with(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
-                    .readValue(GeminiResponseExtractor.stripCodeFences(modelOutput));
+                    .readValue(GeminiAdapterSupport.stripCodeFences(modelOutput));
         } catch (JacksonException exception) {
             log.warn("Gemini interview follow-up output did not match prompt version {}",
                     properties.followUpPromptVersion());
@@ -170,8 +172,8 @@ public class GeminiInterviewFollowUpDecider implements InterviewFollowUpDecider 
                     exception);
         }
 
-        String responseModel = GeminiResponseExtractor.extractModelName(response, properties.model());
-        Integer totalTokens = GeminiResponseExtractor.extractTotalTokens(response);
+        String responseModel = GeminiAdapterSupport.extractModelName(response, properties.model());
+        Integer totalTokens = GeminiAdapterSupport.extractTotalTokens(response);
         return new FollowUpDecisionOutcome(
                 result,
                 responseModel,

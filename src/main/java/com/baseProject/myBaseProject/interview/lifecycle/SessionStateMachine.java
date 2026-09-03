@@ -79,6 +79,7 @@ public class SessionStateMachine {
                 SessionTransitionActor.USER,
                 null,
                 now));
+
         return session;
     }
 
@@ -89,6 +90,7 @@ public class SessionStateMachine {
             String reason) {
         InterviewSession session = findSystemSession(sessionId, expectedVersion);
         requireStatus(session, SessionStatus.CREATED);
+
         return apply(
                 session,
                 new Transition(
@@ -364,6 +366,7 @@ public class SessionStateMachine {
             String reason) {
         SessionStatus previousStatus = session.getStatus();
         Instant now = clock.instant();
+
         session.applyStateTransition(
                 transition.status(),
                 transition.awaitingAction(),
@@ -374,6 +377,7 @@ public class SessionStateMachine {
                 transition.resetProcessingAttempts(),
                 transition.updateLastActivity(),
                 now);
+
         transitionRepository.save(SessionStateTransition.create(
                 session,
                 previousStatus,
@@ -381,6 +385,7 @@ public class SessionStateMachine {
                 actor,
                 normalizeNullable(reason, REASON_MAX_LENGTH),
                 now));
+
         return sessionRepository.saveAndFlush(session);
     }
 

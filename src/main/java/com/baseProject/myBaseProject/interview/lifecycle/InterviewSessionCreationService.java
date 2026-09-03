@@ -146,7 +146,6 @@ public class InterviewSessionCreationService {
 
         InterviewSession created = stateMachine.create(command);
 
-
         InterviewSession generating = stateMachine.dispatchScriptGeneration(
                 created.getId(),
                 created.getVersion(),
@@ -167,10 +166,12 @@ public class InterviewSessionCreationService {
         InterviewSession claimedSession = sessionRepository.findByIdAndUserId(
                         generating.getId(), userId)
                 .orElseThrow(SessionNotFoundException::new);
+
         workflowDispatcher.dispatchAfterCommit(
                 claimedSession.getId(),
                 SessionProcessingStage.SCRIPT_GENERATION,
                 processingToken);
+
         return sessionMapper.toAcceptedResponse(claimedSession);
     }
 

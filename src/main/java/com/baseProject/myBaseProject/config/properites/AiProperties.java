@@ -24,7 +24,7 @@ public record AiProperties(
         @Size(max = 100, message = "app.ai.model dài quá cột model_name VARCHAR(100)")
         String model,
 
-        /** Ghi vào {@code cv_parse_results.schema_version} — cột VARCHAR(20). */
+        /** Version của cặp prompt/schema CV, ghi vào {@code cv_parse_results.schema_version}. */
         @NotBlank(message = "Thiếu app.ai.schema-version")
         @Size(max = 20, message = "app.ai.schema-version dài quá cột schema_version VARCHAR(20)")
         String schemaVersion,
