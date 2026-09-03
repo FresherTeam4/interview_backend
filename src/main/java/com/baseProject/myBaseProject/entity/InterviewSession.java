@@ -7,7 +7,7 @@ import com.baseProject.myBaseProject.enums.SessionFailureStage;
 import com.baseProject.myBaseProject.enums.SessionMode;
 import com.baseProject.myBaseProject.enums.SessionProcessingStage;
 import com.baseProject.myBaseProject.enums.SessionStatus;
-import com.baseProject.myBaseProject.interview.SessionStateChange;
+import com.baseProject.myBaseProject.interview.lifecycle.model.SessionStateChange;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;

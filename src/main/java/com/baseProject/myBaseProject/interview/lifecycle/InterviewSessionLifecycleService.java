@@ -1,0 +1,116 @@
+package com.baseProject.myBaseProject.interview.lifecycle;
+
+import com.baseProject.myBaseProject.dto.interview.InterviewSessionResponse;
+import com.baseProject.myBaseProject.dto.interview.SessionVersionRequest;
+import com.baseProject.myBaseProject.entity.InterviewSession;
+import com.baseProject.myBaseProject.entity.SessionQuestion;
+import com.baseProject.myBaseProject.entity.SessionTurn;
+import com.baseProject.myBaseProject.enums.AwaitingAction;
+import com.baseProject.myBaseProject.enums.SessionStatus;
+import com.baseProject.myBaseProject.enums.TurnRole;
+import com.baseProject.myBaseProject.exception.SessionInvalidStateException;
+import com.baseProject.myBaseProject.exception.SessionNotFoundException;
+import com.baseProject.myBaseProject.interview.lifecycle.model.SessionEvent;
+import com.baseProject.myBaseProject.interview.lifecycle.SessionStateMachine;
+import com.baseProject.myBaseProject.mapper.InterviewSessionMapper;
+import com.baseProject.myBaseProject.repository.InterviewSessionRepository;
+import com.baseProject.myBaseProject.repository.SessionQuestionRepository;
+import com.baseProject.myBaseProject.repository.SessionTurnRepository;
+
+import lombok.RequiredArgsConstructor;
+
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.util.List;
+
+@Service
+@RequiredArgsConstructor
+public class InterviewSessionLifecycleService {
+
+    private static final String START_TRANSITION_REASON = "User started interview";
+    private static final String PAUSE_TRANSITION_REASON = "User paused interview";
+    private static final String RESUME_TRANSITION_REASON = "User resumed interview";
+
+    private final SessionStateMachine stateMachine;
+    private final InterviewSessionRepository sessionRepository;
+    private final SessionQuestionRepository questionRepository;
+    private final SessionTurnRepository turnRepository;
+    private final InterviewSessionMapper sessionMapper;
+
+    @Transactional
+    public InterviewSessionResponse start(
+            Long userId,
+            Long sessionId,
+            SessionVersionRequest request) {
+        InterviewSession started = stateMachine.transitionUser(
+                userId,
+                sessionId,
+                request.expectedVersion(),
+                SessionEvent.START,
+                null,
+                START_TRANSITION_REASON);
+        SessionQuestion firstQuestion = questionRepository.findBySessionIdAndOrdinal(
+                        sessionId, (short) 1)
+                .orElseThrow(() -> new IllegalStateException(
+                        "READY session has no first question, sessionId=" + sessionId));
+        int turnIndex = started.beginAtQuestion(firstQuestion.getOrdinal());
+        SessionTurn firstPrompt = turnRepository.save(SessionTurn.firstInterviewerPrompt(
+                started,
+                firstQuestion,
+                turnIndex,
+                started.getStartedAt()));
+        sessionRepository.saveAndFlush(started);
+        return sessionMapper.toResponse(started, List.of(firstPrompt));
+    }
+
+    @Transactional
+    public InterviewSessionResponse pause(
+            Long userId,
+            Long sessionId,
+            SessionVersionRequest request) {
+        InterviewSession paused = stateMachine.transitionUser(
+                userId,
+                sessionId,
+                request.expectedVersion(),
+                SessionEvent.PAUSE,
+                null,
+                PAUSE_TRANSITION_REASON);
+        return sessionMapper.toResponse(
+                paused,
+                turnRepository.findOwnedHistory(sessionId, userId));
+    }
+
+    @Transactional
+    public InterviewSessionResponse resume(
+            Long userId,
+            Long sessionId,
+            SessionVersionRequest request) {
+        AwaitingAction restoredAction = resolveAwaitingAction(userId, sessionId);
+        InterviewSession resumed = stateMachine.transitionUser(
+                userId,
+                sessionId,
+                request.expectedVersion(),
+                SessionEvent.RESUME,
+                restoredAction,
+                RESUME_TRANSITION_REASON);
+        return sessionMapper.toResponse(
+                resumed,
+                turnRepository.findOwnedHistory(sessionId, userId));
+    }
+
+    private AwaitingAction resolveAwaitingAction(Long userId, Long sessionId) {
+        InterviewSession session = sessionRepository.findByIdAndUserId(sessionId, userId)
+                .orElseThrow(SessionNotFoundException::new);
+        if (session.getStatus() != SessionStatus.PAUSED) {
+            throw new SessionInvalidStateException();
+        }
+        SessionTurn latestTurn = turnRepository
+                .findFirstBySessionIdAndSessionUserIdOrderByTurnIndexDesc(sessionId, userId)
+                .orElseThrow(SessionInvalidStateException::new);
+        if (latestTurn.getRole() != TurnRole.INTERVIEWER) {
+            throw new SessionInvalidStateException();
+        }
+        return AwaitingAction.CANDIDATE_ANSWER;
+    }
+}

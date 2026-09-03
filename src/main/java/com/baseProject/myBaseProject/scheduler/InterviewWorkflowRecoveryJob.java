@@ -4,8 +4,8 @@ import com.baseProject.myBaseProject.config.properites.InterviewProperties;
 import com.baseProject.myBaseProject.enums.AwaitingAction;
 import com.baseProject.myBaseProject.enums.SessionProcessingStage;
 import com.baseProject.myBaseProject.enums.SessionStatus;
-import com.baseProject.myBaseProject.interview.InterviewNextTurnWorkflowDispatcher;
-import com.baseProject.myBaseProject.interview.InterviewScriptWorkflowDispatcher;
+import com.baseProject.myBaseProject.interview.workflow.turn.InterviewNextTurnWorkflowDispatcher;
+import com.baseProject.myBaseProject.interview.workflow.script.InterviewScriptWorkflowDispatcher;
 import com.baseProject.myBaseProject.repository.InterviewSessionRepository;
 import com.baseProject.myBaseProject.repository.SessionTurnRepository;
 

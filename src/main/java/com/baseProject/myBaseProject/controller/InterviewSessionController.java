@@ -66,7 +66,6 @@ public class InterviewSessionController {
                     description = "Key 1-128 ký tự; dùng lại cùng body trả session đã tạo",
                     required = true)
             @RequestHeader(name = IDEMPOTENCY_KEY, required = false)
-            @Size(max = 128, message = "Idempotency-Key tối đa 128 ký tự")
             String idempotencyKey,
             @Valid @RequestBody CreateInterviewSessionRequest request) {
         InterviewSessionAcceptedResponse response = interviewSessionService.create(
