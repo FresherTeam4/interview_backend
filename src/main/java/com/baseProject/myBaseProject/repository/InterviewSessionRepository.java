@@ -186,8 +186,4 @@ public interface InterviewSessionRepository extends JpaRepository<InterviewSessi
             @Param("statusMessage") String statusMessage,
             @Param("updatedAt") Instant updatedAt);
 
-    boolean existsByIdAndProcessingStageAndProcessingToken(
-            Long id,
-            SessionProcessingStage processingStage,
-            String processingToken);
 }

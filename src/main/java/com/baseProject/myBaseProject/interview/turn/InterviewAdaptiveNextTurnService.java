@@ -1,12 +1,12 @@
 package com.baseProject.myBaseProject.interview.turn;
 
 import com.baseProject.myBaseProject.config.properites.InterviewAiProperties;
-import com.baseProject.myBaseProject.interview.ai.model.FollowUpDecisionInput;
-import com.baseProject.myBaseProject.interview.ai.model.FollowUpDecisionOutcome;
+import com.baseProject.myBaseProject.interview.ai.model.FollowUpDecisionContract.FollowUpDecisionInput;
+import com.baseProject.myBaseProject.interview.ai.model.FollowUpDecisionContract.FollowUpDecisionOutcome;
 import com.baseProject.myBaseProject.interview.ai.port.InterviewFollowUpDecider;
-import com.baseProject.myBaseProject.interview.turn.model.NextTurnOutcome;
-import com.baseProject.myBaseProject.interview.turn.model.NextTurnPreparation;
-import com.baseProject.myBaseProject.interview.turn.model.ValidatedFollowUpDecision;
+import com.baseProject.myBaseProject.interview.turn.model.NextTurnData.NextTurnOutcome;
+import com.baseProject.myBaseProject.interview.turn.model.NextTurnData.NextTurnPreparation;
+import com.baseProject.myBaseProject.interview.turn.model.NextTurnData.ValidatedFollowUpDecision;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -24,14 +24,13 @@ public class InterviewAdaptiveNextTurnService {
     private final InterviewFollowUpDecider followUpDecider;
     private final FollowUpDecisionValidator decisionValidator;
     private final InterviewAiProperties aiProperties;
-    private final NextTurnPreparationReader preparationReader;
-    private final NextTurnCommitter committer;
+    private final NextTurnStore store;
 
     /** Loads bounded context, calls AI outside a transaction, then atomically commits its decision. */
     public NextTurnOutcome decideAndPersist(Long sessionId, UUID processingToken) {
         Objects.requireNonNull(sessionId);
         Objects.requireNonNull(processingToken);
-        NextTurnPreparation preparation = preparationReader.prepare(sessionId, processingToken);
+        NextTurnPreparation preparation = store.prepare(sessionId, processingToken);
         if (preparation == null) {
             return NextTurnOutcome.IGNORED;
         }
@@ -59,7 +58,7 @@ public class InterviewAdaptiveNextTurnService {
                     outcome.tokenCost());
         }
 
-        NextTurnOutcome result = committer.commit(
+        NextTurnOutcome result = store.commit(
                 sessionId,
                 processingToken,
                 preparation.candidateTurnId(),

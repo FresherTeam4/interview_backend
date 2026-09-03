@@ -38,11 +38,11 @@ import java.util.UUID;
         },
         indexes = {
                 @Index(
-                        name = "idx_session_questions_project_id",
-                        columnList = "source_project_id"),
+                        name = "idx_session_questions_project_snapshot_id",
+                        columnList = "source_project_snapshot_id"),
                 @Index(
-                        name = "idx_session_questions_skill_id",
-                        columnList = "source_skill_id")
+                        name = "idx_session_questions_skill_snapshot_id",
+                        columnList = "source_skill_snapshot_id")
         }
 )
 @Immutable
@@ -77,13 +77,11 @@ public class SessionQuestion {
     @Column(name = "source_type", nullable = false, length = 30, updatable = false)
     private QuestionSourceType sourceType;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "source_project_id", updatable = false)
-    private ProfileProject sourceProject;
+    @Column(name = "source_project_snapshot_id", updatable = false)
+    private Long sourceProjectSnapshotId;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "source_skill_id", updatable = false)
-    private ProfileSkill sourceSkill;
+    @Column(name = "source_skill_snapshot_id", updatable = false)
+    private Long sourceSkillSnapshotId;
 
     @Column(name = "source_jd_excerpt", updatable = false, columnDefinition = "TEXT")
     private String sourceJdExcerpt;
@@ -126,8 +124,8 @@ public class SessionQuestion {
         question.competency = data.competency();
         question.difficulty = data.difficulty();
         question.sourceType = data.sourceType();
-        question.sourceProject = data.sourceProject();
-        question.sourceSkill = data.sourceSkill();
+        question.sourceProjectSnapshotId = data.sourceProjectSnapshotId();
+        question.sourceSkillSnapshotId = data.sourceSkillSnapshotId();
         question.sourceJdExcerpt = data.sourceJdExcerpt();
         question.questionSignature = data.questionSignature();
         question.generationSeed = data.generationSeed().toString();
@@ -145,8 +143,8 @@ public class SessionQuestion {
             String competency,
             short difficulty,
             QuestionSourceType sourceType,
-            ProfileProject sourceProject,
-            ProfileSkill sourceSkill,
+            Long sourceProjectSnapshotId,
+            Long sourceSkillSnapshotId,
             String sourceJdExcerpt,
             String questionSignature,
             UUID generationSeed,

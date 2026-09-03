@@ -221,9 +221,10 @@ ReportHighlightType = STRENGTH | IMPROVEMENT | NEXT_ACTION
 028-create-interview-session-foundation.sql [M04]
 029-create-session-questions.sql            [M05]
 030-create-session-turns.sql                [M07]
-031-create-interview-report-tables.sql      [M10]
-032-create-voice-answer-attempts.sql        [M12]
-033-create-turn-audio-assets.sql            [M15]
+031-decouple-question-sources-from-live-profile.sql [M09 hardening]
+032-create-interview-report-tables.sql      [M10]
+033-create-voice-answer-attempts.sql        [M12]
+034-create-turn-audio-assets.sql            [M15]
 ```
 
 Migration `028` tạo `interview_sessions`, `session_context_snapshots` và
@@ -445,8 +446,8 @@ topic               VARCHAR(150) NOT NULL
 competency          VARCHAR(100) NOT NULL
 difficulty          SMALLINT NOT NULL
 source_type         VARCHAR(30) NOT NULL
-source_project_id   BIGINT NULL FK profile_projects ON DELETE SET NULL
-source_skill_id     BIGINT NULL FK profile_skills ON DELETE SET NULL
+source_project_snapshot_id BIGINT NULL (ID nằm trong profile snapshot, không có live FK)
+source_skill_snapshot_id   BIGINT NULL (ID nằm trong profile snapshot, không có live FK)
 source_jd_excerpt   TEXT NULL
 question_signature  CHAR(64) NOT NULL
 generation_seed     CHAR(36) NOT NULL
@@ -458,8 +459,9 @@ UNIQUE (session_id, question_signature)
 CHECK (difficulty BETWEEN 1 AND 5)
 ```
 
-Application validate project/skill thực sự thuộc profile snapshot của session. Không tin ID do AI
-trả về.
+Application validate project/skill thực sự thuộc profile snapshot của session. Hai source ID không
+tham chiếu bảng profile sống, nên việc user sửa hoặc xóa profile item sau khi tạo session không làm
+thay đổi provenance và follow-up context của câu hỏi.
 
 ### 4.9. `session_turns`
 
@@ -1663,7 +1665,7 @@ Server validation:
 - Đúng question count và ordinal liên tục từ 1.
 - Question text/topic/competency không blank và nằm trong length limit.
 - Difficulty 1–5.
-- Source IDs tồn tại trong snapshot và thuộc selected profile.
+- Source IDs tồn tại trong immutable snapshot của session.
 - JD excerpt là substring sau normalize hoặc được bỏ nếu không khớp.
 - Không có duplicate normalized text/signature.
 - Diversity với ba session gần nhất đạt ngưỡng.
@@ -1674,8 +1676,8 @@ Server validation:
 - System message giữ instruction; user message chỉ chứa JSON profile/JD có nhãn untrusted. Prompt
   và schema được resolve theo `app.interview.ai.script-prompt-version` lúc startup.
 - Provider call chạy sau read transaction chuẩn bị input và trước write transaction persist output.
-- Source ID phải đồng thời xuất hiện trong immutable snapshot và còn thuộc profile đã chọn. DB FK
-  không được dùng thay cho bước trust-boundary validation này.
+- Source ID phải xuất hiện trong immutable snapshot của session. Hai giá trị được persist như ID
+  logic trong snapshot và không có DB FK tới live profile.
 - Server tự tạo SHA-256 signature từ source type/entity, competency và normalized concept. Seed chỉ
   phục vụ audit.
 - Query diversity chỉ lấy tối đa ba session gần nhất cùng profile/JD hash. Không câu normalized nào
@@ -2178,18 +2180,18 @@ Hai bảng audio đã có `audio_deleted_at` nullable để cleanup idempotent v
 
 ---
 
-## 20. Manual verification strategy
+## 20. Verification strategy
 
 ### 20.1. Quy ước triển khai
 
-Từ M03, Codex không tạo thêm unit test, controller test hoặc integration test cho từng module trừ
-khi người dùng yêu cầu rõ. Các test M01/M02 đã có được giữ nguyên nhưng không phải mẫu bắt buộc cho
-module sau. Mục tiêu review mặc định là:
+Mỗi thay đổi phải có focused automated test ở tầng phù hợp khi hành vi có thể kiểm thử. Test provider
+phải mock Gemini và không phụ thuộc network, MinIO hoặc dữ liệu developer. Ngoài test, review còn
+kiểm tra:
 
-- Production code compile được.
+- Production code và test compile được.
 - Liquibase, entity và `ddl-auto=validate` đồng bộ khi có schema change.
 - API có OpenAPI annotation và checklist Swagger rõ ràng.
-- Người dùng tự chạy happy path và failure path trên Swagger.
+- Happy path và failure path quan trọng được test tự động; Swagger vẫn dùng để nghiệm thu luồng thật.
 - Module chưa public API có query/checklist database hoặc log để quan sát kết quả.
 
 Không hướng dẫn lại authentication trong checklist Swagger.
@@ -2347,11 +2349,12 @@ Mỗi module dừng ở review gate. Chỉ `APPROVED Mxx` mới cho phép bắt 
 | `M07` | `030-create-session-turns.sql` | Conversation append-only để start/resume |
 | `M08` | Không | Text answer dùng session turns đã tạo ở M07 |
 | `M09` | Không | Follow-up dùng session turns |
-| `M10` | `031-create-interview-report-tables.sql` | Score, evidence, report, highlight |
+| `M09 hardening` | `031-decouple-question-sources-from-live-profile.sql` | Source question chỉ tham chiếu immutable snapshot |
+| `M10` | `032-create-interview-report-tables.sql` | Score, evidence, report, highlight |
 | `M11` | Không | Timeout/recovery dùng session/report tables |
-| `M12` | `032-create-voice-answer-attempts.sql` | Recording và transcript draft |
+| `M12` | `033-create-voice-answer-attempts.sql` | Recording và transcript draft |
 | `M13–M14` | Không | STT/edit/confirm dùng voice attempts |
-| `M15` | `033-create-turn-audio-assets.sql` | TTS/replay |
+| `M15` | `034-create-turn-audio-assets.sql` | TTS/replay |
 | `M16` | Không | Hardening và release verification |
 
 Không tạo skeleton hoặc migration của module tương lai. Focused verification chạy trong từng
@@ -2386,7 +2389,7 @@ tới đúng module gate, không phải blocker của M00.
 | `D-017` | Voice draft | `voice_answer_attempts`; chỉ confirm transcript mới tạo candidate turn | `LOCKED_M00` |
 | `D-018` | Audio boundary | 15 MB, 5 phút; WebM/Opus + MP4/AAC; retention 30 ngày | `LOCKED_M00` |
 | `D-019` | Question visibility | Frontend/API không trả future questions chưa được hỏi | `LOCKED_M00` |
-| `D-020` | Migration sequence | Dùng chính xác `025–033` ở §4.2/§23; không sửa `001–024` | `LOCKED_M00` |
+| `D-020` | Migration sequence | Dùng sequence `025–034`; `031` là snapshot-integrity fix và các migration dự kiến sau đó dịch một số; không sửa `001–024` | `REVISED_M09` |
 | `D-021` | STT provider | Chọn và benchmark trước khi bắt đầu `M13` | `DEFERRED_M13` |
 | `D-022` | TTS provider | Chọn và benchmark trước khi bắt đầu `M15` | `DEFERRED_M15` |
 
@@ -2408,7 +2411,7 @@ tới đúng module gate, không phải blocker của M00.
 - [x] Rubric v1 và năm criterion/weight đã cụ thể hóa.
 - [x] Audio format, duration, size và retention đã cụ thể hóa.
 - [x] STT/TTS provider có module gate rõ ràng và không block `M01–M12`.
-- [x] Migration filename/owner `025–033` đã đồng bộ với module sequence.
+- [x] Migration filename/owner `025–034` đã đồng bộ với module sequence đã revision ở M09.
 - [x] Người dùng/team đã phát hành `APPROVED M00` ngày 2026-08-26.
 
 Sau `APPROVED M00`, thiết kế database/API được xem là khóa cho MVP. Mọi thay đổi sau đó phải nêu

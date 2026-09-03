@@ -4,8 +4,7 @@ import com.baseProject.myBaseProject.config.properites.InterviewProperties;
 import com.baseProject.myBaseProject.enums.AwaitingAction;
 import com.baseProject.myBaseProject.enums.SessionProcessingStage;
 import com.baseProject.myBaseProject.enums.SessionStatus;
-import com.baseProject.myBaseProject.interview.workflow.turn.InterviewNextTurnWorkflowDispatcher;
-import com.baseProject.myBaseProject.interview.workflow.script.InterviewScriptWorkflowDispatcher;
+import com.baseProject.myBaseProject.interview.workflow.InterviewWorkflowDispatcher;
 import com.baseProject.myBaseProject.repository.InterviewSessionRepository;
 import com.baseProject.myBaseProject.repository.SessionTurnRepository;
 
@@ -32,8 +31,7 @@ public class InterviewWorkflowRecoveryJob {
     private final InterviewProperties properties;
     private final InterviewSessionRepository sessionRepository;
     private final SessionTurnRepository turnRepository;
-    private final InterviewScriptWorkflowDispatcher workflowDispatcher;
-    private final InterviewNextTurnWorkflowDispatcher nextTurnWorkflowDispatcher;
+    private final InterviewWorkflowDispatcher workflowDispatcher;
     private final Clock clock;
 
     @EventListener(ApplicationReadyEvent.class)
@@ -62,7 +60,8 @@ public class InterviewWorkflowRecoveryJob {
                     PageRequest.of(0, RECOVERY_BATCH_SIZE));
             int claimed = 0;
             for (Long sessionId : sessionIds) {
-                if (workflowDispatcher.claimAndDispatch(sessionId)) {
+                if (workflowDispatcher.claimAndDispatch(
+                        sessionId, SessionProcessingStage.SCRIPT_GENERATION)) {
                     claimed++;
                 }
             }
@@ -94,7 +93,8 @@ public class InterviewWorkflowRecoveryJob {
                     PageRequest.of(0, RECOVERY_BATCH_SIZE));
             int claimed = 0;
             for (Long sessionId : sessionIds) {
-                if (nextTurnWorkflowDispatcher.claimAndDispatch(sessionId)) {
+                if (workflowDispatcher.claimAndDispatch(
+                        sessionId, SessionProcessingStage.NEXT_TURN)) {
                     claimed++;
                 }
             }

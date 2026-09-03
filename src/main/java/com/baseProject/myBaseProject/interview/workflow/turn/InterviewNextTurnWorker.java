@@ -2,7 +2,8 @@ package com.baseProject.myBaseProject.interview.workflow.turn;
 
 import com.baseProject.myBaseProject.exception.FollowUpDecisionException;
 import com.baseProject.myBaseProject.interview.turn.InterviewAdaptiveNextTurnService;
-import com.baseProject.myBaseProject.interview.turn.model.NextTurnOutcome;
+import com.baseProject.myBaseProject.interview.turn.model.NextTurnData.NextTurnOutcome;
+import com.baseProject.myBaseProject.interview.workflow.InterviewWorkflowCoordinator;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -20,20 +21,20 @@ import java.util.UUID;
 public class InterviewNextTurnWorker {
 
     private final InterviewAdaptiveNextTurnService nextTurnService;
-    private final InterviewNextTurnWorkCoordinator workCoordinator;
+    private final InterviewWorkflowCoordinator workflowCoordinator;
 
     public Optional<Instant> process(Long sessionId, UUID processingToken) {
         long startedNanos = System.nanoTime();
         String outcome = "ignored";
         try {
-            InterviewNextTurnWorkCoordinator.ClaimInspection inspection =
-                    workCoordinator.inspect(sessionId, processingToken);
-            if (inspection == InterviewNextTurnWorkCoordinator.ClaimInspection.LOST) {
+            InterviewWorkflowCoordinator.ClaimInspection inspection =
+                    workflowCoordinator.inspectNextTurn(sessionId, processingToken);
+            if (inspection == InterviewWorkflowCoordinator.ClaimInspection.LOST) {
                 return Optional.empty();
             }
-            if (inspection == InterviewNextTurnWorkCoordinator.ClaimInspection.ATTEMPTS_EXHAUSTED) {
+            if (inspection == InterviewWorkflowCoordinator.ClaimInspection.ATTEMPTS_EXHAUSTED) {
                 outcome = "failed";
-                return retryAt(workCoordinator.handleFailure(
+                return retryAt(workflowCoordinator.handleNextTurnFailure(
                         sessionId,
                         processingToken,
                         FollowUpDecisionException.unexpected(
@@ -46,8 +47,8 @@ public class InterviewNextTurnWorker {
             outcome = result.name().toLowerCase();
             return Optional.empty();
         } catch (FollowUpDecisionException failure) {
-            InterviewNextTurnWorkCoordinator.FailureOutcome failureOutcome =
-                    workCoordinator.handleFailure(sessionId, processingToken, failure);
+            InterviewWorkflowCoordinator.FailureOutcome failureOutcome =
+                    workflowCoordinator.handleNextTurnFailure(sessionId, processingToken, failure);
             outcome = failureOutcome.ignored()
                     ? "ignored"
                     : failureOutcome.failed() ? "failed" : "retry_scheduled";
@@ -57,6 +58,20 @@ public class InterviewNextTurnWorker {
                     sessionId,
                     failure.getReason(),
                     failure.isRetryable(),
+                    outcome);
+            return retryAt(failureOutcome);
+        } catch (RuntimeException unexpected) {
+            InterviewWorkflowCoordinator.FailureOutcome failureOutcome =
+                    workflowCoordinator.handleNextTurnFailure(
+                            sessionId,
+                            processingToken,
+                            FollowUpDecisionException.unexpected(unexpected));
+            outcome = failureOutcome.ignored() ? "ignored" : "failed";
+            log.error(
+                    "Unexpected interview next-turn failure: "
+                            + "sessionId={}, exceptionType={}, outcome={}",
+                    sessionId,
+                    unexpected.getClass().getSimpleName(),
                     outcome);
             return retryAt(failureOutcome);
         } finally {
@@ -70,7 +85,7 @@ public class InterviewNextTurnWorker {
         }
     }
 
-    private Optional<Instant> retryAt(InterviewNextTurnWorkCoordinator.FailureOutcome outcome) {
+    private Optional<Instant> retryAt(InterviewWorkflowCoordinator.FailureOutcome outcome) {
         return Optional.ofNullable(outcome.retryAt());
     }
 }

@@ -2,11 +2,11 @@ package com.baseProject.myBaseProject.interview.generation;
 
 import com.baseProject.myBaseProject.config.properites.InterviewAiProperties;
 import com.baseProject.myBaseProject.exception.ScriptGenerationException;
-import com.baseProject.myBaseProject.interview.ai.model.ScriptGenerationOutcome;
+import com.baseProject.myBaseProject.interview.ai.model.ScriptGenerationContract.ScriptGenerationOutcome;
 import com.baseProject.myBaseProject.interview.ai.port.InterviewQuestionGenerator;
-import com.baseProject.myBaseProject.interview.generation.model.GenerationPreparation;
-import com.baseProject.myBaseProject.interview.generation.model.ScriptGenerationResult;
-import com.baseProject.myBaseProject.interview.generation.model.ValidatedScript;
+import com.baseProject.myBaseProject.interview.generation.model.ScriptGenerationData.GenerationPreparation;
+import com.baseProject.myBaseProject.interview.generation.model.ScriptGenerationData.ScriptGenerationResult;
+import com.baseProject.myBaseProject.interview.generation.model.ScriptGenerationData.ValidatedScript;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -24,8 +24,7 @@ public class InterviewScriptGenerationService {
     private final InterviewQuestionGenerator questionGenerator;
     private final QuestionScriptValidator validator;
     private final InterviewAiProperties aiProperties;
-    private final ScriptGenerationPreparationReader preparationReader;
-    private final ScriptGenerationCommitter committer;
+    private final ScriptGenerationStore store;
 
     /**
      * Calls the provider without a database transaction, then commits the complete script and READY
@@ -36,7 +35,7 @@ public class InterviewScriptGenerationService {
         Objects.requireNonNull(processingToken);
 
         for (int attempt = 0; attempt < 2; attempt++) {
-            GenerationPreparation preparation = preparationReader.prepare(sessionId, processingToken);
+            GenerationPreparation preparation = store.prepare(sessionId, processingToken);
             ScriptGenerationOutcome outcome = questionGenerator.generate(preparation.input());
             validateProviderContract(outcome);
 
@@ -48,7 +47,7 @@ public class InterviewScriptGenerationService {
                         preparation.allowedSkillIds(),
                         preparation.recentSessionIds(),
                         preparation.history());
-                ScriptGenerationResult result = committer.commit(
+                ScriptGenerationResult result = store.commit(
                         sessionId,
                         processingToken,
                         preparation.profileId(),

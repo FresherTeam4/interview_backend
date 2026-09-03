@@ -4,9 +4,9 @@ import com.baseProject.myBaseProject.config.InterviewAiConfig;
 import com.baseProject.myBaseProject.config.properites.AiProperties;
 import com.baseProject.myBaseProject.config.properites.InterviewAiProperties;
 import com.baseProject.myBaseProject.exception.ScriptGenerationException;
-import com.baseProject.myBaseProject.interview.ai.model.GeneratedScript;
-import com.baseProject.myBaseProject.interview.ai.model.ScriptGenerationInput;
-import com.baseProject.myBaseProject.interview.ai.model.ScriptGenerationOutcome;
+import com.baseProject.myBaseProject.interview.ai.model.ScriptGenerationContract.GeneratedScript;
+import com.baseProject.myBaseProject.interview.ai.model.ScriptGenerationContract.ScriptGenerationInput;
+import com.baseProject.myBaseProject.interview.ai.model.ScriptGenerationContract.ScriptGenerationOutcome;
 import com.baseProject.myBaseProject.interview.ai.port.InterviewQuestionGenerator;
 
 import lombok.extern.slf4j.Slf4j;

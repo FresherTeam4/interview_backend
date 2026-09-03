@@ -1,7 +1,7 @@
 package com.baseProject.myBaseProject.interview.generation;
 
 import com.baseProject.myBaseProject.exception.ScriptGenerationException;
-import com.baseProject.myBaseProject.interview.generation.model.ValidatedQuestion;
+import com.baseProject.myBaseProject.interview.generation.model.ScriptGenerationData.ValidatedQuestion;
 import com.baseProject.myBaseProject.repository.projection.QuestionHistoryProjection;
 
 import lombok.RequiredArgsConstructor;

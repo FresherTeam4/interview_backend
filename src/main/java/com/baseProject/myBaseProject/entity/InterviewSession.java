@@ -7,7 +7,6 @@ import com.baseProject.myBaseProject.enums.SessionFailureStage;
 import com.baseProject.myBaseProject.enums.SessionMode;
 import com.baseProject.myBaseProject.enums.SessionProcessingStage;
 import com.baseProject.myBaseProject.enums.SessionStatus;
-import com.baseProject.myBaseProject.interview.lifecycle.model.SessionStateChange;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -295,31 +294,38 @@ public class InterviewSession {
 
     /** Áp dụng một state transition đã được SessionStateMachine kiểm tra. */
     public void applyStateTransition(
-            SessionStateChange change,
+            SessionStatus targetStatus,
+            AwaitingAction nextAwaitingAction,
+            SessionEndReason nextEndReason,
+            SessionFailureStage nextFailureStage,
+            String nextStatusMessage,
+            SessionProcessingStage nextProcessingStage,
+            boolean resetProcessingAttempts,
+            boolean updateLastActivity,
             Instant now) {
         SessionStatus previousStatus = status;
-        status = change.targetStatus();
-        awaitingAction = change.awaitingAction();
-        endReason = change.endReason();
-        failureStage = change.failureStage();
-        statusMessage = change.statusMessage();
-        processingStage = change.processingStage();
+        status = targetStatus;
+        awaitingAction = nextAwaitingAction;
+        endReason = nextEndReason;
+        failureStage = nextFailureStage;
+        statusMessage = nextStatusMessage;
+        processingStage = nextProcessingStage;
         processingToken = null;
         processingStartedAt = null;
         nextRetryAt = null;
-        if (change.resetProcessingAttempts()) {
+        if (resetProcessingAttempts) {
             processingAttempts = 0;
         }
         if (previousStatus == SessionStatus.READY
-                && change.targetStatus() == SessionStatus.IN_PROGRESS) {
+                && targetStatus == SessionStatus.IN_PROGRESS) {
             startedAt = now;
         }
-        if (change.targetStatus().isTerminal()) {
+        if (targetStatus.isTerminal()) {
             completedAt = now;
         } else {
             completedAt = null;
         }
-        if (change.updateLastActivity()) {
+        if (updateLastActivity) {
             lastActivityAt = now;
         }
         updatedAt = now;

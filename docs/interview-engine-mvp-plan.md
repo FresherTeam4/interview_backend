@@ -794,12 +794,6 @@ Một số module nền tảng chưa tạo ra đầy đủ luồng người dùn
 phải compile và application không được có dependency bắt buộc chưa tồn tại. MVP chỉ được coi là
 phát hành được sau module `M16`.
 
-> **Quy ước tiết kiệm token — có hiệu lực từ M03:** Codex không tạo thêm unit test, controller test
-> hoặc integration test cho từng module, trừ khi người dùng yêu cầu rõ. Các test đã tồn tại từ
-> M01/M02 được giữ nguyên, không xóa, không làm yếu và không được hiểu là yêu cầu phải tiếp tục viết
-> test cho module sau. Việc review chuyển sang giải thích implementation và hướng dẫn kiểm tra thủ
-> công; nếu module có API thì ưu tiên Swagger.
-
 ### 13.2. Quy trình review và approval bắt buộc
 
 Chỉ triển khai **một module tại một thời điểm** theo quy trình:
@@ -807,9 +801,9 @@ Chỉ triển khai **một module tại một thời điểm** theo quy trình:
 ```text
 Chốt scope module
    ↓
-Implement production code + migration + docs liên quan
+Implement production code + test + migration + docs liên quan
    ↓
-Compile/kiểm tra cấu hình, schema và diff ở mức cần thiết
+Chạy focused test, compile/kiểm tra cấu hình, schema và diff ở mức cần thiết
    ↓
 Gửi giải thích implementation + hướng dẫn kiểm tra thủ công
    ↓
@@ -898,7 +892,7 @@ Các milestone dễ quan sát:
 | C — Voice turn-based ready | `M12–M15` | Record, STT, edit, confirm, TTS/replay, text fallback |
 | D — MVP release candidate | `M16` | Full combined MVP đủ verification và tài liệu |
 
-Migration sequence chính thức đã được khóa cho review M00:
+Migration sequence được cập nhật sau snapshot-integrity refactor:
 
 ```text
 025-create-job-descriptions.sql             [M01]
@@ -907,9 +901,10 @@ Migration sequence chính thức đã được khóa cho review M00:
 028-create-interview-session-foundation.sql [M04]
 029-create-session-questions.sql            [M05]
 030-create-session-turns.sql                [M07]
-031-create-interview-report-tables.sql      [M10]
-032-create-voice-answer-attempts.sql        [M12]
-033-create-turn-audio-assets.sql            [M15]
+031-decouple-question-sources-from-live-profile.sql [M09 hardening]
+032-create-interview-report-tables.sql      [M10]
+033-create-voice-answer-attempts.sql        [M12]
+034-create-turn-audio-assets.sql            [M15]
 ```
 
 Migration chỉ được tạo trong module sở hữu, không tạo placeholder trước và tuyệt đối không sửa
@@ -1384,7 +1379,7 @@ kịch bản hợp lệ; chưa mở create-session API cho frontend.
    signatures/text của tối đa ba session gần nhất. Transaction đóng trước khi gọi Gemini với timeout
    script riêng 12 giây.
 4. Backend kiểm count theo difficulty, ordinal liên tục, length/difficulty, code fence, source shape,
-   source ID vừa có trong snapshot vừa thuộc profile hiện tại, và JD excerpt. Excerpt không còn là
+   source ID có trong immutable snapshot, và JD excerpt. Excerpt không còn là
    substring sau normalize bị bỏ; source type bắt buộc excerpt sau đó sẽ bị reject.
 5. `questionSignature` là SHA-256 lowercase do server tạo từ
    `sourceType + projectId + skillId + competency + normalized concept`; model chỉ cung cấp concept.
@@ -1441,14 +1436,15 @@ kịch bản hợp lệ; chưa mở create-session API cho frontend.
    ORDER BY index_name;
    ```
 
-   Kết quả phải có hai unique key session/ordinal và session/signature, hai index source, FK session
-   `ON DELETE CASCADE`, còn FK project/skill `ON DELETE SET NULL`.
+   Sau hardening `031`, kết quả phải có hai unique key session/ordinal và session/signature, hai
+   index source snapshot, FK session `ON DELETE CASCADE`, và không còn FK project/skill tới live
+   profile.
 3. Smoke nội bộ bằng provider giả và fixture tổng hợp trong transaction rollback đã cho kết quả:
    `calls=2`, `diversityRetried=true`, session `READY`, `totalQuestionCount=6`, version `1`, đúng sáu
    questions, đúng một transition và metadata `mock-m05:v1`. Sau rollback, fixture user/session/
    question đều bằng `0`.
 4. Smoke contract riêng xác nhận missing key thành `MISSING_CREDENTIAL`, `retryable=false`, message
-   an toàn; source project ID không thuộc snapshot/profile thành `INVALID_OUTPUT` trước khi persist.
+   an toàn; source project ID không thuộc snapshot thành `INVALID_OUTPUT` trước khi persist.
 5. Không gọi Gemini thật bằng CV/JD thật khi review. Nếu cần thử provider, chỉ dùng dữ liệu giả và
    đối chiếu log model/prompt version/duration; log không được chứa full prompt/output.
 
@@ -1497,7 +1493,7 @@ nhận session `READY` hoặc lỗi retry được.
    required = false) @Size(max = 128)`, `@CurrentUser` userId, rồi trả `202 Accepted` kèm
    `Location: /api/sessions/{id}` và `Retry-After: 1`. Không có repository hay infrastructure call
    nào trong controller.
-2. `InterviewSessionServiceImpl.create` chạy trong một transaction ngắn. Thứ tự bắt buộc:
+2. `InterviewSessionCreationService.create` chạy trong một transaction ngắn. Thứ tự bắt buộc:
    `ensureEnabled` (feature flag off thành `503 INTERVIEW_AI_UNAVAILABLE`), normalize
    `Idempotency-Key` (null/blank/dài quá 128 thành `400 IDEMPOTENCY_KEY_REQUIRED`), normalize
    `languageCode` về lowercase, rồi tính `creation_request_hash` = SHA-256 hex của canonical string
@@ -1520,16 +1516,18 @@ nhận session `READY` hoặc lỗi retry được.
    (`SNAPSHOT_SCHEMA_VERSION = v1`). Snapshot được lưu cùng session nên script sau này không bị ảnh
    hưởng nếu user sửa profile.
 7. Vẫn trong transaction đó: `SessionStateMachine.create` insert session (version `0`) và context
-   snapshot rồi ghi transition `NULL -> CREATED`; `transitionSystem(DISPATCH_SCRIPT_GENERATION)` ghi
+   snapshot rồi ghi transition `NULL -> CREATED`; `dispatchScriptGeneration` ghi
    transition `CREATED -> SCRIPT_GENERATING` (version `1`); `SessionProcessingClaimService.claim`
    set `processing_stage`, `processing_token`, `processing_started_at` và tăng `processing_attempts`
    (version `2`). Vì vậy body `202` trả `version: 2`.
-8. `InterviewScriptWorkflowDispatcher.dispatchAfterCommit` đăng ký `TransactionSynchronization` và
+8. `InterviewWorkflowDispatcher.dispatchAfterCommit` đăng ký `TransactionSynchronization` và
    chỉ submit vào executor `afterCommit`, nên client disconnect hoặc rollback không để lại work
    không có row tương ứng. Executor đầy thành `TaskRejectedException` được log ở mức `warn` và để
    recovery job xử lý, không làm request thất bại.
-9. `InterviewScriptGenerationWorker` kiểm claim bằng `InterviewScriptWorkCoordinator.inspect` trước
-   khi gọi generator (M05). Thành công thì state machine persist script và đi
+9. `InterviewScriptGenerationWorker` kiểm claim bằng
+   `InterviewWorkflowCoordinator.inspectScript` trước khi gọi generator (M05).
+   `ScriptGenerationStore` giữ hai transaction boundary `prepare` và `commit`, nên lời gọi Gemini
+   ở giữa không giữ database connection. Thành công thì state machine persist script và đi
    `SCRIPT_GENERATING -> READY`, xóa `processing_stage`/`processing_token`/`status_message`, set
    `total_question_count`. Lỗi đi vào `handleFailure`: retryable và `processing_attempts <
    MAX_PROVIDER_ATTEMPTS (2)` thì `releaseForRetry` nhả claim, ghi `next_retry_at = now + 1s` và
@@ -1538,7 +1536,8 @@ nhận session `READY` hoặc lỗi retry được.
 10. `InterviewWorkflowRecoveryJob` chạy ở `ApplicationReadyEvent` và theo
     `@Scheduled(cron = "${app.interview.recovery-cron}")`. `findRecoverableWorkIds` lấy tối đa 50
     session `SCRIPT_GENERATING` mà claim đã quá `processing-lease-seconds` hoặc tới `next_retry_at`,
-    rồi `claimAndDispatch` từng cái. Đây là lý do restart hoặc queue-full không làm session treo.
+    rồi `claimAndDispatch(sessionId, SCRIPT_GENERATION)` từng cái. Đây là lý do restart hoặc
+    queue-full không làm session treo.
 11. `get` là `@Transactional(readOnly = true)` + `findByIdAndUserId`, map qua
     `InterviewSessionMapper.toResponse`. Response chỉ có counters, status, `statusMessage` và
     reference profile/JD; chưa có turns hay câu hỏi tương lai.
@@ -1881,8 +1880,9 @@ Chuẩn bị session đã start theo M07. Từ `GET /api/sessions/{sessionId}`, 
 - OpenAPI sinh thành công route `POST /api/sessions/{sessionId}/answers`, khai báo Bearer security,
   request bắt buộc đủ bốn field, giới hạn `content: 10000`/`clientTurnId: 64` và các response
   `202/400/404/409`.
-- Không tạo hoặc chạy test mới theo review override M03–M16. Không sửa schema và không gọi Gemini;
-  policy progression của M08 hoàn toàn deterministic trong backend.
+- Lần review M08 ban đầu chỉ compile và kiểm tra thủ công; các thay đổi tiếp theo phải bổ sung
+  regression test phù hợp theo quy ước testing chung của repository. Không gọi Gemini thật trong
+  verification; policy progression của M08 hoàn toàn deterministic trong backend.
 
 **Điểm dừng:** đã nhận `APPROVED M08`.
 
@@ -2014,9 +2014,10 @@ Chuẩn bị session `IN_PROGRESS + CANDIDATE_ANSWER` theo M07/M08. Từ
   `EntityManagerFactory`, prompt/schema follow-up v1 được nạp và Tomcat start hoàn chỉnh.
 - `git diff --check` không phát hiện whitespace error; warning CRLF chỉ phản ánh cấu hình line
   ending hiện có trên Windows.
-- Không tạo hoặc chạy test mới theo review override M03–M16. M09 không có migration; schema `028`
-  và `030` đã chứa counter, processing claim, parent turn và follow-up fields cần thiết. Không gọi
-  Gemini hoặc gửi dữ liệu ứng viên thật trong verification.
+- Lần review M09 ban đầu chưa có automated test riêng. Các thay đổi tiếp theo phải bổ sung focused
+  regression test và vẫn không gọi Gemini hoặc gửi dữ liệu ứng viên thật trong verification.
+  M09 ban đầu không có migration; schema `028` và `030` đã chứa counter, processing claim, parent
+  turn và follow-up fields cần thiết.
 
 **Điểm dừng:** chờ `APPROVED M09`.
 
@@ -2342,7 +2343,7 @@ tích hợp frontend.
 | `D-017` | Voice answer tồn tại dưới dạng attempt/draft; chỉ confirm mới gửi vào conversation/scoring | `LOCKED_M00` |
 | `D-018` | Audio tối đa 15 MB/5 phút, WebM/Opus + MP4/AAC, retention 30 ngày | `LOCKED_M00` |
 | `D-019` | API không trả trước future questions | `LOCKED_M00` |
-| `D-020` | Migration dùng chính xác `025–033` theo module owner; không sửa `001–024` | `LOCKED_M00` |
+| `D-020` | Migration dùng sequence `025–034`; `031` là snapshot-integrity fix và các migration dự kiến sau đó dịch một số; không sửa `001–024` | `REVISED_M09` |
 | `D-021` | Chọn/benchmark STT provider tại gate trước `M13` | `DEFERRED_M13` |
 | `D-022` | Chọn/benchmark TTS provider tại gate trước `M15` | `DEFERRED_M15` |
 

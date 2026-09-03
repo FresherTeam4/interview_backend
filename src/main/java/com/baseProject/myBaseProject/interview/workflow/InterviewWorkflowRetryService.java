@@ -9,9 +9,6 @@ import com.baseProject.myBaseProject.enums.SessionProcessingStage;
 import com.baseProject.myBaseProject.exception.InterviewAiUnavailableException;
 import com.baseProject.myBaseProject.exception.SessionNotFoundException;
 import com.baseProject.myBaseProject.interview.lifecycle.SessionStateMachine;
-import com.baseProject.myBaseProject.interview.workflow.SessionProcessingClaimService;
-import com.baseProject.myBaseProject.interview.workflow.script.InterviewScriptWorkflowDispatcher;
-import com.baseProject.myBaseProject.interview.workflow.turn.InterviewNextTurnWorkflowDispatcher;
 import com.baseProject.myBaseProject.mapper.InterviewSessionMapper;
 import com.baseProject.myBaseProject.repository.InterviewSessionRepository;
 
@@ -33,8 +30,7 @@ public class InterviewWorkflowRetryService {
     private final SessionStateMachine stateMachine;
     private final SessionProcessingClaimService claimService;
     private final InterviewSessionRepository sessionRepository;
-    private final InterviewScriptWorkflowDispatcher workflowDispatcher;
-    private final InterviewNextTurnWorkflowDispatcher nextTurnWorkflowDispatcher;
+    private final InterviewWorkflowDispatcher workflowDispatcher;
     private final InterviewSessionMapper sessionMapper;
 
     @Transactional
@@ -66,14 +62,12 @@ public class InterviewWorkflowRetryService {
 
         InterviewSession claimedSession = sessionRepository.findByIdAndUserId(sessionId, userId)
                 .orElseThrow(SessionNotFoundException::new);
-        if (processingStage == SessionProcessingStage.SCRIPT_GENERATION) {
-            workflowDispatcher.dispatchAfterCommit(sessionId, processingToken);
-        } else if (processingStage == SessionProcessingStage.NEXT_TURN) {
-            nextTurnWorkflowDispatcher.dispatchAfterCommit(sessionId, processingToken);
-        } else {
+        if (processingStage != SessionProcessingStage.SCRIPT_GENERATION
+                && processingStage != SessionProcessingStage.NEXT_TURN) {
             throw new IllegalStateException(
                     "Unsupported retried processing stage " + processingStage);
         }
+        workflowDispatcher.dispatchAfterCommit(sessionId, processingStage, processingToken);
         return sessionMapper.toAcceptedResponse(claimedSession);
     }
 

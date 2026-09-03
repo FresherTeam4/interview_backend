@@ -1,14 +1,14 @@
 package com.baseProject.myBaseProject.interview.turn;
 
-import com.baseProject.myBaseProject.interview.turn.model.ValidatedFollowUpDecision;
+import com.baseProject.myBaseProject.interview.turn.model.NextTurnData.ValidatedFollowUpDecision;
 
 import static com.baseProject.myBaseProject.constant.InterviewConstraints.MAX_QUESTION_TEXT_LENGTH;
 
 import com.baseProject.myBaseProject.enums.FollowUpDecision;
 import com.baseProject.myBaseProject.exception.FollowUpDecisionException;
-import com.baseProject.myBaseProject.interview.ai.model.FollowUpDecisionInput;
-import com.baseProject.myBaseProject.interview.ai.model.FollowUpDecisionOutcome;
-import com.baseProject.myBaseProject.interview.ai.model.GeneratedFollowUpDecision;
+import com.baseProject.myBaseProject.interview.ai.model.FollowUpDecisionContract.FollowUpDecisionInput;
+import com.baseProject.myBaseProject.interview.ai.model.FollowUpDecisionContract.FollowUpDecisionOutcome;
+import com.baseProject.myBaseProject.interview.ai.model.FollowUpDecisionContract.GeneratedFollowUpDecision;
 
 import org.springframework.stereotype.Component;
 

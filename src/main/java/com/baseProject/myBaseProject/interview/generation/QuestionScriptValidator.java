@@ -3,11 +3,11 @@ package com.baseProject.myBaseProject.interview.generation;
 import static com.baseProject.myBaseProject.constant.InterviewConstraints.MAX_QUESTION_TEXT_LENGTH;
 
 import com.baseProject.myBaseProject.exception.ScriptGenerationException;
-import com.baseProject.myBaseProject.interview.ai.model.GeneratedQuestion;
-import com.baseProject.myBaseProject.interview.ai.model.ScriptGenerationInput;
-import com.baseProject.myBaseProject.interview.ai.model.ScriptGenerationOutcome;
-import com.baseProject.myBaseProject.interview.generation.model.ValidatedQuestion;
-import com.baseProject.myBaseProject.interview.generation.model.ValidatedScript;
+import com.baseProject.myBaseProject.interview.ai.model.ScriptGenerationContract.GeneratedQuestion;
+import com.baseProject.myBaseProject.interview.ai.model.ScriptGenerationContract.ScriptGenerationInput;
+import com.baseProject.myBaseProject.interview.ai.model.ScriptGenerationContract.ScriptGenerationOutcome;
+import com.baseProject.myBaseProject.interview.generation.model.ScriptGenerationData.ValidatedQuestion;
+import com.baseProject.myBaseProject.interview.generation.model.ScriptGenerationData.ValidatedScript;
 import com.baseProject.myBaseProject.repository.projection.QuestionHistoryProjection;
 
 import lombok.RequiredArgsConstructor;
@@ -129,13 +129,6 @@ public class QuestionScriptValidator {
                 outcome.promptVersion().strip(),
                 outcome.tokenCost(),
                 outcome.durationMs());
-    }
-
-    public void validateDiversity(
-            List<ValidatedQuestion> questions,
-            List<Long> recentSessionIds,
-            List<QuestionHistoryProjection> history) {
-        diversityPolicy.validateDiversity(questions, recentSessionIds, history);
     }
 
     private static void validateMetadata(ScriptGenerationOutcome outcome) {

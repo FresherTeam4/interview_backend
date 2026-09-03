@@ -1,24 +1,25 @@
 package com.baseProject.myBaseProject.interview.generation;
 
+import com.baseProject.myBaseProject.config.properites.InterviewQuestionProperties;
 import com.baseProject.myBaseProject.entity.InterviewSession;
-import com.baseProject.myBaseProject.entity.ProfileProject;
-import com.baseProject.myBaseProject.entity.ProfileSkill;
+import com.baseProject.myBaseProject.entity.SessionContextSnapshot;
 import com.baseProject.myBaseProject.entity.SessionQuestion;
 import com.baseProject.myBaseProject.enums.SessionProcessingStage;
 import com.baseProject.myBaseProject.enums.SessionStatus;
-import com.baseProject.myBaseProject.exception.ScriptGenerationException;
 import com.baseProject.myBaseProject.exception.SessionInvalidStateException;
 import com.baseProject.myBaseProject.exception.SessionNotFoundException;
-import com.baseProject.myBaseProject.interview.generation.model.ScriptGenerationResult;
-import com.baseProject.myBaseProject.interview.generation.model.ValidatedQuestion;
-import com.baseProject.myBaseProject.interview.generation.model.ValidatedScript;
+import com.baseProject.myBaseProject.interview.ai.model.ScriptGenerationContract.ScriptGenerationInput;
+import com.baseProject.myBaseProject.interview.generation.model.ScriptGenerationData.GenerationPreparation;
+import com.baseProject.myBaseProject.interview.generation.model.ScriptGenerationData.ScriptGenerationResult;
+import com.baseProject.myBaseProject.interview.generation.model.ScriptGenerationData.ValidatedQuestion;
+import com.baseProject.myBaseProject.interview.generation.model.ScriptGenerationData.ValidatedScript;
 import com.baseProject.myBaseProject.interview.lifecycle.SessionStateMachine;
 import com.baseProject.myBaseProject.repository.CandidateProfileRepository;
 import com.baseProject.myBaseProject.repository.InterviewSessionRepository;
-import com.baseProject.myBaseProject.repository.ProfileProjectRepository;
-import com.baseProject.myBaseProject.repository.ProfileSkillRepository;
+import com.baseProject.myBaseProject.repository.SessionContextSnapshotRepository;
 import com.baseProject.myBaseProject.repository.SessionQuestionRepository;
 import com.baseProject.myBaseProject.repository.projection.QuestionHistoryProjection;
+import com.fasterxml.jackson.databind.JsonNode;
 
 import lombok.RequiredArgsConstructor;
 
@@ -28,27 +29,66 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
-import java.util.function.Function;
 import java.util.stream.Collectors;
 
+/** Transactional persistence boundary for the script-generation workflow. */
 @Component
 @RequiredArgsConstructor
-public class ScriptGenerationCommitter {
+public class ScriptGenerationStore {
 
     private static final int DIVERSITY_HISTORY_SESSION_LIMIT = 3;
     private static final String TRANSITION_REASON = "Generated interview script persisted";
 
+    private final InterviewQuestionProperties questionProperties;
     private final InterviewSessionRepository sessionRepository;
     private final CandidateProfileRepository profileRepository;
-    private final ProfileProjectRepository projectRepository;
-    private final ProfileSkillRepository skillRepository;
+    private final SessionContextSnapshotRepository snapshotRepository;
     private final SessionQuestionRepository questionRepository;
     private final SessionStateMachine stateMachine;
     private final QuestionDiversityPolicy diversityPolicy;
     private final Clock clock;
+
+    @Transactional(readOnly = true)
+    public GenerationPreparation prepare(Long sessionId, UUID processingToken) {
+        SessionContextSnapshot snapshot = snapshotRepository.findBySessionId(sessionId)
+                .orElseThrow(SessionNotFoundException::new);
+        InterviewSession session = snapshot.getSession();
+        verifyGenerationClaim(session, processingToken);
+        if (questionRepository.countBySessionId(sessionId) != 0) {
+            throw new SessionInvalidStateException();
+        }
+
+        Long profileId = session.getProfile().getId();
+        Set<Long> projectIds = extractIds(snapshot.getProfileJson(), "projects");
+        Set<Long> skillIds = extractIds(snapshot.getProfileJson(), "skills");
+
+        List<Long> recentSessionIds = recentSessionIds(
+                profileId, snapshot.getJobDescriptionHash(), sessionId);
+        List<QuestionHistoryProjection> history = history(recentSessionIds);
+        Set<String> excludedSignatures = history.stream()
+                .map(QuestionHistoryProjection::questionSignature)
+                .collect(Collectors.toUnmodifiableSet());
+        ScriptGenerationInput input = new ScriptGenerationInput(
+                session.getLanguageCode(),
+                session.getDifficulty(),
+                questionProperties.countFor(session.getDifficulty()),
+                UUID.fromString(session.getGenerationSeed()),
+                snapshot.getProfileJson(),
+                snapshot.getJobDescriptionText(),
+                excludedSignatures);
+        return new GenerationPreparation(
+                profileId,
+                snapshot.getJobDescriptionHash(),
+                input,
+                Set.copyOf(projectIds),
+                Set.copyOf(skillIds),
+                List.copyOf(recentSessionIds),
+                List.copyOf(history));
+    }
 
     @Transactional
     public ScriptGenerationResult commit(
@@ -68,34 +108,16 @@ public class ScriptGenerationCommitter {
             throw new SessionInvalidStateException();
         }
 
-        List<Long> recentSessionIds = questionRepository.findRecentComparableSessionIds(
-                expectedProfileId,
-                jobDescriptionHash,
-                sessionId,
-                PageRequest.of(0, DIVERSITY_HISTORY_SESSION_LIMIT));
-        List<QuestionHistoryProjection> history = recentSessionIds.isEmpty()
-                ? List.of()
-                : questionRepository.findHistoryBySessionIds(recentSessionIds);
+        List<Long> recentSessionIds = recentSessionIds(
+                expectedProfileId, jobDescriptionHash, sessionId);
         diversityPolicy.validateDiversity(
-                script.questions(),
-                recentSessionIds,
-                history);
+                script.questions(), recentSessionIds, history(recentSessionIds));
 
-        Map<Long, ProfileProject> projects = projectRepository
-                .findByProfileIdOrderByDisplayOrderAsc(expectedProfileId)
-                .stream()
-                .collect(Collectors.toMap(ProfileProject::getId, Function.identity()));
-        Map<Long, ProfileSkill> skills = skillRepository
-                .findByProfileIdOrderByDisplayOrderAsc(expectedProfileId)
-                .stream()
-                .collect(Collectors.toMap(ProfileSkill::getId, Function.identity()));
         Instant now = clock.instant();
         List<SessionQuestion> questions = script.questions().stream()
                 .map(question -> toEntity(
                         session,
                         question,
-                        projects,
-                        skills,
                         script.promptVersion(),
                         script.modelName(),
                         now))
@@ -104,9 +126,7 @@ public class ScriptGenerationCommitter {
         session.recordGeneratedQuestionCount(questions.size());
 
         InterviewSession readySession = stateMachine.completeScriptGeneration(
-                session,
-                processingToken,
-                TRANSITION_REASON);
+                session, processingToken, TRANSITION_REASON);
         return new ScriptGenerationResult(
                 sessionId,
                 questions.size(),
@@ -118,17 +138,29 @@ public class ScriptGenerationCommitter {
                 diversityRetried);
     }
 
+    private List<Long> recentSessionIds(
+            Long profileId,
+            String jobDescriptionHash,
+            Long excludedSessionId) {
+        return questionRepository.findRecentComparableSessionIds(
+                profileId,
+                jobDescriptionHash,
+                excludedSessionId,
+                PageRequest.of(0, DIVERSITY_HISTORY_SESSION_LIMIT));
+    }
+
+    private List<QuestionHistoryProjection> history(List<Long> sessionIds) {
+        return sessionIds.isEmpty()
+                ? List.of()
+                : questionRepository.findHistoryBySessionIds(sessionIds);
+    }
+
     private SessionQuestion toEntity(
             InterviewSession session,
             ValidatedQuestion question,
-            Map<Long, ProfileProject> projects,
-            Map<Long, ProfileSkill> skills,
             String promptVersion,
             String modelName,
             Instant now) {
-        ProfileProject project = resolveSource(
-                question.sourceProjectId(), projects, "source project");
-        ProfileSkill skill = resolveSource(question.sourceSkillId(), skills, "source skill");
         return SessionQuestion.create(
                 session,
                 new SessionQuestion.CreationData(
@@ -138,26 +170,14 @@ public class ScriptGenerationCommitter {
                         question.competency(),
                         question.difficulty(),
                         question.sourceType(),
-                        project,
-                        skill,
+                        question.sourceProjectId(),
+                        question.sourceSkillId(),
                         question.sourceJdExcerpt(),
                         question.questionSignature(),
                         UUID.fromString(session.getGenerationSeed()),
                         promptVersion,
                         modelName),
                 now);
-    }
-
-    private <T> T resolveSource(Long sourceId, Map<Long, T> available, String sourceName) {
-        if (sourceId == null) {
-            return null;
-        }
-        T source = available.get(sourceId);
-        if (source == null) {
-            throw ScriptGenerationException.invalidOutput(
-                    sourceName + " no longer belongs to the selected profile");
-        }
-        return source;
     }
 
     private void verifyGenerationClaim(InterviewSession session, UUID processingToken) {
@@ -169,5 +189,20 @@ public class ScriptGenerationCommitter {
             throw new IllegalStateException(
                     "Script generation claim is no longer owned, sessionId=" + session.getId());
         }
+    }
+
+    private static Set<Long> extractIds(JsonNode profile, String arrayField) {
+        Set<Long> ids = new HashSet<>();
+        JsonNode items = profile.path(arrayField);
+        if (!items.isArray()) {
+            return ids;
+        }
+        for (JsonNode item : items) {
+            JsonNode id = item.path("id");
+            if (id.isIntegralNumber() && id.canConvertToLong() && id.longValue() > 0) {
+                ids.add(id.longValue());
+            }
+        }
+        return ids;
     }
 }

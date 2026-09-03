@@ -16,7 +16,7 @@ import com.baseProject.myBaseProject.exception.CurrentPromptMismatchException;
 import com.baseProject.myBaseProject.exception.SessionInvalidStateException;
 import com.baseProject.myBaseProject.exception.SessionNotFoundException;
 import com.baseProject.myBaseProject.exception.SessionVersionConflictException;
-import com.baseProject.myBaseProject.interview.workflow.turn.InterviewNextTurnWorkflowDispatcher;
+import com.baseProject.myBaseProject.interview.workflow.InterviewWorkflowDispatcher;
 import com.baseProject.myBaseProject.repository.InterviewSessionRepository;
 import com.baseProject.myBaseProject.repository.SessionTurnRepository;
 
@@ -37,7 +37,7 @@ public class InterviewAnswerService {
     private final InterviewProperties properties;
     private final InterviewSessionRepository sessionRepository;
     private final SessionTurnRepository turnRepository;
-    private final InterviewNextTurnWorkflowDispatcher nextTurnWorkflowDispatcher;
+    private final InterviewWorkflowDispatcher workflowDispatcher;
     private final Clock clock;
 
     @Transactional
@@ -98,7 +98,10 @@ public class InterviewAnswerService {
                 clientTurnId,
                 now));
         sessionRepository.saveAndFlush(session);
-        nextTurnWorkflowDispatcher.dispatchAfterCommit(sessionId, processingToken);
+        workflowDispatcher.dispatchAfterCommit(
+                sessionId,
+                SessionProcessingStage.NEXT_TURN,
+                processingToken);
         return toTextAnswerAccepted(session, candidateTurn);
     }
 
@@ -153,8 +156,9 @@ public class InterviewAnswerService {
                         || session.getAwaitingAction() == AwaitingAction.ENGINE_RETRY)
                 && session.getProcessingStage() == SessionProcessingStage.NEXT_TURN
                 && session.getProcessingToken() != null) {
-            nextTurnWorkflowDispatcher.dispatchAfterCommit(
+            workflowDispatcher.dispatchAfterCommit(
                     session.getId(),
+                    SessionProcessingStage.NEXT_TURN,
                     UUID.fromString(session.getProcessingToken()));
         }
     }

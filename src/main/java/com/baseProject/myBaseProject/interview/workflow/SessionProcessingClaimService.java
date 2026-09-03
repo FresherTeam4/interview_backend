@@ -37,9 +37,6 @@ public class SessionProcessingClaimService {
         Objects.requireNonNull(stage);
         Objects.requireNonNull(token);
         Instant now = clock.instant();
-        Objects.requireNonNull(sessionId);
-        Objects.requireNonNull(stage);
-        Objects.requireNonNull(token);
         return sessionRepository.claimProcessing(
                         sessionId,
                         stage,
@@ -89,18 +86,6 @@ public class SessionProcessingClaimService {
                         normalizeStatusMessage(statusMessage),
                         now)
                 == 1;
-    }
-
-    @Transactional(readOnly = true)
-    public boolean ownsClaim(
-            Long sessionId,
-            SessionProcessingStage stage,
-            UUID token) {
-        Objects.requireNonNull(sessionId);
-        Objects.requireNonNull(stage);
-        Objects.requireNonNull(token);
-        return sessionRepository.existsByIdAndProcessingStageAndProcessingToken(
-                sessionId, stage, token.toString());
     }
 
     private String normalizeStatusMessage(String statusMessage) {

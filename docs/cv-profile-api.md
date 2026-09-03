@@ -561,22 +561,21 @@ Quy tắc xử lý từng bảng con:
 `display_order` = vị trí trong mảng, nên kéo thả sắp xếp lại cũng chỉ là một `PUT`.
 `is_user_edited` bật `true` khi hàng có thay đổi thật; hàng gửi lên y nguyên thì giữ cờ cũ.
 
-**Vì sao không xóa sạch rồi chèn lại**
+**Liên hệ với lịch sử interview**
 
-Cách đó ngắn hơn nhiều và `deleteAllByProfileId` đã viết sẵn cho cả 3 bảng con. Nhưng:
+Question lịch sử không còn giữ foreign key tới hàng profile đang sống:
 
 ```
-profile_projects (1) ──< (N) session_questions.source_project_id   [set null]
-profile_skills   (1) ──< (N) session_questions.source_skill_id     [set null]
+session_questions.source_project_snapshot_id ──> session_context_snapshots.profile_json.projects[*].id
+session_questions.source_skill_snapshot_id   ──> session_context_snapshots.profile_json.skills[*].id
 ```
 
-Xóa hàng cũ là `SET NULL` toàn bộ câu hỏi của mọi phiên đã phỏng vấn — mất sạch liên kết *"câu
-hỏi này sinh ra từ dự án nào"*, tức là mất chính thứ mà `schema-guide` gọi là điểm khác biệt
-của sản phẩm. Chỉ vì người dùng sửa một chữ trong `headline`.
+Hai cột source là ID logic nằm trong immutable snapshot, không có live FK tới `profile_projects`
+hoặc `profile_skills`. Vì vậy việc sửa hay xóa item trong profile hiện tại không làm mất nguồn của
+câu hỏi cũ. Engine dựng follow-up context bằng cách tìm ID này trong snapshot của chính session.
 
-Ở bản 2, luồng parse lại CV (chỗ duy nhất việc mất liên kết là đúng ý) **không còn tồn tại** —
-CV mới sinh hồ sơ mới. Nên `deleteAllByProfileId` ở cả 3 repository thành **không ai gọi**. Tôi
-sẽ nêu lại lúc làm chunk service để anh chọn bỏ hay giữ chờ tính năng "dựng lại hồ sơ từ CV cũ".
+Service vẫn update theo ID thay vì xóa sạch rồi insert lại để giữ ID ổn định trong response, giảm
+write không cần thiết và bảo toàn audit flag. Đây không còn là điều kiện để giữ lịch sử interview.
 
 `PUT` cũng đặt `source = USER_EDITED` (cột này chỉ để thống kê tỉ lệ AI bóc tách sai).
 

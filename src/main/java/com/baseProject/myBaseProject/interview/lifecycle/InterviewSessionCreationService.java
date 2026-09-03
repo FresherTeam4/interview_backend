@@ -21,11 +21,10 @@ import com.baseProject.myBaseProject.exception.ProfileNotFoundException;
 import com.baseProject.myBaseProject.exception.SessionLimitReachedException;
 import com.baseProject.myBaseProject.exception.SessionNotFoundException;
 import com.baseProject.myBaseProject.interview.lifecycle.model.NewInterviewSession;
-import com.baseProject.myBaseProject.interview.lifecycle.model.SessionEvent;
 import com.baseProject.myBaseProject.interview.lifecycle.SessionStateMachine;
 import com.baseProject.myBaseProject.interview.snapshot.ProfileSnapshotFactory;
+import com.baseProject.myBaseProject.interview.workflow.InterviewWorkflowDispatcher;
 import com.baseProject.myBaseProject.interview.workflow.SessionProcessingClaimService;
-import com.baseProject.myBaseProject.interview.workflow.script.InterviewScriptWorkflowDispatcher;
 import com.baseProject.myBaseProject.mapper.InterviewSessionMapper;
 import com.baseProject.myBaseProject.repository.CandidateProfileRepository;
 import com.baseProject.myBaseProject.repository.InterviewSessionRepository;
@@ -78,7 +77,7 @@ public class InterviewSessionCreationService {
     private final ProfileSnapshotFactory snapshotFactory;
     private final SessionStateMachine stateMachine;
     private final SessionProcessingClaimService claimService;
-    private final InterviewScriptWorkflowDispatcher workflowDispatcher;
+    private final InterviewWorkflowDispatcher workflowDispatcher;
     private final InterviewSessionMapper sessionMapper;
 
     @Transactional
@@ -148,13 +147,9 @@ public class InterviewSessionCreationService {
         InterviewSession created = stateMachine.create(command);
 
 
-        InterviewSession generating = stateMachine.transitionSystem(
+        InterviewSession generating = stateMachine.dispatchScriptGeneration(
                 created.getId(),
                 created.getVersion(),
-                SessionEvent.DISPATCH_SCRIPT_GENERATION,
-                null,
-                null,
-                null,
                 CREATE_TRANSITION_REASON);
 
         UUID processingToken = UUID.randomUUID();
@@ -172,7 +167,10 @@ public class InterviewSessionCreationService {
         InterviewSession claimedSession = sessionRepository.findByIdAndUserId(
                         generating.getId(), userId)
                 .orElseThrow(SessionNotFoundException::new);
-        workflowDispatcher.dispatchAfterCommit(claimedSession.getId(), processingToken);
+        workflowDispatcher.dispatchAfterCommit(
+                claimedSession.getId(),
+                SessionProcessingStage.SCRIPT_GENERATION,
+                processingToken);
         return sessionMapper.toAcceptedResponse(claimedSession);
     }
 

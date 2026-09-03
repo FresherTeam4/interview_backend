@@ -1,90 +1,122 @@
-Khi mới nhìn vào tính năng **Mock Interview**, chúng ta rất dễ nghĩ rằng nó chỉ đơn giản là:
-> *User bấm bắt đầu ➔ Hệ thống gọi AI sinh câu hỏi ➔ User gõ câu trả lời ➔ Hệ thống gửi câu trả lời lên AI xem có cần hỏi thêm (follow-up) không ➔ Hết buổi thì chấm điểm.*
+# Interview Engine — kiến trúc và luồng runtime
 
-Nếu chỉ làm theo kiểu đồ án hoặc prototype (gọi AI đồng bộ ngay trong Controller), toàn bộ phần này thực sự chỉ cần **2 - 3 file** và khoảng **300 dòng code**.
+> Phạm vi hiện tại: M03–M09. Script generation, text interview và adaptive follow-up đã có;
+> scoring, timeout và voice vẫn thuộc các module sau.
 
-Nhưng trong codebase này, **Interview Engine được thiết kế theo chuẩn Enterprise / Production-grade** (tương tự kiến trúc xử lý thanh toán của ngân hàng hoặc hệ thống đặt vé). Khi đó, bài toán không còn là *"gọi API của AI như thế nào"*, mà là: **Làm sao để hệ thống chạy ổn định khi mạng chập chờn, user thao tác liên tục, và AI trả lời thất thường.**
+Interview Engine cần xử lý nhiều hơn một lần gọi Gemini, nhưng không phải mọi phần của engine đều
+cần một class hoặc một tầng abstraction riêng. Kiến trúc hiện tại giữ các boundary quan trọng và
+gom những lớp chỉ chuyển tiếp hoặc lặp lại cùng một workflow.
 
-Dưới đây là lời giải thích chi tiết tại sao nó lại có nhiều file và code đến như vậy.
+## 1. Các nguyên tắc được giữ lại
 
----
+- Không giữ database transaction trong lúc chờ Gemini.
+- Database là nguồn sự thật cho session, script và conversation.
+- Tạo session dùng `Idempotency-Key`; submit answer dùng `clientTurnId`.
+- Mỗi mutation session kiểm tra ownership, version và trạng thái hợp lệ.
+- Context CV/JD được snapshot khi tạo session.
+- Source project/skill của question là ID logic trong snapshot, không phải quan hệ tới live profile.
+- AI output luôn được validate trước khi persist.
+- Follow-up tối đa hai lần trên một base question và năm lần trên toàn session.
+- Worker dùng processing claim; scheduler có thể khôi phục work sau queue rejection hoặc restart.
 
-### 1. Code đang phải xử lý những gì trong Interview Engine?
+## 2. Luồng tạo session và sinh script
 
-Interview Engine thực chất đang gánh **6 hệ thống con chạy ngầm**:
+```text
+POST /api/sessions
+  -> InterviewSessionCreationService
+       -> validate ownership/profile/JD/rubric/idempotency
+       -> SessionStateMachine tạo session + snapshot + transition log
+       -> claim SCRIPT_GENERATION
+       -> InterviewWorkflowDispatcher chạy sau commit
+            -> InterviewScriptGenerationWorker
+                 -> ScriptGenerationStore.prepare() [read-only transaction]
+                 -> InterviewQuestionGenerator.generate() [không có transaction]
+                 -> QuestionScriptValidator
+                 -> ScriptGenerationStore.commit() [write transaction]
+                      -> persist questions
+                      -> session READY
+```
 
-#### ① Hệ thống chống nghẽn Connection Database (Non-blocking Leased Claim Pattern)
-* **Vấn đề**: Gọi Gemini sinh cả bộ câu hỏi có thể mất **5 – 15 giây**. Nếu bạn mở một `@Transactional` trong Database rồi đứng chờ Gemini trả lời, Database Connection Pool (HikariCP) sẽ bị chiếm giữ suốt 15 giây đó. Chỉ cần 20 người cùng phỏng vấn, toàn bộ server sẽ sập vì hết connection pool.
-* **Code đã xử lý**:
-  - `ScriptGenerationPreparationReader`: Mở transaction đọc nhanh dữ liệu rồi **đóng kết nối ngay**.
-  - `InterviewQuestionGenerator`: Gọi Gemini hoàn toàn **bên ngoài Database Transaction**.
-  - `ScriptGenerationCommitter`: Khi Gemini trả lời xong, mới mở transaction ghi kết quả vào DB.
-  - `SessionProcessingClaimService`: Cơ chế "thuê quyền xử lý" (lease token). Nếu worker đang xử lý mà bị crash, `InterviewWorkflowRecoveryJob` sẽ tự động tìm các session bị "bỏ rơi" để chạy tiếp.
+`ScriptGenerationStore` là persistence boundary của use case. Việc một class có cả `prepare` và
+`commit` không làm transaction kéo dài qua Gemini: hai method được gọi riêng qua Spring bean proxy,
+còn provider call nằm giữa hai method.
 
-#### ② Máy trạng thái nghiêm ngặt (Pessimistic Lock & State Machine)
-* **Vấn đề**: User có thể bấm đúp chuột (double click), F5 trang web, mở 2 tab cùng lúc, hoặc mất mạng rồi submit lại.
-* **Code đã xử lý** (`lifecycle`):
-  - Kiểm soát luồng trạng thái nghiêm ngặt: `CREATED` ➔ `SCRIPT_GENERATING` ➔ `READY` ➔ `IN_PROGRESS` (từng turn) ➔ `PAUSED` ⇄ `RESUMED` ➔ `SCORING` / `FAILED`.
-  - Cơ chế **Idempotency Key** và **Client Turn ID**: Khi user gửi lại câu trả lời cũ do lag mạng, hệ thống nhận biết được ngay và không tạo ra câu hỏi trùng lặp.
-  - Sử dụng khóa bi quan (`SELECT ... FOR UPDATE`) và kiểm tra version (`expectedVersion`) để ngăn chặn việc ghi đè trạng thái.
+Khi persist question, `source_project_snapshot_id` và `source_skill_snapshot_id` chỉ định item trong
+`session_context_snapshots.profile_json`. Không có foreign key từ hai cột này tới profile hiện tại,
+nên user sửa hoặc xóa project/skill sau đó không làm thay đổi ý nghĩa của question lịch sử.
 
-#### ③ Cơ chế đóng băng dữ liệu (Snapshotting)
-* **Vấn đề**: User tạo phỏng vấn dựa trên CV và JD hiện tại. Nhưng ngày mai, user vào trang Profile sửa lại toàn bộ kinh nghiệm, hoặc xóa một Project trong CV.
-* **Code đã xử lý** (`snapshot`):
-  - Khi tạo phỏng vấn, toàn bộ thông tin Profile, Project, Skill, JD và cả phiên bản Rubric (tiêu chí chấm điểm) đều được chụp ảnh lại (`SessionContextSnapshot`).
-  - Toàn bộ buổi phỏng vấn diễn ra dựa trên "ảnh chụp" bất biến đó, độc lập hoàn toàn với việc người dùng chỉnh sửa Profile sau này.
+## 3. Luồng submit answer và sinh turn tiếp theo
 
-#### ④ Kiểm định AI & Chống lặp câu hỏi (Diversity & Hallucination Guardrails)
-* **Vấn đề**:
-  - AI thường xuyên bị "ảo giác" (hallucination): tự bịa ra một Project ID không hề có trong CV của ứng viên.
-  - AI thường lặp lại câu hỏi: Nếu phỏng vấn Java 2 lần liên tiếp, AI rất hay hỏi lại đúng những câu quen thuộc (như *"OOP là gì?", "HashMap hoạt động thế nào?"*).
-* **Code đã xử lý** (`generation`, `QuestionScriptValidator`, `QuestionDiversityPolicy`):
-  - Băm nhỏ câu hỏi thành chữ ký SHA-256 (`QuestionSignatureFactory`).
-  - So sánh với lịch sử 3 buổi phỏng vấn gần nhất: **Bắt buộc ít nhất 70% câu hỏi phải có chữ ký khác biệt** và không được trùng nội dung đã chuẩn hóa.
-  - Nếu AI vi phạm độ đa dạng, hệ thống **tự động loại bỏ và yêu cầu AI sinh lại lần 2** mà user không hề hay biết.
-  - Kiểm tra tính xác thực: Mọi câu hỏi gắn nhãn `CV_PROJECT` hay `CV_SKILL` đều phải khớp chính xác với `id` có trong snapshot.
+```text
+POST /api/sessions/{id}/answers
+  -> InterviewAnswerService
+       -> lock session, validate version/current prompt/clientTurnId
+       -> persist candidate turn
+       -> claim NEXT_TURN
+       -> InterviewWorkflowDispatcher chạy sau commit
+            -> InterviewNextTurnWorker
+                 -> NextTurnStore.prepare() [read-only transaction]
+                 -> InterviewFollowUpDecider.decide() [không có transaction]
+                 -> FollowUpDecisionValidator
+                 -> NextTurnStore.commit() [write transaction]
+                      -> follow-up, next base question hoặc SCORING
+```
 
-#### ⑤ Quản lý ngân sách câu hỏi và Context Bounded (`turn`)
-* **Vấn đề**: Nếu người dùng trả lời mập mờ, AI có thể liên tục hỏi follow-up vô tận, làm tốn token và làm buổi phỏng vấn kéo dài quá lâu. Nếu nhét toàn bộ lịch sử trò chuyện vào prompt, độ dài context sẽ bùng nổ.
-* **Code đã xử lý** (`turn`):
-  - Giới hạn cứng ngân sách: Tối đa 2 câu hỏi follow-up cho 1 câu hỏi chính, tối đa 6 follow-up cho toàn bộ buổi phỏng vấn.
-  - **Server-side Override**: Nếu AI đòi hỏi follow-up nhưng hệ thống thấy đã hết "ngân sách", hệ thống sẽ tự động ghi đè quyết định của AI thành `NEXT_QUESTION`.
-  - Cắt tỉa context: Chỉ gửi các lượt trao đổi của câu hỏi hiện tại cho AI, không gửi toàn bộ lịch sử của cả buổi phỏng vấn.
+Server luôn kiểm tra lại processing token và pending candidate turn khi commit. Vì vậy kết quả của
+một worker đã mất lease không thể ghi đè kết quả của worker mới.
 
-#### ⑥ Xử lý lỗi nhà cung cấp mạng/AI (Fault Tolerance)
-* **Vấn đề**: Gemini có thể trả về HTTP 429 (Rate limit), 408 (Timeout), 503 (Server error), hoặc trả về chuỗi Markdown có bọc ` ```json ` làm vỡ trình parse JSON.
-* **Code đã xử lý** (`ai/gemini`):
-  - Bóc tách code fence tự động (`stripCodeFences`).
-  - Phân loại lỗi chính xác (`GeminiFailureClassifier`): Lỗi nào là tạm thời (để worker tự lên lịch retry), lỗi nào là vĩnh viễn (sai API key, prompt không hợp lệ).
-  - Chuẩn hóa JSON Schema sang OpenAPI Schema tương thích riêng với Spring AI và Google GenAI.
+## 4. Workflow và retry
 
----
+`InterviewWorkflowDispatcher` dùng chung executor/scheduler cho script generation và next-turn.
+`InterviewWorkflowCoordinator` dùng chung logic:
 
-### 2. Tại sao đã tách CV và JD Extractor rồi mà Interview Engine vẫn dài?
+1. Kiểm tra worker còn sở hữu claim.
+2. Kiểm tra số attempt.
+3. Release claim và đặt `nextRetryAt` nếu lỗi retryable.
+4. Chuyển session sang `FAILED` nếu hết retry hoặc lỗi permanent.
 
-CV Extractor và JD Extractor chỉ giải quyết khâu: **"File PDF / Text thô ➔ JSON có cấu trúc"** (đây là tầng chuẩn bị dữ liệu đầu vào).
+Recovery job chỉ tìm ID ứng viên rồi atomic-claim từng session. Nó không giữ transaction trong khi
+gọi AI và không phụ thuộc queue trong memory để tồn tại qua application restart.
 
-Còn Interview Engine là **trái tim điều hành toàn bộ một phiên phỏng vấn tương tác nhiều vòng (multi-turn interactive flow)**:
-- Nó không chỉ đọc text một lần, mà nó quản lý **trạng thái sống** của người dùng theo thời gian thực.
-- Nó phải xử lý việc người dùng tạm dừng (pause), tiếp tục (resume), trả lời từng câu, sinh câu hỏi phụ, chuyển câu hỏi tiếp theo, và kiểm soát worker chạy bất đồng bộ (async).
+## 5. State hiện tại
 
-Do đó, lượng code lớn trong Interview Engine **không nằm ở phần trích xuất thông tin**, mà nằm ở **State Management, Concurrency, Async Coordination và AI Guardrails**.
+Public contract vẫn giữ hai trường:
 
----
+- `status`: lifecycle lớn của session.
+- `awaitingAction`: hành động frontend cần thực hiện.
 
-### 3. Có chỗ nào bị "thừa" không?
+Các transition đang được sử dụng ở M09:
 
-Câu trả lời phụ thuộc vào **mục tiêu của dự án**:
+```text
+CREATED -> SCRIPT_GENERATING -> READY -> IN_PROGRESS -> SCORING
+                                  |           |
+                                  |           +-> PAUSED -> IN_PROGRESS
+                                  +-> FAILED <-+  (khi AI workflow thất bại)
+```
 
-| Thành phần | Nếu là bài toán Prototype / Hackathon | Nếu là bài toán Production / Doanh nghiệp thực tế |
-| :--- | :--- | :--- |
-| **Worker / Leased Claim** (`workflow`) | **Có thể coi là thừa**: Có thể gọi AI trực tiếp ngay trong Controller. | **Rất cần thiết**: Ngăn chặn sập connection pool của Database và treo request của người dùng khi AI phản hồi chậm. |
-| **Diversity Policy & SHA-256** (`generation`) | **Có thể coi là thừa**: Cứ để AI sinh tự nhiên, lặp câu hỏi cũng được. | **Rất cần thiết**: Tránh trải nghiệm người dùng tệ hại khi phỏng vấn lại mà cứ gặp các câu hỏi y hệt buổi trước. |
-| **Snapshot Profile & Rubric** (`snapshot`) | **Có thể coi là thừa**: Cứ lấy trực tiếp từ bảng Profile. | **Rất cần thiết**: Đảm bảo tính toàn vẹn dữ liệu khi người dùng chỉnh sửa hồ sơ giữa buổi phỏng vấn. |
-| **Server-side Budget Override** (`turn`) | **Có thể coi là thừa**: Tin tưởng hoàn toàn vào câu trả lời của AI. | **Rất cần thiết**: Kiểm soát chi phí gọi AI (Token cost) và chặn việc AI bị kẹt vào một vòng lặp hỏi dồn dập. |
+`SCORING` hiện là điểm bàn giao cho M10; chưa có scoring worker nên chưa chuyển tiếp sang
+`COMPLETED`. Các state dành cho timeout, report và voice trong schema/API contract chưa đồng nghĩa
+với việc các module đó đã được triển khai.
 
-**Về mặt kỹ thuật**: 
-Hiện tại trong package `interview` **không có dòng code nào là dead code (code rác/thừa không dùng đến)**. Từng class đều phục vụ một trách nhiệm duy nhất (Single Responsibility Principle) theo đúng kiến trúc phân lớp sạch sẽ.
+## 6. Trách nhiệm của các class chính
 
-### Tóm lại
-Lý do code dài và nhiều file không phải vì tính năng phỏng vấn bị viết cồng kềnh, mà là vì **engine này đã được cài đặt sẵn tất cả các cơ chế bảo vệ (resilience, anti-cheating, anti-hallucination, concurrency safety, async worker)** để có thể chịu tải và chạy ổn định trên môi trường thực tế, thay vì chỉ là một ứng dụng wrapper API Gemini đơn giản.
+| Class | Trách nhiệm |
+|---|---|
+| `SessionStateMachine` | Lock session, kiểm tra transition, cập nhật session và transition log |
+| `ScriptGenerationStore` | Read/commit transaction của script generation |
+| `NextTurnStore` | Read/commit transaction của adaptive next-turn |
+| `InterviewWorkflowDispatcher` | Dispatch-after-commit, executor và delayed retry |
+| `InterviewWorkflowCoordinator` | Claim inspection, retry và terminal failure |
+| `QuestionScriptValidator` | Validate question count, source, content và signature |
+| `QuestionDiversityPolicy` | Chặn câu trùng và enforce ngưỡng 70% signature mới |
+| `FollowUpDecisionValidator` | Validate decision, evidence quote và server-side budget |
+| Gemini adapters | Prompt/schema, provider call, parse response và phân loại lỗi |
+
+## 7. Những phần chưa triển khai
+
+- M10: scoring và report.
+- M11: inactivity timeout 24 giờ.
+- M12–M15: voice attempt, STT, transcript confirmation và TTS.
+- M16: hardening và release verification.
+
+Không nên mô tả các nhánh này là behavior đang chạy cho tới khi module tương ứng được hoàn thành.

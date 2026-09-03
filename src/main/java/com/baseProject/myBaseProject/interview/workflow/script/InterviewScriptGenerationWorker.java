@@ -1,6 +1,7 @@
 package com.baseProject.myBaseProject.interview.workflow.script;
 
 import com.baseProject.myBaseProject.interview.generation.InterviewScriptGenerationService;
+import com.baseProject.myBaseProject.interview.workflow.InterviewWorkflowCoordinator;
 
 import com.baseProject.myBaseProject.exception.ScriptGenerationException;
 
@@ -20,20 +21,20 @@ import java.util.UUID;
 public class InterviewScriptGenerationWorker {
 
     private final InterviewScriptGenerationService generationService;
-    private final InterviewScriptWorkCoordinator workCoordinator;
+    private final InterviewWorkflowCoordinator workflowCoordinator;
 
     public Optional<Instant> process(Long sessionId, UUID processingToken) {
         long startedNanos = System.nanoTime();
         String outcome = "ignored";
         try {
-            InterviewScriptWorkCoordinator.ClaimInspection inspection =
-                    workCoordinator.inspect(sessionId, processingToken);
-            if (inspection == InterviewScriptWorkCoordinator.ClaimInspection.LOST) {
+            InterviewWorkflowCoordinator.ClaimInspection inspection =
+                    workflowCoordinator.inspectScript(sessionId, processingToken);
+            if (inspection == InterviewWorkflowCoordinator.ClaimInspection.LOST) {
                 return Optional.empty();
             }
-            if (inspection == InterviewScriptWorkCoordinator.ClaimInspection.ATTEMPTS_EXHAUSTED) {
+            if (inspection == InterviewWorkflowCoordinator.ClaimInspection.ATTEMPTS_EXHAUSTED) {
                 outcome = "failed";
-                return retryAt(workCoordinator.handleFailure(
+                return retryAt(workflowCoordinator.handleScriptFailure(
                         sessionId,
                         processingToken,
                         ScriptGenerationException.unexpected(
@@ -45,8 +46,8 @@ public class InterviewScriptGenerationWorker {
             outcome = "ready";
             return Optional.empty();
         } catch (ScriptGenerationException failure) {
-            InterviewScriptWorkCoordinator.FailureOutcome failureOutcome =
-                    workCoordinator.handleFailure(sessionId, processingToken, failure);
+            InterviewWorkflowCoordinator.FailureOutcome failureOutcome =
+                    workflowCoordinator.handleScriptFailure(sessionId, processingToken, failure);
             outcome = failureOutcome.ignored()
                     ? "ignored"
                     : failureOutcome.failed() ? "failed" : "retry_scheduled";
@@ -58,8 +59,8 @@ public class InterviewScriptGenerationWorker {
                     outcome);
             return retryAt(failureOutcome);
         } catch (RuntimeException unexpected) {
-            InterviewScriptWorkCoordinator.FailureOutcome failureOutcome =
-                    workCoordinator.handleFailure(
+            InterviewWorkflowCoordinator.FailureOutcome failureOutcome =
+                    workflowCoordinator.handleScriptFailure(
                             sessionId,
                             processingToken,
                             ScriptGenerationException.unexpected(unexpected));
@@ -81,7 +82,7 @@ public class InterviewScriptGenerationWorker {
     }
 
     private Optional<Instant> retryAt(
-            InterviewScriptWorkCoordinator.FailureOutcome failureOutcome) {
+            InterviewWorkflowCoordinator.FailureOutcome failureOutcome) {
         return Optional.ofNullable(failureOutcome.retryAt());
     }
 }

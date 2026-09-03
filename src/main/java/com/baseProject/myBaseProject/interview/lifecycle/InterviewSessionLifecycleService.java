@@ -10,8 +10,6 @@ import com.baseProject.myBaseProject.enums.SessionStatus;
 import com.baseProject.myBaseProject.enums.TurnRole;
 import com.baseProject.myBaseProject.exception.SessionInvalidStateException;
 import com.baseProject.myBaseProject.exception.SessionNotFoundException;
-import com.baseProject.myBaseProject.interview.lifecycle.model.SessionEvent;
-import com.baseProject.myBaseProject.interview.lifecycle.SessionStateMachine;
 import com.baseProject.myBaseProject.mapper.InterviewSessionMapper;
 import com.baseProject.myBaseProject.repository.InterviewSessionRepository;
 import com.baseProject.myBaseProject.repository.SessionQuestionRepository;
@@ -43,12 +41,10 @@ public class InterviewSessionLifecycleService {
             Long userId,
             Long sessionId,
             SessionVersionRequest request) {
-        InterviewSession started = stateMachine.transitionUser(
+        InterviewSession started = stateMachine.start(
                 userId,
                 sessionId,
                 request.expectedVersion(),
-                SessionEvent.START,
-                null,
                 START_TRANSITION_REASON);
         SessionQuestion firstQuestion = questionRepository.findBySessionIdAndOrdinal(
                         sessionId, (short) 1)
@@ -69,12 +65,10 @@ public class InterviewSessionLifecycleService {
             Long userId,
             Long sessionId,
             SessionVersionRequest request) {
-        InterviewSession paused = stateMachine.transitionUser(
+        InterviewSession paused = stateMachine.pause(
                 userId,
                 sessionId,
                 request.expectedVersion(),
-                SessionEvent.PAUSE,
-                null,
                 PAUSE_TRANSITION_REASON);
         return sessionMapper.toResponse(
                 paused,
@@ -87,11 +81,10 @@ public class InterviewSessionLifecycleService {
             Long sessionId,
             SessionVersionRequest request) {
         AwaitingAction restoredAction = resolveAwaitingAction(userId, sessionId);
-        InterviewSession resumed = stateMachine.transitionUser(
+        InterviewSession resumed = stateMachine.resume(
                 userId,
                 sessionId,
                 request.expectedVersion(),
-                SessionEvent.RESUME,
                 restoredAction,
                 RESUME_TRANSITION_REASON);
         return sessionMapper.toResponse(

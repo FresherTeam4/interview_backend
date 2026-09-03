@@ -4,10 +4,10 @@ import com.baseProject.myBaseProject.config.InterviewAiConfig;
 import com.baseProject.myBaseProject.config.properites.AiProperties;
 import com.baseProject.myBaseProject.config.properites.InterviewAiProperties;
 import com.baseProject.myBaseProject.exception.FollowUpDecisionException;
-import com.baseProject.myBaseProject.interview.ai.model.FollowUpDecisionInput;
-import com.baseProject.myBaseProject.interview.ai.model.FollowUpDecisionOutcome;
-import com.baseProject.myBaseProject.interview.ai.model.FollowUpTurnContext;
-import com.baseProject.myBaseProject.interview.ai.model.GeneratedFollowUpDecision;
+import com.baseProject.myBaseProject.interview.ai.model.FollowUpDecisionContract.FollowUpDecisionInput;
+import com.baseProject.myBaseProject.interview.ai.model.FollowUpDecisionContract.FollowUpDecisionOutcome;
+import com.baseProject.myBaseProject.interview.ai.model.FollowUpDecisionContract.FollowUpTurnContext;
+import com.baseProject.myBaseProject.interview.ai.model.FollowUpDecisionContract.GeneratedFollowUpDecision;
 import com.baseProject.myBaseProject.interview.ai.port.InterviewFollowUpDecider;
 
 import lombok.extern.slf4j.Slf4j;
