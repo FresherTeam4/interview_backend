@@ -96,8 +96,7 @@ public class InterviewSession {
             name = "creation_request_hash",
             nullable = false,
             length = 64,
-            updatable = false,
-            columnDefinition = "CHAR(64)")
+            updatable = false)
     private String creationRequestHash;
 
     @Enumerated(EnumType.STRING)

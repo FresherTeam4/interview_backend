@@ -21,6 +21,6 @@ public interface UserAccountRepository extends JpaRepository<UserAccount, Long> 
     Optional<UserAccount> findByGoogleId(String googleId);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @Query("select account from UserAccount account where account.id = :id")
+    @Query("SELECT account FROM UserAccount account WHERE account.id = :id")
     Optional<UserAccount> findByIdForUpdate(@Param("id") Long id);
 }

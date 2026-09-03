@@ -138,19 +138,23 @@ public class InterviewSessionServiceImpl implements InterviewSessionService {
         String languageCode = request.languageCode().strip().toLowerCase(Locale.ROOT);
         String requestHash = requestHash(request, languageCode);
 
+        // get user id for update
         UserAccount user = userAccountRepository.findByIdForUpdate(userId)
-                .orElseThrow(() -> new IllegalStateException(
-                        "Authenticated user no longer exists, userId=" + userId));
+                .orElseThrow(() -> new IllegalStateException("Authenticated user no longer exists, userId=" + userId));
+
         InterviewSession existing = sessionRepository
                 .findByUserIdAndCreationKey(userId, normalizedKey)
                 .orElse(null);
+
         if (existing != null) {
             if (!existing.getCreationRequestHash().equals(requestHash)) {
                 throw new IdempotencyKeyReusedException();
             }
+
             return sessionMapper.toAcceptedResponse(existing);
         }
 
+        // check profile and job description must be belong to user
         CandidateProfile profile = profileRepository.findActiveOwnedByIdForUpdate(
                         request.profileId(), userId)
                 .orElseThrow(ProfileNotFoundException::new);
@@ -194,6 +198,7 @@ public class InterviewSessionServiceImpl implements InterviewSessionService {
                 null,
                 null,
                 CREATE_TRANSITION_REASON);
+
         UUID processingToken = UUID.randomUUID();
         boolean claimed = claimService.claim(
                 generating.getId(),

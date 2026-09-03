@@ -21,12 +21,12 @@ public interface CandidateProfileRepository extends JpaRepository<CandidateProfi
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("""
-            select profile
-            from CandidateProfile profile
-            join profile.cvDocument document
-            where profile.id = :profileId
-              and profile.user.id = :userId
-              and document.active = true
+            SELECT profile
+            FROM CandidateProfile profile
+            JOIN profile.cvDocument document
+            WHERE profile.id = :profileId
+              AND profile.user.id = :userId
+              AND document.active = true
             """)
     Optional<CandidateProfile> findActiveOwnedByIdForUpdate(
             @Param("profileId") Long profileId,

@@ -71,6 +71,7 @@ public class InterviewSessionController {
             @Valid @RequestBody CreateInterviewSessionRequest request) {
         InterviewSessionAcceptedResponse response = interviewSessionService.create(
                 currentUser.getId(), idempotencyKey, request);
+
         return accepted(response);
     }
 
@@ -132,12 +133,6 @@ public class InterviewSessionController {
 
     @PostMapping("/{sessionId}/answers")
     @Operation(summary = "Lưu câu trả lời text và để engine quyết định follow-up hoặc câu tiếp theo")
-    @ApiResponses({
-            @ApiResponse(responseCode = "202", description = "Câu trả lời đã được lưu"),
-            @ApiResponse(responseCode = "400", description = "Payload câu trả lời không hợp lệ"),
-            @ApiResponse(responseCode = "404", description = "Không tìm thấy session của user"),
-            @ApiResponse(responseCode = "409", description = "Version, prompt hoặc state xung đột")
-    })
     public ResponseEntity<TextAnswerAcceptedResponse> submitTextAnswer(
             @CurrentUser CustomUserDetails currentUser,
             @PathVariable Long sessionId,
