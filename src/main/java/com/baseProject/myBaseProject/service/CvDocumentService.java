@@ -16,6 +16,8 @@ public interface CvDocumentService {
 
     CvFileUrlResponse fileUrl(Long userId, Long cvId);
 
+    CvDocumentResponse retryParse(Long userId, Long cvId);
+
     record CvUploadResult(CvDocumentResponse document, boolean reusedExisting) {
     }
 }

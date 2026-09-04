@@ -116,6 +116,26 @@ public class CvDocumentServiceImpl implements CvDocumentService {
         return new CvFileUrlResponse(url, expiresAt);
     }
 
+    @Override
+    public CvDocumentResponse retryParse(Long userId, Long cvId) {
+        CvDocument document = requireActiveDocument(userId, cvId);
+
+        switch (document.getStatus()) {
+            case FAILED -> {
+                // Commit trạng thái UPLOADED trước khi executor nhận job để claim đọc được dữ liệu mới.
+                document.prepareForRetry();
+                document = cvDocumentRepository.save(document);
+                submitProcessing(document);
+            }
+            case UPLOADED, PARSING ->
+                    throw new DomainException(ErrorCode.CV_PARSE_IN_PROGRESS);
+            case PARSED ->
+                    throw new DomainException(ErrorCode.CV_PARSE_NOT_RETRYABLE);
+        }
+
+        return cvDocumentMapper.toResponse(document, null);
+    }
+
     private CvUploadResult reuse(Long userId, CvDocument document) {
         if (!document.isActive()) {
             ensureUploadCapacity(userId);

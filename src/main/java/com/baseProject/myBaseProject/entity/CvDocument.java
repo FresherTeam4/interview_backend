@@ -104,6 +104,11 @@ public class CvDocument {
         active = true;
     }
 
+    public void prepareForRetry() {
+        status = CvDocumentStatus.UPLOADED;
+        statusMessage = null;
+    }
+
     public void markParsing() {
         status = CvDocumentStatus.PARSING;
         statusMessage = null;

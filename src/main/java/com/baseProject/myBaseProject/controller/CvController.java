@@ -19,6 +19,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestPart;
+import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -65,5 +66,13 @@ public class CvController {
     public CvFileUrlResponse fileUrl(@CurrentUser CustomUserDetails currentUser,
                                      @PathVariable Long cvId) {
         return cvDocumentService.fileUrl(currentUser.getId(), cvId);
+    }
+
+    @PostMapping("/{cvId}/parse")
+    @ResponseStatus(HttpStatus.ACCEPTED)
+    @Operation(summary = "Retry parsing a failed CV")
+    public CvDocumentResponse retryParse(@CurrentUser CustomUserDetails currentUser,
+                                         @PathVariable Long cvId) {
+        return cvDocumentService.retryParse(currentUser.getId(), cvId);
     }
 }
