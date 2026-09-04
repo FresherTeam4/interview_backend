@@ -17,4 +17,12 @@ public final class Message {
     public static final String GOOGLE_EMAIL_NOT_VERIFIED = "This Google account has no verified email";
     public static final String GOOGLE_LOGIN_NOT_CONFIGURED =
             "Google login is not configured on this server";
+
+    // AI & CV parsing
+    public static final String AI_SERVICE_UNAVAILABLE = "AI service is temporarily unavailable";
+    public static final String AI_TIMEOUT = "AI service request timed out";
+    public static final String AI_MALFORMED_OUTPUT = "AI service returned invalid or unparseable output";
+    public static final String AI_CONFIG_ERROR = "AI service is not configured properly";
+    public static final String AI_ERROR = "AI service execution failed";
+    public static final String CV_PARSE_FAILED = "Failed to parse CV content";
 }

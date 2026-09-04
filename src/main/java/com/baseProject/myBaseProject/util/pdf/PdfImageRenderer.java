@@ -1,5 +1,7 @@
 package com.baseProject.myBaseProject.util.pdf;
 
+import com.baseProject.myBaseProject.exception.DomainException;
+import com.baseProject.myBaseProject.exception.ErrorCode;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.pdmodel.PDDocument;
@@ -21,11 +23,11 @@ public class PdfImageRenderer {
     private static final int DEFAULT_DPI = 150;
     private static final int MAX_PAGES = 5; // giới hạn số trang đọc tối đa
 
-    public List<byte[]> renderPagesAsImages(byte[] pdfBytes) throws IOException {
+    public List<byte[]> renderPagesAsImages(byte[] pdfBytes) {
         return renderPagesAsImages(pdfBytes, MAX_PAGES, DEFAULT_DPI);
     }
 
-    public List<byte[]> renderPagesAsImages(byte[] pdfBytes, int maxPages, int dpi) throws IOException {
+    public List<byte[]> renderPagesAsImages(byte[] pdfBytes, int maxPages, int dpi) {
         if (pdfBytes == null || pdfBytes.length == 0) {
             return List.of();
         }
@@ -45,6 +47,9 @@ public class PdfImageRenderer {
                     pageImages.add(baos.toByteArray());
                 }
             }
+        } catch (IOException e) {
+            log.error("Failed to render PDF bytes to images", e);
+            throw new DomainException(ErrorCode.CV_PARSE_FAILED, "Failed to render PDF document: " + e.getMessage(), e);
         }
 
         return pageImages;
