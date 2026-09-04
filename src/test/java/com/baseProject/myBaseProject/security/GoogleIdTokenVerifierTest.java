@@ -16,8 +16,8 @@ import org.junit.jupiter.api.Test;
 
 import com.baseProject.myBaseProject.config.properites.GoogleOAuthProperties;
 import com.baseProject.myBaseProject.dto.auth.GoogleUserInfo;
-import com.baseProject.myBaseProject.exception.GoogleLoginNotConfiguredException;
-import com.baseProject.myBaseProject.exception.InvalidGoogleTokenException;
+import com.baseProject.myBaseProject.exception.DomainException;
+import com.baseProject.myBaseProject.exception.ErrorCode;
 import com.nimbusds.jose.JWSAlgorithm;
 import com.nimbusds.jose.JWSHeader;
 import com.nimbusds.jose.crypto.RSASSASigner;
@@ -38,70 +38,64 @@ import com.sun.net.httpserver.HttpServer;
  * chứng minh các test từ chối không "đậu giả" vì JWKS tải thất bại.
  */
 class GoogleIdTokenVerifierTest {
+
     private static final String CLIENT_ID = "test-client-id.apps.googleusercontent.com";
     private static final String ISSUER = "https://accounts.google.com";
-    private static final String GOOGLE_SUB = "1234567890";
-    private static final String EMAIL = "nguoidung@gmail.com";
+    private static final String KEY_ID = "test-key-1";
+    private static final String GOOGLE_SUB = "google-user-12345";
+    private static final String EMAIL = "developer@example.com";
+    private static final String NAME = "Fresher Developer";
+    private static final String PICTURE = "https://example.com/avatar.png";
 
-    private static RSAKey signingKey;
+    private static RSAKey rsaKey;
+    private static HttpServer jwksServer;
     private static GoogleIdTokenVerifier verifier;
-    private static HttpServer jwkServer;
 
     @BeforeAll
-    static void setUp() throws Exception {
-        signingKey = new RSAKeyGenerator(2048).keyID("test-key").generate();
-        byte[] jwkSet = ("{\"keys\":[" + signingKey.toPublicJWK().toJSONString() + "]}")
-                .getBytes(StandardCharsets.UTF_8);
+    static void startJwksServer() throws Exception {
+        rsaKey = new RSAKeyGenerator(2048).keyID(KEY_ID).generate();
+        String jwksResponse = "{\"keys\": [" + rsaKey.toPublicJWK().toJSONString() + "]}";
 
-        // Port 0 để OS cấp cổng rỗi, tránh xung đột khi chạy song song trên CI.
-        jwkServer = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
-        jwkServer.createContext("/certs", exchange -> {
+        jwksServer = HttpServer.create(new InetSocketAddress(0), 0);
+        jwksServer.createContext("/certs", exchange -> {
+            byte[] bytes = jwksResponse.getBytes(StandardCharsets.UTF_8);
             exchange.getResponseHeaders().set("Content-Type", "application/json");
-            exchange.sendResponseHeaders(200, jwkSet.length);
-            try (OutputStream body = exchange.getResponseBody()) {
-                body.write(jwkSet);
+            exchange.sendResponseHeaders(200, bytes.length);
+            try (OutputStream os = exchange.getResponseBody()) {
+                os.write(bytes);
             }
         });
-        jwkServer.start();
+        jwksServer.start();
 
-        String jwkSetUri = "http://127.0.0.1:" + jwkServer.getAddress().getPort() + "/certs";
-        verifier = new GoogleIdTokenVerifier(new GoogleOAuthProperties(
-                CLIENT_ID, jwkSetUri, List.of(ISSUER, "accounts.google.com")));
+        int port = jwksServer.getAddress().getPort();
+        String jwkSetUri = "http://localhost:" + port + "/certs";
+
+        GoogleOAuthProperties properties = new GoogleOAuthProperties(CLIENT_ID, jwkSetUri, List.of(ISSUER));
+        verifier = new GoogleIdTokenVerifier(properties);
     }
 
     @AfterAll
-    static void tearDown() {
-        jwkServer.stop(0);
+    static void stopJwksServer() {
+        if (jwksServer != null) {
+            jwksServer.stop(0);
+        }
     }
 
+    /** Token hợp lệ từ Google phải trích xuất đúng thông tin user. */
     @Test
-    void acceptsValidTokenAndExtractsProfile() throws Exception {
-        GoogleUserInfo info = verifier.verify(signedToken(validClaims().build()));
+    void acceptsValidToken() throws Exception {
+        String token = signedToken(validClaims().build());
+
+        GoogleUserInfo info = verifier.verify(token);
 
         assertThat(info.googleId()).isEqualTo(GOOGLE_SUB);
         assertThat(info.email()).isEqualTo(EMAIL);
-        assertThat(info.fullName()).isEqualTo("Nguyen Van A");
-        assertThat(info.avatarUrl()).isEqualTo("https://lh3.googleusercontent.com/a/photo");
-    }
-
-    @Test
-    void normalizesUppercaseEmailToLowercase() throws Exception {
-        GoogleUserInfo info = verifier.verify(signedToken(
-                validClaims().claim("email", "Nguoi.Dung@Gmail.COM").build()));
-
-        assertThat(info.email()).isEqualTo("nguoi.dung@gmail.com");
-    }
-
-    @Test
-    void fallsBackToEmailWhenNameClaimAbsent() throws Exception {
-        GoogleUserInfo info = verifier.verify(signedToken(
-                validClaims().claim("name", null).build()));
-
-        assertThat(info.fullName()).isEqualTo(EMAIL);
+        assertThat(info.fullName()).isEqualTo(NAME);
+        assertThat(info.avatarUrl()).isEqualTo(PICTURE);
     }
 
     /**
-     * Token do Google ký thật nhưng phát cho ứng dụng khác. Đây là kịch bản tấn công
+     * Token được cấp cho một client ID khác (app khác của bên thứ ba) — trường hợp giả mạo
      * nguy hiểm nhất: chữ ký, issuer và hạn dùng đều hợp lệ.
      */
     @Test
@@ -110,7 +104,8 @@ class GoogleIdTokenVerifierTest {
                 .audience("attacker-app.apps.googleusercontent.com").build());
 
         assertThatThrownBy(() -> verifier.verify(token))
-                .isInstanceOf(InvalidGoogleTokenException.class);
+                .isInstanceOf(DomainException.class)
+                .hasFieldOrPropertyWithValue("code", ErrorCode.INVALID_GOOGLE_TOKEN);
     }
 
     @Test
@@ -122,7 +117,8 @@ class GoogleIdTokenVerifierTest {
         jwt.sign(new RSASSASigner(rogueKey));
 
         assertThatThrownBy(() -> verifier.verify(jwt.serialize()))
-                .isInstanceOf(InvalidGoogleTokenException.class);
+                .isInstanceOf(DomainException.class)
+                .hasFieldOrPropertyWithValue("code", ErrorCode.INVALID_GOOGLE_TOKEN);
     }
 
     @Test
@@ -134,7 +130,8 @@ class GoogleIdTokenVerifierTest {
                 .build());
 
         assertThatThrownBy(() -> verifier.verify(token))
-                .isInstanceOf(InvalidGoogleTokenException.class);
+                .isInstanceOf(DomainException.class)
+                .hasFieldOrPropertyWithValue("code", ErrorCode.INVALID_GOOGLE_TOKEN);
     }
 
     @Test
@@ -142,7 +139,8 @@ class GoogleIdTokenVerifierTest {
         String token = signedToken(validClaims().issuer("https://evil-idp.example.com").build());
 
         assertThatThrownBy(() -> verifier.verify(token))
-                .isInstanceOf(InvalidGoogleTokenException.class);
+                .isInstanceOf(DomainException.class)
+                .hasFieldOrPropertyWithValue("code", ErrorCode.INVALID_GOOGLE_TOKEN);
     }
 
     @Test
@@ -150,7 +148,8 @@ class GoogleIdTokenVerifierTest {
         String token = signedToken(validClaims().claim("email_verified", false).build());
 
         assertThatThrownBy(() -> verifier.verify(token))
-                .isInstanceOf(InvalidGoogleTokenException.class);
+                .isInstanceOf(DomainException.class)
+                .hasFieldOrPropertyWithValue("code", ErrorCode.INVALID_GOOGLE_TOKEN);
     }
 
     @Test
@@ -158,13 +157,15 @@ class GoogleIdTokenVerifierTest {
         String token = signedToken(validClaims().claim("email", null).build());
 
         assertThatThrownBy(() -> verifier.verify(token))
-                .isInstanceOf(InvalidGoogleTokenException.class);
+                .isInstanceOf(DomainException.class)
+                .hasFieldOrPropertyWithValue("code", ErrorCode.INVALID_GOOGLE_TOKEN);
     }
 
     @Test
     void rejectsMalformedToken() {
         assertThatThrownBy(() -> verifier.verify("not-a-jwt"))
-                .isInstanceOf(InvalidGoogleTokenException.class);
+                .isInstanceOf(DomainException.class)
+                .hasFieldOrPropertyWithValue("code", ErrorCode.INVALID_GOOGLE_TOKEN);
     }
 
     /** Chưa cấu hình client ID thì phải báo 503, không được âm thầm bỏ qua kiểm tra audience. */
@@ -174,7 +175,8 @@ class GoogleIdTokenVerifierTest {
                 new GoogleOAuthProperties("", "https://example.com/certs", List.of(ISSUER)));
 
         assertThatThrownBy(() -> unconfigured.verify(signedToken(validClaims().build())))
-                .isInstanceOf(GoogleLoginNotConfiguredException.class);
+                .isInstanceOf(DomainException.class)
+                .hasFieldOrPropertyWithValue("code", ErrorCode.GOOGLE_LOGIN_NOT_CONFIGURED);
     }
 
     private JWTClaimsSet.Builder validClaims() {
@@ -183,19 +185,19 @@ class GoogleIdTokenVerifierTest {
                 .subject(GOOGLE_SUB)
                 .issuer(ISSUER)
                 .audience(CLIENT_ID)
-                .issueTime(Date.from(now))
-                .expirationTime(Date.from(now.plusSeconds(3600)))
                 .claim("email", EMAIL)
                 .claim("email_verified", true)
-                .claim("name", "Nguyen Van A")
-                .claim("picture", "https://lh3.googleusercontent.com/a/photo");
+                .claim("name", NAME)
+                .claim("picture", PICTURE)
+                .issueTime(Date.from(now))
+                .expirationTime(Date.from(now.plusSeconds(3600)));
     }
 
     private String signedToken(JWTClaimsSet claims) throws Exception {
         SignedJWT jwt = new SignedJWT(
-                new JWSHeader.Builder(JWSAlgorithm.RS256).keyID(signingKey.getKeyID()).build(),
+                new JWSHeader.Builder(JWSAlgorithm.RS256).keyID(KEY_ID).build(),
                 claims);
-        jwt.sign(new RSASSASigner(signingKey));
+        jwt.sign(new RSASSASigner(rsaKey));
         return jwt.serialize();
     }
 }

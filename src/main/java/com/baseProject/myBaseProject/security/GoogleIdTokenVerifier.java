@@ -17,8 +17,8 @@ import org.springframework.util.StringUtils;
 import com.baseProject.myBaseProject.config.properites.GoogleOAuthProperties;
 import com.baseProject.myBaseProject.constant.Message;
 import com.baseProject.myBaseProject.dto.auth.GoogleUserInfo;
-import com.baseProject.myBaseProject.exception.GoogleLoginNotConfiguredException;
-import com.baseProject.myBaseProject.exception.InvalidGoogleTokenException;
+import com.baseProject.myBaseProject.exception.DomainException;
+import com.baseProject.myBaseProject.exception.ErrorCode;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -60,14 +60,14 @@ public class GoogleIdTokenVerifier {
 
     public GoogleUserInfo verify(String idToken) {
         if (jwtDecoder == null) {
-            throw new GoogleLoginNotConfiguredException();
+            throw new DomainException(ErrorCode.GOOGLE_LOGIN_NOT_CONFIGURED);
         }
 
         Jwt jwt;
         try {
             jwt = jwtDecoder.decode(idToken);
         } catch (JwtException ex) {
-            throw new InvalidGoogleTokenException(Message.INVALID_GOOGLE_TOKEN);
+            throw new DomainException(ErrorCode.INVALID_GOOGLE_TOKEN);
         }
 
         return extractUserInfo(jwt);
@@ -78,11 +78,11 @@ public class GoogleIdTokenVerifier {
         String email = jwt.getClaimAsString("email");
 
         if (!StringUtils.hasText(googleId) || !StringUtils.hasText(email)) {
-            throw new InvalidGoogleTokenException(Message.INVALID_GOOGLE_TOKEN);
+            throw new DomainException(ErrorCode.INVALID_GOOGLE_TOKEN);
         }
 
         if (!Boolean.TRUE.equals(jwt.getClaimAsBoolean("email_verified"))) {
-            throw new InvalidGoogleTokenException(Message.GOOGLE_EMAIL_NOT_VERIFIED);
+            throw new DomainException(ErrorCode.INVALID_GOOGLE_TOKEN, Message.GOOGLE_EMAIL_NOT_VERIFIED);
         }
 
         String normalizedEmail = email.trim().toLowerCase();

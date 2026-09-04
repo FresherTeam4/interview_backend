@@ -20,8 +20,8 @@ import com.baseProject.myBaseProject.dto.auth.LoginRequest;
 import com.baseProject.myBaseProject.dto.auth.RegisterRequest;
 import com.baseProject.myBaseProject.entity.UserAccount;
 import com.baseProject.myBaseProject.enums.UserRole;
-import com.baseProject.myBaseProject.exception.DuplicateEmailException;
-import com.baseProject.myBaseProject.exception.ResourceNotFoundException;
+import com.baseProject.myBaseProject.exception.DomainException;
+import com.baseProject.myBaseProject.exception.ErrorCode;
 import com.baseProject.myBaseProject.repository.UserAccountRepository;
 import com.baseProject.myBaseProject.security.CustomUserDetails;
 import com.baseProject.myBaseProject.security.GoogleIdTokenVerifier;
@@ -47,7 +47,7 @@ public class AuthServiceImpl implements AuthService {
         String email = request.email().trim().toLowerCase();
 
         if (userAccountRepository.existsByEmail(email)) {
-            throw new DuplicateEmailException();
+            throw new DomainException(ErrorCode.DUPLICATE_EMAIL);
         }
 
         UserAccount account = UserAccount.builder()
@@ -101,7 +101,7 @@ public class AuthServiceImpl implements AuthService {
     @Transactional(readOnly = true)
     public CurrentUserResponse currentUser(Long userId) {
         UserAccount account = userAccountRepository.findById(userId)
-                .orElseThrow(() -> new ResourceNotFoundException(Message.USER_NOT_FOUND));
+                .orElseThrow(() -> new DomainException(ErrorCode.RESOURCE_NOT_FOUND, Message.USER_NOT_FOUND));
 
         return new CurrentUserResponse(
                 account.getId(),

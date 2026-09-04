@@ -9,8 +9,7 @@ import com.baseProject.myBaseProject.dto.auth.LoginRequest;
 import com.baseProject.myBaseProject.dto.auth.RegisterRequest;
 import com.baseProject.myBaseProject.exception.ApiError;
 import com.baseProject.myBaseProject.exception.DomainException;
-import com.baseProject.myBaseProject.exception.InvalidRefreshTokenException;
-import com.baseProject.myBaseProject.exception.MissingRefreshTokenException;
+import com.baseProject.myBaseProject.exception.ErrorCode;
 import com.baseProject.myBaseProject.security.RefreshTokenCookieFactory;
 import com.baseProject.myBaseProject.security.SecurityUtils;
 import com.baseProject.myBaseProject.security.CustomUserDetails;
@@ -74,7 +73,7 @@ public class AuthController {
     @Operation(summary = "Làm mới access token")
     public ResponseEntity<AuthResponse> refresh(HttpServletRequest request) {
         String refreshToken = cookieFactory.read(request)
-                .orElseThrow(MissingRefreshTokenException::new);
+                .orElseThrow(() -> new DomainException(ErrorCode.MISSING_REFRESH_TOKEN));
 
         return withRefreshCookie(HttpStatus.OK, authService.refresh(refreshToken));
     }
@@ -101,19 +100,22 @@ public class AuthController {
                 .build();
     }
 
-    @ExceptionHandler({MissingRefreshTokenException.class, InvalidRefreshTokenException.class})
+    @ExceptionHandler(DomainException.class)
     public ResponseEntity<ApiError> handleRefreshTokenRejected(DomainException ex, HttpServletRequest request) {
-        ApiError body = ApiError.of(
-                clock.instant(),
-                ex.getStatus().value(),
-                ex.getCode(),
-                ex.getMessage(),
-                request.getRequestURI()
-        );
+        if (ex.getCode() == ErrorCode.MISSING_REFRESH_TOKEN || ex.getCode() == ErrorCode.INVALID_REFRESH_TOKEN) {
+            ApiError body = ApiError.of(
+                    clock.instant(),
+                    ex.getStatus().value(),
+                    ex.getCode(),
+                    ex.getMessage(),
+                    request.getRequestURI()
+            );
 
-        return ResponseEntity.status(ex.getStatus())
-                .header(HttpHeaders.SET_COOKIE, cookieFactory.clear().toString())
-                .body(body);
+            return ResponseEntity.status(ex.getStatus())
+                    .header(HttpHeaders.SET_COOKIE, cookieFactory.clear().toString())
+                    .body(body);
+        }
+        throw ex;
     }
 
     private ResponseEntity<AuthResponse> withRefreshCookie(HttpStatus status, AuthResult result) {

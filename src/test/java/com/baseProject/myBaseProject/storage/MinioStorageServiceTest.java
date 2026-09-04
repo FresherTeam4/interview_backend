@@ -8,7 +8,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.baseProject.myBaseProject.config.properites.StorageProperties;
-import com.baseProject.myBaseProject.exception.StorageException;
+import com.baseProject.myBaseProject.exception.DomainException;
 import com.baseProject.myBaseProject.storage.impl.MinioStorageService;
 
 import software.amazon.awssdk.core.ResponseBytes;
@@ -95,12 +95,12 @@ class MinioStorageServiceTest {
     }
 
     @Test
-    void download_shouldThrowStorageExceptionWhenObjectNotFound() {
+    void download_shouldThrowDomainExceptionWhenObjectNotFound() {
         String key = "cvs/user1/notfound.pdf";
         when(s3Client.getObjectAsBytes(any(GetObjectRequest.class)))
                 .thenThrow(NoSuchKeyException.builder().message("Object not found").build());
 
-        assertThrows(StorageException.class, () -> storageService.download(key));
+        assertThrows(DomainException.class, () -> storageService.download(key));
     }
 
     @Test

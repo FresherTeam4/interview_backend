@@ -3,7 +3,8 @@ package com.baseProject.myBaseProject.service.impl;
 import com.baseProject.myBaseProject.config.properites.RefreshTokenProperties;
 import com.baseProject.myBaseProject.entity.RefreshToken;
 import com.baseProject.myBaseProject.entity.UserAccount;
-import com.baseProject.myBaseProject.exception.InvalidRefreshTokenException;
+import com.baseProject.myBaseProject.exception.DomainException;
+import com.baseProject.myBaseProject.exception.ErrorCode;
 import com.baseProject.myBaseProject.repository.RefreshTokenRepository;
 import com.baseProject.myBaseProject.service.RefreshTokenService;
 import lombok.RequiredArgsConstructor;
@@ -43,21 +44,21 @@ public class RefreshTokenServiceImpl implements RefreshTokenService {
     public RotationResult rotate(String rawToken) {
         Instant now = clock.instant();
         RefreshToken stored = refreshTokenRepository.findByTokenHashForUpdate(hash(rawToken))
-                .orElseThrow(InvalidRefreshTokenException::new);
+                .orElseThrow(() -> new DomainException(ErrorCode.INVALID_REFRESH_TOKEN));
 
         if (stored.isRevoked()) {
             refreshTokenRepository.revokeFamily(stored.getFamilyId(), now);
-            throw new InvalidRefreshTokenException();
+            throw new DomainException(ErrorCode.INVALID_REFRESH_TOKEN);
         }
 
         if (stored.isExpiredAt(now)) {
-            throw new InvalidRefreshTokenException();
+            throw new DomainException(ErrorCode.INVALID_REFRESH_TOKEN);
         }
 
         UserAccount user = stored.getUser();
         if (!user.isEnabled()) {
             refreshTokenRepository.revokeFamily(stored.getFamilyId(), now);
-            throw new InvalidRefreshTokenException();
+            throw new DomainException(ErrorCode.INVALID_REFRESH_TOKEN);
         }
 
         stored.setRevokedAt(now);

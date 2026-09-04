@@ -5,7 +5,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import com.baseProject.myBaseProject.config.properites.StorageProperties;
-import com.baseProject.myBaseProject.exception.StorageException;
+import com.baseProject.myBaseProject.exception.DomainException;
+import com.baseProject.myBaseProject.exception.ErrorCode;
 import com.baseProject.myBaseProject.storage.StorageService;
 
 import software.amazon.awssdk.core.sync.RequestBody;
@@ -44,7 +45,7 @@ public class MinioStorageService implements StorageService {
             log.info("Uploaded file to MinIO bucket '{}' with key '{}'", properties.bucketName(), key);
         } catch (Exception e) {
             log.error("Failed to upload file to storage with key '{}': {}", key, e.getMessage(), e);
-            throw new StorageException("Không thể upload file lên hệ thống lưu trữ: " + e.getMessage(), e);
+            throw new DomainException(ErrorCode.STORAGE_ERROR, "Không thể upload file lên hệ thống lưu trữ: " + e.getMessage(), e);
         }
     }
 
@@ -59,10 +60,10 @@ public class MinioStorageService implements StorageService {
             return s3Client.getObjectAsBytes(getRequest).asByteArray();
         } catch (NoSuchKeyException e) {
             log.warn("File not found in storage for key '{}'", key);
-            throw new StorageException("Không tìm thấy file trên hệ thống lưu trữ: " + key, e);
+            throw new DomainException(ErrorCode.RESOURCE_NOT_FOUND, "Không tìm thấy file trên hệ thống lưu trữ: " + key, e);
         } catch (Exception e) {
             log.error("Failed to download file with key '{}': {}", key, e.getMessage(), e);
-            throw new StorageException("Lỗi khi tải file từ hệ thống lưu trữ: " + e.getMessage(), e);
+            throw new DomainException(ErrorCode.STORAGE_ERROR, "Lỗi khi tải file từ hệ thống lưu trữ: " + e.getMessage(), e);
         }
     }
 
@@ -78,7 +79,7 @@ public class MinioStorageService implements StorageService {
             log.info("Deleted file with key '{}' from bucket '{}'", key, properties.bucketName());
         } catch (Exception e) {
             log.error("Failed to delete file with key '{}': {}", key, e.getMessage(), e);
-            throw new StorageException("Lỗi khi xóa file khỏi hệ thống lưu trữ: " + e.getMessage(), e);
+            throw new DomainException(ErrorCode.STORAGE_ERROR, "Lỗi khi xóa file khỏi hệ thống lưu trữ: " + e.getMessage(), e);
         }
     }
 
@@ -98,10 +99,10 @@ public class MinioStorageService implements StorageService {
                 return false;
             }
             log.error("Error checking existence of key '{}': {}", key, e.getMessage(), e);
-            throw new StorageException("Lỗi khi kiểm tra file tồn tại: " + e.getMessage(), e);
+            throw new DomainException(ErrorCode.STORAGE_ERROR, "Lỗi khi kiểm tra file tồn tại: " + e.getMessage(), e);
         } catch (Exception e) {
             log.error("Error checking existence of key '{}': {}", key, e.getMessage(), e);
-            throw new StorageException("Lỗi khi kiểm tra file tồn tại: " + e.getMessage(), e);
+            throw new DomainException(ErrorCode.STORAGE_ERROR, "Lỗi khi kiểm tra file tồn tại: " + e.getMessage(), e);
         }
     }
 
@@ -121,7 +122,7 @@ public class MinioStorageService implements StorageService {
             return s3Presigner.presignGetObject(presignRequest).url().toString();
         } catch (Exception e) {
             log.error("Failed to generate presigned URL for key '{}': {}", key, e.getMessage(), e);
-            throw new StorageException("Lỗi khi tạo URL tải file: " + e.getMessage(), e);
+            throw new DomainException(ErrorCode.STORAGE_ERROR, "Lỗi khi tạo URL tải file: " + e.getMessage(), e);
         }
     }
 }
