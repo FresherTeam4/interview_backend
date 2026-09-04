@@ -136,6 +136,18 @@ public class CvDocumentServiceImpl implements CvDocumentService {
         return cvDocumentMapper.toResponse(document, null);
     }
 
+    @Override
+    @Transactional
+    public void delete(Long userId, Long cvId) {
+        CvDocument document = requireActiveDocument(userId, cvId);
+        if (document.getStatus() == CvDocumentStatus.PARSING) {
+            throw new DomainException(ErrorCode.CV_PARSE_IN_PROGRESS);
+        }
+
+        // Chỉ ẩn CV; file và các liên kết lịch sử phải được giữ nguyên cho interview cũ.
+        document.deactivate();
+    }
+
     private CvUploadResult reuse(Long userId, CvDocument document) {
         if (!document.isActive()) {
             ensureUploadCapacity(userId);

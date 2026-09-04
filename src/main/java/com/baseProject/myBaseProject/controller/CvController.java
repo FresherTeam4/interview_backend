@@ -15,6 +15,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -74,5 +75,13 @@ public class CvController {
     public CvDocumentResponse retryParse(@CurrentUser CustomUserDetails currentUser,
                                          @PathVariable Long cvId) {
         return cvDocumentService.retryParse(currentUser.getId(), cvId);
+    }
+
+    @DeleteMapping("/{cvId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    @Operation(summary = "Soft-delete a CV from the current user's list")
+    public void delete(@CurrentUser CustomUserDetails currentUser,
+                       @PathVariable Long cvId) {
+        cvDocumentService.delete(currentUser.getId(), cvId);
     }
 }

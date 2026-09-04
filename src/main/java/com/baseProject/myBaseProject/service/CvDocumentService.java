@@ -18,6 +18,8 @@ public interface CvDocumentService {
 
     CvDocumentResponse retryParse(Long userId, Long cvId);
 
+    void delete(Long userId, Long cvId);
+
     record CvUploadResult(CvDocumentResponse document, boolean reusedExisting) {
     }
 }

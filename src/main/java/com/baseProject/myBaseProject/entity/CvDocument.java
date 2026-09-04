@@ -126,4 +126,8 @@ public class CvDocument {
         status = CvDocumentStatus.FAILED;
         statusMessage = message;
     }
+
+    public void deactivate() {
+        active = false;
+    }
 }
