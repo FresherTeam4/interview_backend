@@ -19,12 +19,16 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.task.TaskRejectedException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Clock;
+import java.util.HashMap;
 import java.util.HexFormat;
+import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -64,10 +68,26 @@ public class CvDocumentServiceImpl implements CvDocumentService {
 
         // Chỉ kiểm tra hạn mức khi thật sự tạo mới hoặc kích hoạt lại một CV đã xóa.
         ensureUploadCapacity(userId);
+
+        // upload cv vào server
         CvDocument document = store(userId, file.getOriginalFilename(), content, checksum);
+
         submitProcessing(document);
 
         return new CvUploadResult(cvDocumentMapper.toResponse(document, null), false);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<CvDocumentResponse> list(Long userId) {
+        List<CvDocument> documents =
+                cvDocumentRepository.findByUserIdAndActiveTrueOrderByUploadedAtDesc(userId);
+        Map<Long, CandidateProfile> profilesByDocumentId = loadProfilesByDocumentId(documents);
+
+        return documents.stream()
+                .map(document -> cvDocumentMapper.toResponse(
+                        document, profilesByDocumentId.get(document.getId())))
+                .toList();
     }
 
     private CvUploadResult reuse(Long userId, CvDocument document) {
@@ -120,6 +140,20 @@ public class CvDocumentServiceImpl implements CvDocumentService {
             document.markFailed("CV parsing queue is temporarily full; please retry later");
             cvDocumentRepository.save(document);
         }
+    }
+
+    private Map<Long, CandidateProfile> loadProfilesByDocumentId(List<CvDocument> documents) {
+        if (documents.isEmpty()) {
+            return Map.of();
+        }
+
+        // Lấy toàn bộ profile bằng một query để không phát sinh N+1 khi map danh sách CV.
+        List<Long> documentIds = documents.stream().map(CvDocument::getId).toList();
+        Map<Long, CandidateProfile> profilesByDocumentId = new HashMap<>();
+        candidateProfileRepository.findByCvDocumentIdIn(documentIds)
+                .forEach(profile -> profilesByDocumentId.put(
+                        profile.getCvDocument().getId(), profile));
+        return profilesByDocumentId;
     }
 
     private String sha256Hex(byte[] content) {
