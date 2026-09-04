@@ -1,11 +1,12 @@
-package com.baseProject.myBaseProject.service.impl;
+package com.baseProject.myBaseProject.cv.impl;
 
 import com.baseProject.myBaseProject.ai.AiService;
+import com.baseProject.myBaseProject.config.properites.CvProperties;
 import com.baseProject.myBaseProject.constant.PromptConstant;
+import com.baseProject.myBaseProject.cv.CvParsingService;
 import com.baseProject.myBaseProject.dto.ai.CvExtractionResult;
 import com.baseProject.myBaseProject.exception.DomainException;
 import com.baseProject.myBaseProject.exception.ErrorCode;
-import com.baseProject.myBaseProject.service.CvParsingService;
 import com.baseProject.myBaseProject.util.pdf.PdfImageRenderer;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
@@ -24,6 +25,7 @@ public class CvParsingServiceImpl implements CvParsingService {
 
     private final AiService aiService;
     private final PdfImageRenderer pdfImageRenderer;
+    private final CvProperties cvProperties;
     private String cvVisionPrompt;
 
     @PostConstruct
@@ -38,7 +40,8 @@ public class CvParsingServiceImpl implements CvParsingService {
         log.info("Parsing CV from PDF, size: {} KB", pdfBytes != null ? pdfBytes.length / 1024 : 0);
         long startTime = System.currentTimeMillis();
 
-        List<byte[]> pageImages = pdfImageRenderer.renderPagesAsImages(pdfBytes);
+        List<byte[]> pageImages = pdfImageRenderer.renderPagesAsImages(
+                pdfBytes, cvProperties.maxPages(), 150);
         if (pageImages.isEmpty()) {
             throw new DomainException(ErrorCode.CV_PARSE_FAILED, "PDF file contains no renderable pages");
         }

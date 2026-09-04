@@ -23,6 +23,7 @@ import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.AuthenticationException;
@@ -95,6 +96,13 @@ public class GlobalExceptionHandler {
                                                        HttpServletRequest req) {
         return build(HttpStatus.BAD_REQUEST, ErrorCode.MALFORMED_REQUEST,
                 "Required parameter '%s' is missing".formatted(ex.getParameterName()), req);
+    }
+
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    public ResponseEntity<ApiError> handleMaxUploadSize(MaxUploadSizeExceededException ex,
+                                                        HttpServletRequest req) {
+        return build(HttpStatus.CONTENT_TOO_LARGE, ErrorCode.UPLOAD_TOO_LARGE,
+                Message.UPLOAD_TOO_LARGE, req);
     }
 
     // request path not found. vd path /api...

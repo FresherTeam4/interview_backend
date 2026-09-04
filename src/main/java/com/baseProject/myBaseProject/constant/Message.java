@@ -25,4 +25,14 @@ public final class Message {
     public static final String AI_CONFIG_ERROR = "AI service is not configured properly";
     public static final String AI_ERROR = "AI service execution failed";
     public static final String CV_PARSE_FAILED = "Failed to parse CV content";
+
+    // CV upload
+    public static final String UPLOAD_TOO_LARGE = "Uploaded request is too large";
+    public static final String CV_FILE_REQUIRED = "CV file is required";
+    public static final String CV_INVALID_FILE_TYPE = "CV must be a valid PDF file";
+    public static final String CV_FILE_TOO_LARGE = "CV file exceeds the allowed size";
+    public static final String CV_FILE_CORRUPTED = "CV file is corrupted, encrypted, or unreadable";
+    public static final String CV_TOO_MANY_PAGES = "CV has too many pages";
+    public static final String CV_LIMIT_REACHED = "Maximum number of CVs reached";
+    public static final String STORAGE_UNAVAILABLE = "File storage is temporarily unavailable";
 }

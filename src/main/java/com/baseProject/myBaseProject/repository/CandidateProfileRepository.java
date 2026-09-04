@@ -12,5 +12,7 @@ public interface CandidateProfileRepository extends JpaRepository<CandidateProfi
 
     Optional<CandidateProfile> findByIdAndUserIdAndCvDocumentActiveTrue(Long id, Long userId);
 
+    Optional<CandidateProfile> findByCvDocumentId(Long cvDocumentId);
+
     boolean existsByCvDocumentId(Long cvDocumentId);
 }

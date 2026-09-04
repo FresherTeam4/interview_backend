@@ -4,6 +4,8 @@ import com.baseProject.myBaseProject.entity.CvDocument;
 import com.baseProject.myBaseProject.enums.CvDocumentStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 
+import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -20,5 +22,7 @@ public interface CvDocumentRepository extends JpaRepository<CvDocument, Long> {
     Optional<CvDocument> findFirstByUserIdAndChecksumSha256AndStatusOrderByUploadedAtDesc(
             Long userId, String checksumSha256, CvDocumentStatus status);
 
-    List<CvDocument> findByStatus(CvDocumentStatus status);
+    List<CvDocument> findByStatusInAndUploadedAtBefore(
+            Collection<CvDocumentStatus> statuses,
+            Instant uploadedBefore);
 }

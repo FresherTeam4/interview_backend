@@ -12,6 +12,12 @@ spring:
     open-in-view: false
     show-sql: false
 
+  servlet:
+    multipart:
+      # Cao hơn giới hạn từng feature để validator trả đúng mã lỗi nghiệp vụ.
+      max-file-size: 16MB
+      max-request-size: 17MB
+
   ai:
     openai:
       api-key: ${AI_API_KEY:AIzaSy_fake_placeholder_key}
@@ -68,3 +74,8 @@ app:
     enabled: ${AI_ENABLED:true}
     default-model: ${AI_MODEL:gemini-2.0-flash}
     temperature: ${AI_TEMPERATURE:0.1}
+
+  cv:
+    max-file-size-bytes: ${CV_MAX_FILE_SIZE_BYTES:5242880}
+    max-pages: ${CV_MAX_PAGES:10}
+    max-per-user: ${CV_MAX_PER_USER:10}

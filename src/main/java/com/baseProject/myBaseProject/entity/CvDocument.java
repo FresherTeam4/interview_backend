@@ -99,4 +99,26 @@ public class CvDocument {
     public boolean isFailed() {
         return status == CvDocumentStatus.FAILED;
     }
+
+    public void reactivate() {
+        active = true;
+    }
+
+    public void markParsing() {
+        status = CvDocumentStatus.PARSING;
+        statusMessage = null;
+    }
+
+    public void markParsed(Instant completedAt) {
+        status = CvDocumentStatus.PARSED;
+        statusMessage = null;
+        if (parsedAt == null) {
+            parsedAt = completedAt;
+        }
+    }
+
+    public void markFailed(String message) {
+        status = CvDocumentStatus.FAILED;
+        statusMessage = message;
+    }
 }
