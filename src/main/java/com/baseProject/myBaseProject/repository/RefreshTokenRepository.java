@@ -16,28 +16,28 @@ public interface RefreshTokenRepository extends JpaRepository<RefreshToken, Long
     Optional<RefreshToken> findByTokenHash(String tokenHash);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @Query("select t from RefreshToken t where t.tokenHash = :tokenHash")
+    @Query("SELECT t FROM RefreshToken t WHERE t.tokenHash = :tokenHash")
     Optional<RefreshToken> findByTokenHashForUpdate(@Param("tokenHash") String tokenHash);
 
     @Modifying(flushAutomatically = true)
     @Query("""
-            update RefreshToken t
-               set t.revokedAt = :revokedAt
-             where t.familyId = :familyId
-               and t.revokedAt is null
+            UPDATE RefreshToken t
+               SET t.revokedAt = :revokedAt
+             WHERE t.familyId = :familyId
+               AND t.revokedAt IS NULL
             """)
     int revokeFamily(@Param("familyId") String familyId, @Param("revokedAt") Instant revokedAt);
 
     @Modifying(flushAutomatically = true)
     @Query("""
-            update RefreshToken t
-               set t.revokedAt = :revokedAt
-             where t.user.id = :userId
-               and t.revokedAt is null
+            UPDATE RefreshToken t
+               SET t.revokedAt = :revokedAt
+             WHERE t.user.id = :userId
+               AND t.revokedAt IS NULL
             """)
     int revokeAllByUserId(@Param("userId") Long userId, @Param("revokedAt") Instant revokedAt);
 
     @Modifying
-    @Query("delete from RefreshToken t where t.expiresAt < :cutoff")
+    @Query("DELETE FROM RefreshToken t WHERE t.expiresAt < :cutoff")
     int deleteAllExpiredBefore(@Param("cutoff") Instant cutoff);
 }

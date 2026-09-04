@@ -1,7 +1,6 @@
 package com.baseProject.myBaseProject.repository;
 
 import com.baseProject.myBaseProject.entity.ProfileEducation;
-
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -16,8 +15,7 @@ public interface ProfileEducationRepository extends JpaRepository<ProfileEducati
 
     Optional<ProfileEducation> findByIdAndProfileId(Long id, Long profileId);
 
-    /** Clears the list in one statement, for a replace-all profile edit. */
     @Modifying(flushAutomatically = true)
-    @Query("delete from ProfileEducation e where e.profile.id = :profileId")
+    @Query("DELETE FROM ProfileEducation e WHERE e.profile.id = :profileId")
     int deleteAllByProfileId(@Param("profileId") Long profileId);
 }
