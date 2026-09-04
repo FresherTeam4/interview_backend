@@ -2,27 +2,15 @@ spring:
   application:
     name: BaseProject
   datasource:
-    url: ${DB_URL:jdbc:mysql://localhost:3306/interview_db?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC}
+    url: ${DB_URL:jdbc:mysql://localhost:3306/interview_thaitruong?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC}
     username: ${DB_USERNAME:root}
     password: ${DB_PASSWORD:123456}
     driver-class-name: com.mysql.cj.jdbc.Driver
   jpa:
     hibernate:
-      ddl-auto: validate
+      ddl-auto: update
     open-in-view: false
     show-sql: false
-    properties:
-      hibernate:
-        format_sql: true
-  liquibase:
-    enabled: true
-    change-log: classpath:db/changelog/db.changelog-master.yaml
-  servlet:
-    multipart:
-      # Đặt cao hơn hạn mức 5MB của app.cv một chút, để chính app trả lỗi
-      # CV_FILE_TOO_LARGE có thông báo tử tế thay vì servlet chặn trước.
-      max-file-size: 6MB
-      max-request-size: 8MB
 
 springdoc:
   api-docs:
@@ -56,34 +44,3 @@ app:
       client-id: ${GOOGLE_CLIENT_ID:1063418979323-9esrkg9ef25jofnrjrrkdgcduhaffaia.apps.googleusercontent.com}
       jwk-set-uri: ${GOOGLE_JWK_SET_URI:https://www.googleapis.com/oauth2/v3/certs}
       issuers: ${GOOGLE_ISSUERS:https://accounts.google.com,accounts.google.com}
-  cv:
-    # 5MB, tính bằng byte để so trực tiếp với MultipartFile.getSize()
-    max-file-size-bytes: ${CV_MAX_FILE_SIZE_BYTES:5242880}
-    # CV dài hơn mức này gần như chắc chắn là tài liệu khác bị up nhầm
-    max-pages: ${CV_MAX_PAGES:10}
-    # Không còn "ghi đè CV cũ" nữa, nên cần hạn mức để chặn up vô hạn
-    max-per-user: ${CV_MAX_PER_USER:10}
-  storage:
-    # Địa chỉ server nói chuyện với MinIO (trong docker network là http://minio:9000)
-    endpoint: ${STORAGE_ENDPOINT:http://localhost:9000}
-    # Địa chỉ trình duyệt của người dùng mở được. Tách riêng vì link presigned ký cả
-    # hostname: ký bằng "minio" rồi trả cho trình duyệt là link chết.
-    public-endpoint: ${STORAGE_PUBLIC_ENDPOINT:http://localhost:9000}
-    bucket: ${STORAGE_BUCKET:interview-cv}
-    # MinIO không có region thật nhưng SigV4 vẫn bắt buộc phải có một giá trị
-    region: ${STORAGE_REGION:us-east-1}
-    # Mặc định trùng với docker-compose.yml; deploy thật thì bắt buộc set biến môi trường
-    access-key: ${STORAGE_ACCESS_KEY:minioadmin}
-    secret-key: ${STORAGE_SECRET_KEY:minioadmin}
-    # Link tải CV sống 5 phút: đủ để bấm mở, không đủ để đem đi chia sẻ
-    presign-ttl-seconds: ${STORAGE_PRESIGN_TTL_SECONDS:300}
-  ai:
-    base-url: ${GEMINI_BASE_URL:https://generativelanguage.googleapis.com/v1beta}
-    # Để trống trong repo. Thiếu key thì lần bóc tách đầu tiên trả FAILED kèm lý do,
-    # chứ không làm app không khởi động được.
-    api-key: ${GEMINI_API_KEY:}
-    model: ${GEMINI_MODEL:gemini-3.6-flash}
-    # Ghi vào cv_parse_results.schema_version để biết raw_json theo layout nào
-    schema-version: ${GEMINI_SCHEMA_VERSION:v1}
-    # Yêu cầu nghiệp vụ là dưới 30 giây; cắt ở 25 giây để còn chỗ ghi DB và log
-    timeout-ms: ${GEMINI_TIMEOUT_MS:25000}
