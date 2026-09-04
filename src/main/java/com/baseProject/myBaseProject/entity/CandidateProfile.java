@@ -24,20 +24,6 @@ import lombok.Setter;
 import java.math.BigDecimal;
 import java.time.Instant;
 
-/**
- * The editable working copy of a parsed CV — one per {@link CvDocument}, and the only
- * place the user touches. {@link CvParseResult} keeps the untouched AI output alongside
- * it, which is why no "prefer the edited version" flag is needed: the edited version is
- * the only version anything downstream reads.
- *
- * <p>A user owns as many profiles as they have CVs and picks which one an interview runs
- * against, so uploading a new CV never disturbs an older profile's manual edits. The
- * one-per-CV rule is the database's job: {@code uq_candidate_profiles_cv_document}.
- *
- * <p>Child rows live in {@link ProfileEducation}, {@link ProfileSkill} and
- * {@link ProfileProject} rather than a JSON blob, because generated questions
- * carry a foreign key back to the exact project or skill they dig into.
- */
 @Entity
 @Table(
         name = "candidate_profiles",
@@ -59,11 +45,6 @@ public class CandidateProfile {
     @JoinColumn(name = "user_id", nullable = false)
     private UserAccount user;
 
-    /**
-     * Which CV this profile was built from. Unique, so a CV never grows a second
-     * profile; and the foreign key is RESTRICT, so that CV cannot be deleted while
-     * this row points at it — which is why removing a CV is a soft delete.
-     */
     @OneToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "cv_document_id", nullable = false, unique = true)
     private CvDocument cvDocument;

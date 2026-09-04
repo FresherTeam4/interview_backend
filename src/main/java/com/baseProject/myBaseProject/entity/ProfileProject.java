@@ -18,11 +18,6 @@ import lombok.Setter;
 
 import java.time.LocalDate;
 
-/**
- * One project of a {@link CandidateProfile}. Generated questions reference this row,
- * and {@link #description} is the main raw material the question generator digs into —
- * the most valuable column in the whole CV group.
- */
 @Entity
 @Table(
         name = "profile_projects",
@@ -47,14 +42,13 @@ public class ProfileProject {
     @Column(nullable = false, length = 255)
     private String name;
 
-    /** Main raw material for deep-dive question generation. */
     @Column(columnDefinition = "TEXT")
     private String description;
 
     @Column(name = "role_in_project", length = 150)
     private String roleInProject;
 
-    /** Comma-separated list. A join table is not needed for the MVP. */
+    // Danh sách tech stack cách nhau bằng dấu phẩy
     @Column(name = "tech_stack", columnDefinition = "TEXT")
     private String techStack;
 
@@ -64,7 +58,6 @@ public class ProfileProject {
     @Column(name = "end_date")
     private LocalDate endDate;
 
-    /** Maps {@code is_user_edited}. */
     @Column(name = "is_user_edited", nullable = false)
     @Builder.Default
     private boolean userEdited = false;

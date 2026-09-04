@@ -16,14 +16,6 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-/**
- * One skill of a {@link CandidateProfile}. Generated questions reference this row
- * directly, which is why skills are rows rather than a JSON array.
- *
- * <p>{@code uq_profile_skills_profile_name} runs on a case-insensitive collation, so
- * "React" and "react" collide in the database. It cannot catch "ReactJS" — normalise
- * the name in the service layer before writing.
- */
 @Entity
 @Table(
         name = "profile_skills",
@@ -48,15 +40,12 @@ public class ProfileSkill {
     @JoinColumn(name = "profile_id", nullable = false)
     private CandidateProfile profile;
 
-    /** Java, Spring Boot, React, PostgreSQL... */
     @Column(nullable = false, length = 80)
     private String name;
 
-    /** LANGUAGE | FRAMEWORK | DATABASE | TOOL | SOFT — free-form, not constrained by the database. */
     @Column(length = 50)
     private String category;
 
-    /** Maps {@code is_user_edited}. */
     @Column(name = "is_user_edited", nullable = false)
     @Builder.Default
     private boolean userEdited = false;
