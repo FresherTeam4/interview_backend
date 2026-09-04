@@ -20,11 +20,11 @@ spring:
 
   ai:
     openai:
-      api-key: ${AI_API_KEY:AIzaSy_fake_placeholder_key}
+      api-key: ${GEMINI_API_KEY:AIzaSy_fake_placeholder_key}
       base-url: ${AI_BASE_URL:https://generativelanguage.googleapis.com/v1beta/openai/}
       chat:
         options:
-          model: ${AI_MODEL:gemini-2.0-flash}
+          model: ${AI_MODEL:gemini-3.5-flash-lite}
           temperature: ${AI_TEMPERATURE:0.1}
 
 springdoc:
@@ -69,11 +69,6 @@ app:
     secret-key: ${STORAGE_SECRET_KEY:minioadmin}
     bucket-name: ${STORAGE_BUCKET_NAME:interview-store}
     region: ${STORAGE_REGION:us-east-1}
-
-  ai:
-    enabled: ${AI_ENABLED:true}
-    default-model: ${AI_MODEL:gemini-2.0-flash}
-    temperature: ${AI_TEMPERATURE:0.1}
 
   cv:
     max-file-size-bytes: ${CV_MAX_FILE_SIZE_BYTES:5242880}

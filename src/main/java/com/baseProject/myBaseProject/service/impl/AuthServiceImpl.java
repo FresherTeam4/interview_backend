@@ -1,7 +1,7 @@
 package com.baseProject.myBaseProject.service.impl;
 
-import java.time.Clock;
-
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.DisabledException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -29,16 +29,19 @@ import com.baseProject.myBaseProject.service.AuthService;
 import com.baseProject.myBaseProject.service.JwtService;
 import com.baseProject.myBaseProject.service.RefreshTokenService;
 
-import lombok.RequiredArgsConstructor;
+import java.time.Clock;
+import java.time.Instant;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class AuthServiceImpl implements AuthService {
+
     private final UserAccountRepository userAccountRepository;
     private final PasswordEncoder passwordEncoder;
+    private final AuthenticationManager authenticationManager;
     private final JwtService jwtService;
     private final RefreshTokenService refreshTokenService;
-    private final AuthenticationManager authenticationManager;
     private final GoogleIdTokenVerifier googleIdTokenVerifier;
     private final Clock clock;
 
@@ -50,13 +53,15 @@ public class AuthServiceImpl implements AuthService {
             throw new DomainException(ErrorCode.DUPLICATE_EMAIL);
         }
 
+        Instant now = clock.instant();
         UserAccount account = UserAccount.builder()
                 .fullName(request.fullName().trim())
                 .email(email)
                 .passwordHash(passwordEncoder.encode(request.password()))
                 .role(UserRole.USER)
                 .enabled(true)
-                .createdAt(clock.instant())
+                .createdAt(now)
+                .updatedAt(now)
                 .build();
         account = userAccountRepository.save(account);
 
@@ -117,6 +122,7 @@ public class AuthServiceImpl implements AuthService {
     private UserAccount syncProfile(UserAccount account, GoogleUserInfo googleUser) {
         account.setFullName(googleUser.fullName());
         account.setAvatarUrl(googleUser.avatarUrl());
+        account.setUpdatedAt(clock.instant());
         return account;
     }
 
@@ -126,10 +132,12 @@ public class AuthServiceImpl implements AuthService {
         if (account.getAvatarUrl() == null) {
             account.setAvatarUrl(googleUser.avatarUrl());
         }
+        account.setUpdatedAt(clock.instant());
         return account;
     }
 
     private UserAccount createFromGoogle(GoogleUserInfo googleUser) {
+        Instant now = clock.instant();
         return UserAccount.builder()
                 .fullName(googleUser.fullName())
                 .email(googleUser.email())
@@ -138,7 +146,8 @@ public class AuthServiceImpl implements AuthService {
                 .passwordHash(null)
                 .role(UserRole.USER)
                 .enabled(true)
-                .createdAt(clock.instant())
+                .createdAt(now)
+                .updatedAt(now)
                 .build();
     }
 

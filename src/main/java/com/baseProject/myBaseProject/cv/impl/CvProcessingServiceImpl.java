@@ -1,7 +1,6 @@
 package com.baseProject.myBaseProject.cv.impl;
 
 import com.baseProject.myBaseProject.config.AsyncConfig;
-import com.baseProject.myBaseProject.config.properites.AiProperties;
 import com.baseProject.myBaseProject.constant.Message;
 import com.baseProject.myBaseProject.cv.CvParsingService;
 import com.baseProject.myBaseProject.dto.ai.CvExtractionResult;
@@ -19,6 +18,7 @@ import com.baseProject.myBaseProject.repository.ProfileSkillRepository;
 import com.baseProject.myBaseProject.cv.CvProcessingService;
 import com.baseProject.myBaseProject.storage.StorageService;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -44,7 +44,7 @@ public class CvProcessingServiceImpl implements CvProcessingService {
     private final StorageService storageService;
     private final CvParsingService cvParsingService;
     private final ProfileMapper profileMapper;
-    private final AiProperties aiProperties;
+    private final ChatModel chatModel;
     private final ObjectMapper objectMapper;
     private final Clock clock;
     private final TransactionTemplate transactionTemplate;
@@ -58,7 +58,7 @@ public class CvProcessingServiceImpl implements CvProcessingService {
                                    StorageService storageService,
                                    CvParsingService cvParsingService,
                                    ProfileMapper profileMapper,
-                                   AiProperties aiProperties,
+                                   ChatModel chatModel,
                                    ObjectMapper objectMapper,
                                    Clock clock,
                                    PlatformTransactionManager transactionManager) {
@@ -71,7 +71,7 @@ public class CvProcessingServiceImpl implements CvProcessingService {
         this.storageService = storageService;
         this.cvParsingService = cvParsingService;
         this.profileMapper = profileMapper;
-        this.aiProperties = aiProperties;
+        this.chatModel = chatModel;
         this.objectMapper = objectMapper;
         this.clock = clock;
         this.transactionTemplate = new TransactionTemplate(transactionManager);
@@ -182,7 +182,7 @@ public class CvProcessingServiceImpl implements CvProcessingService {
     private String modelName(CvExtractionResult extraction) {
         String modelName = extraction.modelName();
         return modelName == null || modelName.isBlank()
-                ? aiProperties.defaultModel()
+                ? chatModel.getOptions().getModel()
                 : modelName.trim();
     }
 
