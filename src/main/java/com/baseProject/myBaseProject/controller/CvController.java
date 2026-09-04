@@ -14,6 +14,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestPart;
@@ -49,5 +50,12 @@ public class CvController {
     @Operation(summary = "Get current user's CVs")
     public List<CvDocumentResponse> list(@CurrentUser CustomUserDetails currentUser) {
         return cvDocumentService.list(currentUser.getId());
+    }
+
+    @GetMapping("/{cvId}")
+    @Operation(summary = "Get a CV and its parsing status")
+    public CvDocumentResponse get(@CurrentUser CustomUserDetails currentUser,
+                                  @PathVariable Long cvId) {
+        return cvDocumentService.get(currentUser.getId(), cvId);
     }
 }

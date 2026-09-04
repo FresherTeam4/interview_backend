@@ -11,6 +11,8 @@ public interface CvDocumentService {
 
     List<CvDocumentResponse> list(Long userId);
 
+    CvDocumentResponse get(Long userId, Long cvId);
+
     record CvUploadResult(CvDocumentResponse document, boolean reusedExisting) {
     }
 }

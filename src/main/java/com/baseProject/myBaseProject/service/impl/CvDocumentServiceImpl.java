@@ -90,6 +90,16 @@ public class CvDocumentServiceImpl implements CvDocumentService {
                 .toList();
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public CvDocumentResponse get(Long userId, Long cvId) {
+        CvDocument document = requireActiveDocument(userId, cvId);
+        CandidateProfile profile = candidateProfileRepository
+                .findByCvDocumentId(document.getId())
+                .orElse(null);
+        return cvDocumentMapper.toResponse(document, profile);
+    }
+
     private CvUploadResult reuse(Long userId, CvDocument document) {
         if (!document.isActive()) {
             ensureUploadCapacity(userId);
@@ -101,6 +111,12 @@ public class CvDocumentServiceImpl implements CvDocumentService {
                 .findByCvDocumentId(document.getId())
                 .orElse(null);
         return new CvUploadResult(cvDocumentMapper.toResponse(document, profile), true);
+    }
+
+    private CvDocument requireActiveDocument(Long userId, Long cvId) {
+        // Gộp owner và trạng thái active trong query để chặn IDOR và không lộ CV đã xóa.
+        return cvDocumentRepository.findByIdAndUserIdAndActiveTrue(cvId, userId)
+                .orElseThrow(() -> new DomainException(ErrorCode.CV_NOT_FOUND));
     }
 
     private void ensureUploadCapacity(Long userId) {

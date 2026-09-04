@@ -34,5 +34,6 @@ public final class Message {
     public static final String CV_FILE_CORRUPTED = "CV file is corrupted, encrypted, or unreadable";
     public static final String CV_TOO_MANY_PAGES = "CV has too many pages";
     public static final String CV_LIMIT_REACHED = "Maximum number of CVs reached";
+    public static final String CV_NOT_FOUND = "CV not found";
     public static final String STORAGE_UNAVAILABLE = "File storage is temporarily unavailable";
 }

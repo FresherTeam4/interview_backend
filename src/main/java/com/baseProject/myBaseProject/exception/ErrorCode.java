@@ -59,6 +59,7 @@ public enum ErrorCode {
     CV_FILE_CORRUPTED(HttpStatus.BAD_REQUEST, Message.CV_FILE_CORRUPTED),
     CV_TOO_MANY_PAGES(HttpStatus.BAD_REQUEST, Message.CV_TOO_MANY_PAGES),
     CV_LIMIT_REACHED(HttpStatus.CONFLICT, Message.CV_LIMIT_REACHED),
+    CV_NOT_FOUND(HttpStatus.NOT_FOUND, Message.CV_NOT_FOUND),
     STORAGE_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, Message.STORAGE_UNAVAILABLE);
 
     private final HttpStatus status;
