@@ -2,6 +2,7 @@ package com.baseProject.myBaseProject.controller;
 
 import com.baseProject.myBaseProject.config.OpenApiConfig;
 import com.baseProject.myBaseProject.dto.cv.CvDocumentResponse;
+import com.baseProject.myBaseProject.dto.cv.CvFileUrlResponse;
 import com.baseProject.myBaseProject.security.CustomUserDetails;
 import com.baseProject.myBaseProject.security.authorization.CurrentUser;
 import com.baseProject.myBaseProject.security.authorization.IsUser;
@@ -57,5 +58,12 @@ public class CvController {
     public CvDocumentResponse get(@CurrentUser CustomUserDetails currentUser,
                                   @PathVariable Long cvId) {
         return cvDocumentService.get(currentUser.getId(), cvId);
+    }
+
+    @GetMapping("/{cvId}/file")
+    @Operation(summary = "Get a temporary URL for the original CV file")
+    public CvFileUrlResponse fileUrl(@CurrentUser CustomUserDetails currentUser,
+                                     @PathVariable Long cvId) {
+        return cvDocumentService.fileUrl(currentUser.getId(), cvId);
     }
 }

@@ -4,6 +4,7 @@ import com.baseProject.myBaseProject.config.properites.CvProperties;
 import com.baseProject.myBaseProject.cv.CvProcessingService;
 import com.baseProject.myBaseProject.cv.validation.CvFileValidator;
 import com.baseProject.myBaseProject.dto.cv.CvDocumentResponse;
+import com.baseProject.myBaseProject.dto.cv.CvFileUrlResponse;
 import com.baseProject.myBaseProject.entity.CandidateProfile;
 import com.baseProject.myBaseProject.entity.CvDocument;
 import com.baseProject.myBaseProject.enums.CvDocumentStatus;
@@ -25,6 +26,8 @@ import org.springframework.web.multipart.MultipartFile;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Clock;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.HashMap;
 import java.util.HexFormat;
 import java.util.List;
@@ -42,6 +45,7 @@ public class CvDocumentServiceImpl implements CvDocumentService {
     private static final String PDF_CONTENT_TYPE = "application/pdf";
     private static final String FALLBACK_FILENAME = "cv.pdf";
     private static final int MAX_FILENAME_LENGTH = 255;
+    private static final Duration FILE_URL_TTL = Duration.ofMinutes(5);
 
     private final CvDocumentRepository cvDocumentRepository;
     private final CandidateProfileRepository candidateProfileRepository;
@@ -98,6 +102,18 @@ public class CvDocumentServiceImpl implements CvDocumentService {
                 .findByCvDocumentId(document.getId())
                 .orElse(null);
         return cvDocumentMapper.toResponse(document, profile);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public CvFileUrlResponse fileUrl(Long userId, Long cvId) {
+        // Không lọc active để interview cũ vẫn có thể truy cập file của CV đã xóa mềm.
+        CvDocument document = cvDocumentRepository.findByIdAndUserId(cvId, userId)
+                .orElseThrow(() -> new DomainException(ErrorCode.CV_NOT_FOUND));
+
+        String url = storageService.generatePresignedUrl(document.getStorageKey(), FILE_URL_TTL);
+        Instant expiresAt = clock.instant().plus(FILE_URL_TTL);
+        return new CvFileUrlResponse(url, expiresAt);
     }
 
     private CvUploadResult reuse(Long userId, CvDocument document) {
