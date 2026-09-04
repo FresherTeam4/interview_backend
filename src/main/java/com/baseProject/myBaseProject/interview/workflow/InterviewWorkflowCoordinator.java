@@ -191,10 +191,11 @@ public class InterviewWorkflowCoordinator {
     private long retryBackoffSeconds(
             SessionProcessingStage stage,
             short attempts) {
-        if (stage == SessionProcessingStage.SCRIPT_GENERATION || attempts == 1) {
-            return 1;
-        }
-        return 3;
+        return switch (stage) {
+            case SCRIPT_GENERATION -> 1;
+            case NEXT_TURN -> attempts == 1 ? 1 : 3;
+            case SCORING -> attempts == 1 ? 2 : 10;
+        };
     }
 
     private String workflowName(SessionProcessingStage stage) {

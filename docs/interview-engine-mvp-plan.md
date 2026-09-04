@@ -2073,6 +2073,8 @@ fake evidence, insufficient evidence và provider adapter. Full suite chạy ng�
 
 ### M11 — Timeout 24 giờ và durable workflow recovery
 
+**Trạng thái:** implementation đã hoàn thành, chờ `APPROVED M11`.
+
 **Kết quả người dùng**
 
 Phiên bị bỏ dở tự kết thúc và được chấm phần đã làm; restart hoặc worker failure không để workflow
@@ -2105,6 +2107,53 @@ treo vĩnh viễn.
 - Answer thắng race hợp lệ không bị expire nhầm.
 - Stale work được xử lý đúng một lần dù recovery chạy đồng thời.
 - Transition/reason/report đúng cho session có và không có answer.
+
+**Kiểm tra thủ công với timeout ngắn**
+
+Chỉ dùng một session test trên database local. Khởi động application với timeout một giờ và expiry
+scan mỗi 10 giây:
+
+```powershell
+$env:INTERVIEW_INACTIVITY_TIMEOUT_HOURS = "1"
+$env:INTERVIEW_EXPIRY_CRON = "*/10 * * * * *"
+.\mvnw.cmd spring-boot:run
+```
+
+1. Với session `READY`, `IN_PROGRESS` hoặc `PAUSED`, đặt `last_activity_at` lùi 59 phút và chờ một
+   lần scan: session phải giữ nguyên.
+2. Đặt cùng session lùi 61 phút. Session không có answer phải thành `COMPLETED`, có
+   `end_reason = TIMEOUT_24H` và report `INSUFFICIENT_EVIDENCE`.
+3. Với session đã có answer, đặt activity lùi 61 phút. Session phải qua `SCORING`, giữ transcript,
+   rồi tạo partial report. Cần provider hợp lệ để hoàn tất nhánh này.
+4. Để kiểm tra recheck/race, backdate session rồi submit answer hoặc pause trước khi expiry lấy lock.
+   Mutation đã commit phải cập nhật activity/status và expiry bỏ qua session. Complete hoặc worker
+   chuyển session khỏi ba status timeout cũng phải thắng theo cùng nguyên tắc.
+5. Dừng application khi script/next-turn/scoring đang xử lý, chờ quá
+   `INTERVIEW_PROCESSING_LEASE_SECONDS`, rồi khởi động lại. Startup recovery phải claim token mới;
+   chỉ worker sở hữu token mới được commit và không sinh turn/report trùng.
+
+Có thể backdate session test bằng MySQL Workbench/CLI; thay `42` bằng ID test và không dùng trên dữ
+liệu thật:
+
+```sql
+UPDATE interview_sessions
+SET last_activity_at = UTC_TIMESTAMP(6) - INTERVAL 61 MINUTE
+WHERE id = 42
+  AND status IN ('READY', 'IN_PROGRESS', 'PAUSED');
+
+SELECT status, awaiting_action, end_reason, last_activity_at, completed_at
+FROM interview_sessions
+WHERE id = 42;
+```
+
+Sau kiểm tra, xóa hai biến môi trường hoặc mở terminal mới để trở về mặc định 24 giờ/5 phút.
+
+**Kết quả triển khai và verification M11:** expiry xử lý batch 50 ID với transaction riêng cho mỗi
+session; state được lock/recheck trước timeout; session rỗng complete atomically với insufficient-
+evidence report, session có answer dispatch partial scoring sau commit. Recovery script, next-turn
+và scoring được kiểm tra với stale cutoff/atomic claim; scoring retry dùng backoff 2s/10s. Focused
+focused tests pass `21/21`; full Maven suite ngày 2026-09-04 pass `125/125`, Liquibase xác nhận 17
+changeset hiện có và Hibernate schema validation khởi tạo thành công trên MySQL local.
 
 **Điểm dừng:** chờ `APPROVED M11`.
 

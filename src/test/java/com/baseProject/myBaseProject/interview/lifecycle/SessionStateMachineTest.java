@@ -111,6 +111,53 @@ class SessionStateMachineTest {
     }
 
     @Test
+    void timeoutMovesInactiveSessionToScoringAsScheduler() {
+        Instant cutoff = NOW.minusSeconds(24 * 60 * 60);
+        when(session.getId()).thenReturn(SESSION_ID);
+        when(session.getStatus()).thenReturn(SessionStatus.PAUSED);
+        when(session.getLastActivityAt()).thenReturn(cutoff);
+        when(sessionRepository.saveAndFlush(session)).thenReturn(session);
+
+        InterviewSession result = stateMachine.timeout(
+                session,
+                cutoff,
+                "Interview expired after inactivity");
+
+        assertThat(result).isSameAs(session);
+        verify(session).applyStateTransition(
+                SessionStatus.SCORING,
+                AwaitingAction.REPORT,
+                SessionEndReason.TIMEOUT_24H,
+                null,
+                null,
+                SessionProcessingStage.SCORING,
+                true,
+                false,
+                NOW);
+        ArgumentCaptor<SessionStateTransition> transitionCaptor =
+                ArgumentCaptor.forClass(SessionStateTransition.class);
+        verify(transitionRepository).save(transitionCaptor.capture());
+        assertThat(transitionCaptor.getValue().getActor())
+                .isEqualTo(SessionTransitionActor.SCHEDULER);
+    }
+
+    @Test
+    void timeoutRejectsSessionWhoseActivityIsNewerThanCutoff() {
+        Instant cutoff = NOW.minusSeconds(24 * 60 * 60);
+        when(session.getId()).thenReturn(SESSION_ID);
+        when(session.getStatus()).thenReturn(SessionStatus.IN_PROGRESS);
+        when(session.getLastActivityAt()).thenReturn(cutoff.plusSeconds(1));
+
+        assertThatThrownBy(() -> stateMachine.timeout(
+                        session,
+                        cutoff,
+                        "Interview expired after inactivity"))
+                .isInstanceOf(SessionInvalidStateException.class);
+
+        verifyNoInteractions(transitionRepository);
+    }
+
+    @Test
     void completeScoringClearsWorkflowAndPreservesEndReason() {
         UUID token = UUID.fromString("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
         when(session.getId()).thenReturn(SESSION_ID);

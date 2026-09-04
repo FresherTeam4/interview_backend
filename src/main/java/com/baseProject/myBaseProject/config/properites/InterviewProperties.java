@@ -12,9 +12,14 @@ import java.time.Duration;
 @ConfigurationProperties(prefix = "app.interview")
 public record InterviewProperties(
         boolean enabled,
+        @Min(1) @Max(8760) long inactivityTimeoutHours,
         @Min(1) @Max(3600) long processingLeaseSeconds,
         @Min(1) @Max(100) int maxActivePerUser,
         @Min(1) @Max(100000) int maxAnswerChars) {
+
+    public Duration inactivityTimeout() {
+        return Duration.ofHours(inactivityTimeoutHours);
+    }
 
     public Duration processingLease() {
         return Duration.ofSeconds(processingLeaseSeconds);

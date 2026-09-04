@@ -281,6 +281,33 @@ public class SessionStateMachine {
     }
 
     @Transactional
+    public InterviewSession timeout(
+            InterviewSession lockedSession,
+            Instant inactivityCutoff,
+            String reason) {
+        requirePersisted(lockedSession);
+        Objects.requireNonNull(inactivityCutoff);
+        if (!isTimeoutEligible(lockedSession)
+                || lockedSession.getLastActivityAt() == null
+                || lockedSession.getLastActivityAt().isAfter(inactivityCutoff)) {
+            throw invalidState();
+        }
+        return apply(
+                lockedSession,
+                new Transition(
+                        SessionStatus.SCORING,
+                        AwaitingAction.REPORT,
+                        SessionEndReason.TIMEOUT_24H,
+                        null,
+                        null,
+                        SessionProcessingStage.SCORING,
+                        true,
+                        false),
+                SessionTransitionActor.SCHEDULER,
+                reason);
+    }
+
+    @Transactional
     public InterviewSession completeScoring(
             InterviewSession lockedSession,
             UUID processingToken,
@@ -535,6 +562,12 @@ public class SessionStateMachine {
         if (session.getStatus() != expectedStatus) {
             throw invalidState();
         }
+    }
+
+    private boolean isTimeoutEligible(InterviewSession session) {
+        return session.getStatus() == SessionStatus.READY
+                || session.getStatus() == SessionStatus.IN_PROGRESS
+                || session.getStatus() == SessionStatus.PAUSED;
     }
 
     private void verifyVersion(InterviewSession session, long expectedVersion) {

@@ -66,6 +66,8 @@ app:
     max-pages: ${JD_MAX_PAGES:20}
   interview:
     enabled: ${INTERVIEW_ENABLED:true}
+    inactivity-timeout-hours: ${INTERVIEW_INACTIVITY_TIMEOUT_HOURS:24}
+    expiry-cron: ${INTERVIEW_EXPIRY_CRON:0 */5 * * * *}
     recovery-cron: ${INTERVIEW_RECOVERY_CRON:30 */2 * * * *}
     processing-lease-seconds: ${INTERVIEW_PROCESSING_LEASE_SECONDS:90}
     max-active-per-user: ${INTERVIEW_MAX_ACTIVE_PER_USER:5}

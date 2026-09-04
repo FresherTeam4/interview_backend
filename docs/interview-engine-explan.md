@@ -1,7 +1,7 @@
 # Interview Engine — kiến trúc và luồng runtime
 
-> Phạm vi hiện tại: M03–M10. Script generation, text interview, adaptive follow-up, scoring và
-> report đã có; timeout và voice vẫn thuộc các module sau.
+> Phạm vi hiện tại: M03–M11. Script generation, text interview, adaptive follow-up, scoring,
+> report, inactivity timeout và durable workflow recovery đã có; voice thuộc các module sau.
 
 Interview Engine cần xử lý nhiều hơn một lần gọi Gemini, nhưng không phải mọi phần của engine đều
 cần một class hoặc một tầng abstraction riêng. Kiến trúc hiện tại giữ các boundary quan trọng và
@@ -79,14 +79,28 @@ scoring.
 Recovery job chỉ tìm ID ứng viên rồi atomic-claim từng session. Nó không giữ transaction trong khi
 gọi AI và không phụ thuộc queue trong memory để tồn tại qua application restart.
 
-## 5. State hiện tại
+## 5. Timeout và recovery runtime
+
+`InterviewSessionExpiryJob` quét tối đa 50 ID mỗi lần theo `lastActivityAt`. Mỗi ID sau đó được
+`InterviewSessionExpiryService` xử lý trong transaction riêng: lock row, kiểm tra lại status và mốc
+hết hạn, rồi mới transition sang `SCORING` với actor `SCHEDULER` và
+`endReason = TIMEOUT_24H`. Session rỗng được complete cùng report `INSUFFICIENT_EVIDENCE`; session
+đã có answer claim scoring và dispatch sau commit. GET/poll và provider completion không kéo dài
+mốc activity.
+
+`InterviewWorkflowRecoveryJob` chạy khi application ready và theo cron. Job tìm script,
+next-turn hoặc scoring chưa có claim, đã tới `nextRetryAt`, hoặc có lease stale. Mỗi candidate phải
+atomic-claim token mới trước khi dispatch. Kết quả từ worker mang token cũ bị bỏ qua khi commit, nên
+hai instance recovery có thể cùng scan nhưng không cùng sở hữu work.
+
+## 6. State hiện tại
 
 Public contract vẫn giữ hai trường:
 
 - `status`: lifecycle lớn của session.
 - `awaitingAction`: hành động frontend cần thực hiện.
 
-Các transition đang được sử dụng tới M10:
+Các transition đang được sử dụng tới M11:
 
 ```text
 CREATED -> SCRIPT_GENERATING -> READY -> IN_PROGRESS -> SCORING -> COMPLETED
@@ -97,10 +111,10 @@ CREATED -> SCRIPT_GENERATING -> READY -> IN_PROGRESS -> SCORING -> COMPLETED
 
 `SCORING` được scoring worker claim bền vững, gọi AI ngoài transaction, validate rubric/evidence rồi
 commit score/report cùng transition sang `COMPLETED`. Provider failure có retry/recovery riêng.
-Các state dành cho timeout và voice trong schema/API contract chưa đồng nghĩa với việc các module đó
-đã được triển khai.
+Timeout từ `READY`, `IN_PROGRESS` hoặc `PAUSED` cũng đi qua `SCORING`; worker đang giữ claim cũ
+không thể ghi sau transition này.
 
-## 6. Trách nhiệm của các class chính
+## 7. Trách nhiệm của các class chính
 
 | Class | Trách nhiệm |
 |---|---|
@@ -109,6 +123,8 @@ Các state dành cho timeout và voice trong schema/API contract chưa đồng n
 | `NextTurnStore` | Read/commit transaction của adaptive next-turn |
 | `InterviewWorkflowDispatcher` | Dispatch-after-commit, executor và delayed retry |
 | `InterviewWorkflowCoordinator` | Claim inspection, retry và terminal failure |
+| `InterviewSessionExpiryJob` | Quét batch ID session quá inactivity cutoff |
+| `InterviewSessionExpiryService` | Lock/recheck, timeout và dispatch partial scoring |
 | `QuestionScriptValidator` | Validate question count, source, content và signature |
 | `QuestionDiversityPolicy` | Chặn câu trùng và enforce ngưỡng 70% signature mới |
 | `FollowUpDecisionValidator` | Validate decision, evidence quote và server-side budget |
@@ -116,9 +132,8 @@ Các state dành cho timeout và voice trong schema/API contract chưa đồng n
 | `InterviewScoringValidator` | Validate locked rubric, level, score và transcript evidence |
 | Gemini adapters | Prompt/schema, provider call, parse response và phân loại lỗi |
 
-## 7. Những phần chưa triển khai
+## 8. Những phần chưa triển khai
 
-- M11: inactivity timeout 24 giờ.
 - M12–M15: voice attempt, STT, transcript confirmation và TTS.
 - M16: hardening và release verification.
 

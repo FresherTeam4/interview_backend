@@ -61,7 +61,7 @@ class InterviewSessionCompletionServiceTest {
     @BeforeEach
     void setUp() {
         service = new InterviewSessionCompletionService(
-                new InterviewProperties(true, 90, 5, 10_000),
+                new InterviewProperties(true, 24, 90, 5, 10_000),
                 stateMachine,
                 scoringStore,
                 claimService,
