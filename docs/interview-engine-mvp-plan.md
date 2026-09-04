@@ -1,7 +1,7 @@
 # Interview Engine MVP — Kịch bản sản phẩm và kế hoạch triển khai
 
-> Trạng thái: M00–M08 đã approved; M09 implementation review candidate
-> Ngày cập nhật: 2026-08-27
+> Trạng thái: M00–M08 đã approved; M09–M10 implementation review candidate
+> Ngày cập nhật: 2026-09-04
 > Phạm vi: Interview Engine, JD, text interview, voice turn-based và scoring
 
 Tài liệu này chốt lại luồng sản phẩm, phạm vi MVP, quy tắc nghiệp vụ, state machine, mô hình dữ
@@ -2025,6 +2025,8 @@ Chuẩn bị session `IN_PROGRESS + CANDIDATE_ANSWER` theo M07/M08. Từ
 
 ### M10 — Scoring, report và kết thúc chủ động
 
+**Trạng thái:** implementation đã hoàn thành, chờ `APPROVED M10`.
+
 **Kết quả người dùng**
 
 Hoàn thành toàn bộ hoặc kết thúc sớm đều tạo báo cáo theo locked rubric, có giải thích và dẫn chứng
@@ -2060,6 +2062,10 @@ thật từ transcript.
 - Không answer tạo report score `null`, không tạo score/evidence giả.
 - Scoring transaction fail không để dữ liệu một phần.
 - Báo cáo cũ không đổi khi rubric/profile/JD mới thay đổi.
+
+**Kết quả verification M10:** focused tests bao phủ API, state transition, weighted/partial formula,
+fake evidence, insufficient evidence và provider adapter. Full suite chạy ngày 2026-09-04 pass
+`111/111`; Liquibase 032 và Hibernate schema validation cũng pass trên MySQL local.
 
 **Điểm dừng:** chờ `APPROVED M10`.
 

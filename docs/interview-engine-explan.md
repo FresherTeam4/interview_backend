@@ -1,7 +1,7 @@
 # Interview Engine — kiến trúc và luồng runtime
 
-> Phạm vi hiện tại: M03–M09. Script generation, text interview và adaptive follow-up đã có;
-> scoring, timeout và voice vẫn thuộc các module sau.
+> Phạm vi hiện tại: M03–M10. Script generation, text interview, adaptive follow-up, scoring và
+> report đã có; timeout và voice vẫn thuộc các module sau.
 
 Interview Engine cần xử lý nhiều hơn một lần gọi Gemini, nhưng không phải mọi phần của engine đều
 cần một class hoặc một tầng abstraction riêng. Kiến trúc hiện tại giữ các boundary quan trọng và
@@ -67,7 +67,8 @@ một worker đã mất lease không thể ghi đè kết quả của worker m�
 
 ## 4. Workflow và retry
 
-`InterviewWorkflowDispatcher` dùng chung executor/scheduler cho script generation và next-turn.
+`InterviewWorkflowDispatcher` dùng chung executor/scheduler cho script generation, next-turn và
+scoring.
 `InterviewWorkflowCoordinator` dùng chung logic:
 
 1. Kiểm tra worker còn sở hữu claim.
@@ -85,18 +86,19 @@ Public contract vẫn giữ hai trường:
 - `status`: lifecycle lớn của session.
 - `awaitingAction`: hành động frontend cần thực hiện.
 
-Các transition đang được sử dụng ở M09:
+Các transition đang được sử dụng tới M10:
 
 ```text
-CREATED -> SCRIPT_GENERATING -> READY -> IN_PROGRESS -> SCORING
+CREATED -> SCRIPT_GENERATING -> READY -> IN_PROGRESS -> SCORING -> COMPLETED
                                   |           |
                                   |           +-> PAUSED -> IN_PROGRESS
                                   +-> FAILED <-+  (khi AI workflow thất bại)
 ```
 
-`SCORING` hiện là điểm bàn giao cho M10; chưa có scoring worker nên chưa chuyển tiếp sang
-`COMPLETED`. Các state dành cho timeout, report và voice trong schema/API contract chưa đồng nghĩa
-với việc các module đó đã được triển khai.
+`SCORING` được scoring worker claim bền vững, gọi AI ngoài transaction, validate rubric/evidence rồi
+commit score/report cùng transition sang `COMPLETED`. Provider failure có retry/recovery riêng.
+Các state dành cho timeout và voice trong schema/API contract chưa đồng nghĩa với việc các module đó
+đã được triển khai.
 
 ## 6. Trách nhiệm của các class chính
 
@@ -110,11 +112,12 @@ với việc các module đó đã được triển khai.
 | `QuestionScriptValidator` | Validate question count, source, content và signature |
 | `QuestionDiversityPolicy` | Chặn câu trùng và enforce ngưỡng 70% signature mới |
 | `FollowUpDecisionValidator` | Validate decision, evidence quote và server-side budget |
+| `InterviewScoringStore` | Chuẩn bị scoring input và commit score/report atomically |
+| `InterviewScoringValidator` | Validate locked rubric, level, score và transcript evidence |
 | Gemini adapters | Prompt/schema, provider call, parse response và phân loại lỗi |
 
 ## 7. Những phần chưa triển khai
 
-- M10: scoring và report.
 - M11: inactivity timeout 24 giờ.
 - M12–M15: voice attempt, STT, transcript confirmation và TTS.
 - M16: hardening và release verification.

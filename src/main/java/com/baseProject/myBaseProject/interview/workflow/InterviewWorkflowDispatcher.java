@@ -4,6 +4,7 @@ import com.baseProject.myBaseProject.config.AsyncConfig;
 import com.baseProject.myBaseProject.config.properites.InterviewProperties;
 import com.baseProject.myBaseProject.enums.SessionProcessingStage;
 import com.baseProject.myBaseProject.interview.workflow.script.InterviewScriptGenerationWorker;
+import com.baseProject.myBaseProject.interview.workflow.scoring.InterviewScoringWorker;
 import com.baseProject.myBaseProject.interview.workflow.turn.InterviewNextTurnWorker;
 
 import lombok.extern.slf4j.Slf4j;
@@ -28,6 +29,7 @@ public class InterviewWorkflowDispatcher {
     private final SessionProcessingClaimService claimService;
     private final InterviewScriptGenerationWorker scriptWorker;
     private final InterviewNextTurnWorker nextTurnWorker;
+    private final InterviewScoringWorker scoringWorker;
     private final ThreadPoolTaskExecutor executor;
     private final TaskScheduler scheduler;
 
@@ -36,12 +38,14 @@ public class InterviewWorkflowDispatcher {
             SessionProcessingClaimService claimService,
             InterviewScriptGenerationWorker scriptWorker,
             InterviewNextTurnWorker nextTurnWorker,
+            InterviewScoringWorker scoringWorker,
             @Qualifier(AsyncConfig.INTERVIEW_AI_EXECUTOR) ThreadPoolTaskExecutor executor,
             @Qualifier(AsyncConfig.INTERVIEW_WORKFLOW_SCHEDULER) TaskScheduler scheduler) {
         this.properties = properties;
         this.claimService = claimService;
         this.scriptWorker = scriptWorker;
         this.nextTurnWorker = nextTurnWorker;
+        this.scoringWorker = scoringWorker;
         this.executor = executor;
         this.scheduler = scheduler;
     }
@@ -63,7 +67,7 @@ public class InterviewWorkflowDispatcher {
     }
 
     public boolean claimAndDispatch(Long sessionId, SessionProcessingStage stage) {
-        if (!properties.enabled() || stage == SessionProcessingStage.SCORING) {
+        if (!properties.enabled()) {
             return false;
         }
         UUID processingToken = UUID.randomUUID();
@@ -103,7 +107,7 @@ public class InterviewWorkflowDispatcher {
         Optional<Instant> retryAt = switch (stage) {
             case SCRIPT_GENERATION -> scriptWorker.process(sessionId, processingToken);
             case NEXT_TURN -> nextTurnWorker.process(sessionId, processingToken);
-            case SCORING -> Optional.empty();
+            case SCORING -> scoringWorker.process(sessionId, processingToken);
         };
         retryAt.ifPresent(when -> scheduleRecovery(sessionId, stage, when));
     }

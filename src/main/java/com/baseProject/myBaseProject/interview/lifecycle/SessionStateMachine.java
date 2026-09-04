@@ -254,6 +254,95 @@ public class SessionStateMachine {
     }
 
     @Transactional
+    public InterviewSession completeEarly(
+            Long userId,
+            Long sessionId,
+            long expectedVersion,
+            String reason) {
+        InterviewSession session = findOwnedSession(userId, sessionId, expectedVersion);
+        requireStatus(session, SessionStatus.IN_PROGRESS);
+        if (session.getAwaitingAction() != AwaitingAction.CANDIDATE_ANSWER
+                && session.getAwaitingAction() != AwaitingAction.TRANSCRIPT_CONFIRMATION) {
+            throw invalidState();
+        }
+        return apply(
+                session,
+                new Transition(
+                        SessionStatus.SCORING,
+                        AwaitingAction.REPORT,
+                        SessionEndReason.USER_COMPLETED_EARLY,
+                        null,
+                        null,
+                        SessionProcessingStage.SCORING,
+                        true,
+                        true),
+                SessionTransitionActor.USER,
+                reason);
+    }
+
+    @Transactional
+    public InterviewSession completeScoring(
+            InterviewSession lockedSession,
+            UUID processingToken,
+            String reason) {
+        requireScoringState(lockedSession);
+        verifyClaim(lockedSession, SessionProcessingStage.SCORING, processingToken);
+        return completeScoringTransition(lockedSession, reason);
+    }
+
+    @Transactional
+    public InterviewSession completeScoringWithoutEvidence(
+            InterviewSession lockedSession,
+            String reason) {
+        requireScoringState(lockedSession);
+        if (lockedSession.getProcessingToken() != null) {
+            throw new IllegalStateException(
+                    "Scoring claim must not exist for insufficient evidence, sessionId="
+                            + lockedSession.getId());
+        }
+        return completeScoringTransition(lockedSession, reason);
+    }
+
+    @Transactional
+    public InterviewSession abandon(
+            Long userId,
+            Long sessionId,
+            long expectedVersion,
+            String reason) {
+        InterviewSession session = sessionRepository
+                .findOwnedByIdForUpdate(sessionId, userId)
+                .orElseThrow(SessionNotFoundException::new);
+        if (session.getStatus() == SessionStatus.ABANDONED) {
+            return session;
+        }
+        verifyVersion(session, expectedVersion);
+        if (session.getStatus() == SessionStatus.IN_PROGRESS
+                && session.getAwaitingAction() != AwaitingAction.CANDIDATE_ANSWER
+                && session.getAwaitingAction() != AwaitingAction.TRANSCRIPT_CONFIRMATION) {
+            throw invalidState();
+        }
+        if (session.getStatus() != SessionStatus.READY
+                && session.getStatus() != SessionStatus.IN_PROGRESS
+                && session.getStatus() != SessionStatus.PAUSED
+                && session.getStatus() != SessionStatus.FAILED) {
+            throw invalidState();
+        }
+        return apply(
+                session,
+                new Transition(
+                        SessionStatus.ABANDONED,
+                        AwaitingAction.NONE,
+                        SessionEndReason.USER_ABANDONED,
+                        null,
+                        null,
+                        null,
+                        false,
+                        true),
+                SessionTransitionActor.USER,
+                reason);
+    }
+
+    @Transactional
     public InterviewSession failWorkflow(
             Long sessionId,
             long expectedVersion,
@@ -296,6 +385,33 @@ public class SessionStateMachine {
                 .orElseThrow(SessionNotFoundException::new);
         verifyVersion(session, expectedVersion);
         return session;
+    }
+
+    private InterviewSession completeScoringTransition(
+            InterviewSession session,
+            String reason) {
+        return apply(
+                session,
+                new Transition(
+                        SessionStatus.COMPLETED,
+                        AwaitingAction.NONE,
+                        session.getEndReason(),
+                        null,
+                        null,
+                        null,
+                        false,
+                        false),
+                SessionTransitionActor.SYSTEM,
+                reason);
+    }
+
+    private void requireScoringState(InterviewSession session) {
+        requirePersisted(session);
+        requireStatus(session, SessionStatus.SCORING);
+        if (session.getAwaitingAction() != AwaitingAction.REPORT
+                || session.getProcessingStage() != SessionProcessingStage.SCORING) {
+            throw invalidState();
+        }
     }
 
     private InterviewSession findSystemSession(Long sessionId, long expectedVersion) {

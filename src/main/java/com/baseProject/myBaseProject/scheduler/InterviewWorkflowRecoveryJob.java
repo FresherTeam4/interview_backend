@@ -38,12 +38,14 @@ public class InterviewWorkflowRecoveryJob {
     public void recoverWhenApplicationIsReady() {
         recoverScriptGeneration();
         recoverNextTurn();
+        recoverScoring();
     }
 
     @Scheduled(cron = "${app.interview.recovery-cron}")
     public void recoverPeriodically() {
         recoverScriptGeneration();
         recoverNextTurn();
+        recoverScoring();
     }
 
     private void recoverScriptGeneration() {
@@ -107,6 +109,38 @@ public class InterviewWorkflowRecoveryJob {
         } catch (RuntimeException exception) {
             log.error(
                     "Interview next-turn recovery failed: exceptionType={}",
+                    exception.getClass().getSimpleName());
+        }
+    }
+
+    private void recoverScoring() {
+        if (!properties.enabled()) {
+            return;
+        }
+        Instant now = clock.instant();
+        try {
+            List<Long> sessionIds = sessionRepository.findRecoverableWorkIds(
+                    List.of(SessionStatus.SCORING),
+                    List.of(SessionProcessingStage.SCORING),
+                    now,
+                    now.minus(properties.processingLease()),
+                    PageRequest.of(0, RECOVERY_BATCH_SIZE));
+            int claimed = 0;
+            for (Long sessionId : sessionIds) {
+                if (workflowDispatcher.claimAndDispatch(
+                        sessionId, SessionProcessingStage.SCORING)) {
+                    claimed++;
+                }
+            }
+            if (!sessionIds.isEmpty()) {
+                log.info(
+                        "Interview scoring recovery scanned: candidates={}, claimed={}",
+                        sessionIds.size(),
+                        claimed);
+            }
+        } catch (RuntimeException exception) {
+            log.error(
+                    "Interview scoring recovery failed: exceptionType={}",
                     exception.getClass().getSimpleName());
         }
     }

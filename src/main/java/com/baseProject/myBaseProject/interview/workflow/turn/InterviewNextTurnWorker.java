@@ -1,13 +1,16 @@
 package com.baseProject.myBaseProject.interview.workflow.turn;
 
 import com.baseProject.myBaseProject.exception.FollowUpDecisionException;
+import com.baseProject.myBaseProject.enums.SessionProcessingStage;
 import com.baseProject.myBaseProject.interview.turn.InterviewAdaptiveNextTurnService;
 import com.baseProject.myBaseProject.interview.turn.model.NextTurnData.NextTurnOutcome;
 import com.baseProject.myBaseProject.interview.workflow.InterviewWorkflowCoordinator;
+import com.baseProject.myBaseProject.interview.workflow.InterviewWorkflowDispatcher;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Component;
 
 import java.time.Duration;
@@ -22,6 +25,7 @@ public class InterviewNextTurnWorker {
 
     private final InterviewAdaptiveNextTurnService nextTurnService;
     private final InterviewWorkflowCoordinator workflowCoordinator;
+    private final ObjectProvider<InterviewWorkflowDispatcher> workflowDispatcherProvider;
 
     public Optional<Instant> process(Long sessionId, UUID processingToken) {
         long startedNanos = System.nanoTime();
@@ -45,6 +49,11 @@ public class InterviewNextTurnWorker {
             NextTurnOutcome result =
                     nextTurnService.decideAndPersist(sessionId, processingToken);
             outcome = result.name().toLowerCase();
+            if (result == NextTurnOutcome.SCORING) {
+                workflowDispatcherProvider.getObject().claimAndDispatch(
+                        sessionId,
+                        SessionProcessingStage.SCORING);
+            }
             return Optional.empty();
         } catch (FollowUpDecisionException failure) {
             InterviewWorkflowCoordinator.FailureOutcome failureOutcome =

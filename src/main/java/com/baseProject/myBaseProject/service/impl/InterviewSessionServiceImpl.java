@@ -14,6 +14,7 @@ import com.baseProject.myBaseProject.enums.SessionListScope;
 import com.baseProject.myBaseProject.interview.lifecycle.InterviewSessionCreationService;
 import com.baseProject.myBaseProject.interview.lifecycle.InterviewSessionLifecycleService;
 import com.baseProject.myBaseProject.interview.lifecycle.InterviewSessionQueryService;
+import com.baseProject.myBaseProject.interview.scoring.InterviewSessionCompletionService;
 import com.baseProject.myBaseProject.interview.turn.InterviewAnswerService;
 import com.baseProject.myBaseProject.interview.workflow.InterviewWorkflowRetryService;
 import com.baseProject.myBaseProject.service.InterviewSessionService;
@@ -30,6 +31,7 @@ public class InterviewSessionServiceImpl implements InterviewSessionService {
     private final InterviewSessionQueryService queryService;
     private final InterviewSessionLifecycleService lifecycleService;
     private final InterviewAnswerService answerService;
+    private final InterviewSessionCompletionService completionService;
     private final InterviewWorkflowRetryService retryService;
 
     @Override
@@ -89,6 +91,22 @@ public class InterviewSessionServiceImpl implements InterviewSessionService {
             Long sessionId,
             SubmitTextAnswerRequest request) {
         return answerService.submitTextAnswer(userId, sessionId, request);
+    }
+
+    @Override
+    public InterviewSessionAcceptedResponse complete(
+            Long userId,
+            Long sessionId,
+            SessionVersionRequest request) {
+        return completionService.complete(userId, sessionId, request);
+    }
+
+    @Override
+    public InterviewSessionAcceptedResponse abandon(
+            Long userId,
+            Long sessionId,
+            SessionVersionRequest request) {
+        return completionService.abandon(userId, sessionId, request);
     }
 
     @Override

@@ -4,6 +4,7 @@ import com.baseProject.myBaseProject.entity.SessionTurn;
 import com.baseProject.myBaseProject.enums.AwaitingAction;
 import com.baseProject.myBaseProject.enums.SessionProcessingStage;
 import com.baseProject.myBaseProject.enums.SessionStatus;
+import com.baseProject.myBaseProject.enums.TurnRole;
 
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -39,6 +40,18 @@ public interface SessionTurnRepository extends JpaRepository<SessionTurn, Long> 
     List<SessionTurn> findBySessionIdAndQuestionIdOrderByTurnIndexAsc(
             Long sessionId,
             Long questionId);
+
+    @Query("""
+            select turn
+            from SessionTurn turn
+            join fetch turn.question
+            where turn.session.id = :sessionId
+              and turn.role = :role
+            order by turn.turnIndex
+            """)
+    List<SessionTurn> findBySessionIdAndRoleWithQuestion(
+            @Param("sessionId") Long sessionId,
+            @Param("role") TurnRole role);
 
     @Query("""
             select turn

@@ -141,6 +141,26 @@ public class InterviewSessionController {
                 .body(response);
     }
 
+    @PostMapping("/{sessionId}/complete")
+    @Operation(summary = "Kết thúc sớm session và bắt đầu scoring")
+    public ResponseEntity<InterviewSessionAcceptedResponse> complete(
+            @CurrentUser CustomUserDetails currentUser,
+            @PathVariable Long sessionId,
+            @Valid @RequestBody SessionVersionRequest request) {
+        InterviewSessionAcceptedResponse response = interviewSessionService.complete(
+                currentUser.getId(), sessionId, request);
+        return accepted(response);
+    }
+
+    @PostMapping("/{sessionId}/abandon")
+    @Operation(summary = "Bỏ session mà không tạo báo cáo")
+    public InterviewSessionAcceptedResponse abandon(
+            @CurrentUser CustomUserDetails currentUser,
+            @PathVariable Long sessionId,
+            @Valid @RequestBody SessionVersionRequest request) {
+        return interviewSessionService.abandon(currentUser.getId(), sessionId, request);
+    }
+
     @PostMapping("/{sessionId}/retry")
     @Operation(summary = "Thử lại bước AI của session đã thất bại")
     public ResponseEntity<InterviewSessionAcceptedResponse> retry(

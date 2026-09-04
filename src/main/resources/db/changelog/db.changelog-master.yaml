@@ -53,3 +53,6 @@ databaseChangeLog:
   - include:
       file: 031-decouple-question-sources-from-live-profile.sql
       relativeToChangelogFile: true
+  - include:
+      file: 032-create-interview-report-tables.sql
+      relativeToChangelogFile: true

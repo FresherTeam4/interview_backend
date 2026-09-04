@@ -10,6 +10,7 @@ import com.baseProject.myBaseProject.config.properites.AiProperties;
 import com.baseProject.myBaseProject.config.properites.InterviewAiProperties;
 import com.baseProject.myBaseProject.enums.FollowUpDecision;
 import com.baseProject.myBaseProject.enums.InterviewDifficulty;
+import com.baseProject.myBaseProject.enums.SessionEndReason;
 import com.baseProject.myBaseProject.enums.TurnRole;
 import com.baseProject.myBaseProject.exception.FollowUpDecisionException;
 import com.baseProject.myBaseProject.exception.ScriptGenerationException;
@@ -18,6 +19,8 @@ import com.baseProject.myBaseProject.interview.ai.model.FollowUpDecisionContract
 import com.baseProject.myBaseProject.interview.ai.model.FollowUpDecisionContract.FollowUpTurnContext;
 import com.baseProject.myBaseProject.interview.ai.model.ScriptGenerationContract.ScriptGenerationInput;
 import com.baseProject.myBaseProject.interview.ai.model.ScriptGenerationContract.ScriptGenerationOutcome;
+import com.baseProject.myBaseProject.interview.ai.model.ScoringContract.ScoringInput;
+import com.baseProject.myBaseProject.interview.ai.model.ScoringContract.ScoringOutcome;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.google.genai.errors.ClientException;
 
@@ -70,6 +73,21 @@ class GeminiInterviewAdaptersTest {
               "reason": "The trade-off needs clarification"
             }
             """;
+    private static final String SCORING_JSON = """
+            {
+              "criteria": [{
+                "criterionCode": "TECHNICAL_DEPTH",
+                "levelNo": 3,
+                "score": 3.0,
+                "comment": "Good technical explanation",
+                "evidences": [{"turnId": 101, "quoteText": "I chose Redis"}]
+              }],
+              "summary": "Solid foundation",
+              "strengths": ["Clear choice"],
+              "improvements": ["Add measurements"],
+              "nextActions": ["Practice trade-offs"]
+            }
+            """;
 
     @Mock
     private GoogleGenAiChatModel chatModel;
@@ -78,18 +96,21 @@ class GeminiInterviewAdaptersTest {
 
     private GeminiInterviewQuestionGenerator questionGenerator;
     private GeminiInterviewFollowUpDecider followUpDecider;
+    private GeminiInterviewScorer scorer;
 
     @BeforeEach
     void setUp() {
         AiProperties credentials = new AiProperties(
                 "test-api-key", "gemini-cv", "v2", 25_000);
         InterviewAiProperties properties = new InterviewAiProperties(
-                "gemini-interview", "v1", "v1", 12_000, 8_000);
+                "gemini-interview", "v1", "v1", "v1", 12_000, 8_000, 50_000);
         JsonMapper jsonMapper = JsonMapper.builder().build();
         DefaultResourceLoader resourceLoader = new DefaultResourceLoader();
         questionGenerator = new GeminiInterviewQuestionGenerator(
                 credentials, properties, jsonMapper, resourceLoader, chatModelProvider);
         followUpDecider = new GeminiInterviewFollowUpDecider(
+                credentials, properties, jsonMapper, resourceLoader, chatModelProvider);
+        scorer = new GeminiInterviewScorer(
                 credentials, properties, jsonMapper, resourceLoader, chatModelProvider);
     }
 
@@ -174,6 +195,39 @@ class GeminiInterviewAdaptersTest {
                 .isInstanceOfSatisfying(FollowUpDecisionException.class,
                         failure -> assertThat(failure.getReason())
                                 .isEqualTo(FollowUpDecisionException.Reason.PROVIDER_UNAVAILABLE));
+
+        assertThatThrownBy(() -> scorer.score(new ScoringInput(
+                        "en",
+                        java.math.BigDecimal.ONE,
+                        SessionEndReason.USER_COMPLETED,
+                        List.of(),
+                        List.of())))
+                .isInstanceOf(com.baseProject.myBaseProject.exception.InterviewScoringException.class);
+    }
+
+    @Test
+    void scorerReadsStructuredScoresAndProtectsUntrustedTranscript() {
+        when(chatModelProvider.getObject()).thenReturn(chatModel);
+        when(chatModel.call(any(Prompt.class))).thenReturn(response(SCORING_JSON));
+
+        ScoringOutcome outcome = scorer.score(new ScoringInput(
+                "en",
+                java.math.BigDecimal.ONE,
+                SessionEndReason.USER_COMPLETED,
+                List.of(),
+                List.of()));
+
+        assertThat(outcome.result().criteria()).hasSize(1);
+        assertThat(outcome.result().criteria().get(0).criterionCode())
+                .isEqualTo("TECHNICAL_DEPTH");
+        assertThat(outcome.promptVersion()).isEqualTo("v1");
+
+        ArgumentCaptor<Prompt> promptCaptor = ArgumentCaptor.forClass(Prompt.class);
+        verify(chatModel).call(promptCaptor.capture());
+        assertThat(promptCaptor.getValue().getSystemMessage().getText())
+                .contains("RANH GIỚI TIN CẬY");
+        assertThat(promptCaptor.getValue().getUserMessage().getText())
+                .contains("<UNTRUSTED_SCORING_CONTEXT>");
     }
 
     private static ChatResponse response(String content) {

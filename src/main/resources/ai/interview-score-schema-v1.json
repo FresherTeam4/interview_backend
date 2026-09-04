@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["criteria", "summary", "strengths", "improvements", "nextActions"],
+  "properties": {
+    "criteria": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["criterionCode", "levelNo", "score", "comment", "evidences"],
+        "properties": {
+          "criterionCode": {"type": "string"},
+          "levelNo": {"type": "integer"},
+          "score": {"type": "number"},
+          "comment": {"type": "string"},
+          "evidences": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["turnId", "quoteText"],
+              "properties": {
+                "turnId": {"type": "integer"},
+                "quoteText": {"type": "string"}
+              }
+            }
+          }
+        }
+      }
+    },
+    "summary": {"type": "string"},
+    "strengths": {"type": "array", "items": {"type": "string"}},
+    "improvements": {"type": "array", "items": {"type": "string"}},
+    "nextActions": {"type": "array", "items": {"type": "string"}}
+  }
+}

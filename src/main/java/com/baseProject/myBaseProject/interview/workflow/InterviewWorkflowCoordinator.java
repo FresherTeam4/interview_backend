@@ -6,6 +6,7 @@ import com.baseProject.myBaseProject.enums.SessionFailureStage;
 import com.baseProject.myBaseProject.enums.SessionProcessingStage;
 import com.baseProject.myBaseProject.enums.SessionStatus;
 import com.baseProject.myBaseProject.exception.FollowUpDecisionException;
+import com.baseProject.myBaseProject.exception.InterviewScoringException;
 import com.baseProject.myBaseProject.exception.ScriptGenerationException;
 import com.baseProject.myBaseProject.interview.lifecycle.SessionStateMachine;
 import com.baseProject.myBaseProject.repository.InterviewSessionRepository;
@@ -27,6 +28,7 @@ public class InterviewWorkflowCoordinator {
 
     private static final short SCRIPT_MAX_ATTEMPTS = 2;
     private static final short NEXT_TURN_MAX_ATTEMPTS = 3;
+    private static final short SCORING_MAX_ATTEMPTS = 3;
 
     private final InterviewSessionRepository sessionRepository;
     private final SessionProcessingClaimService claimService;
@@ -49,6 +51,15 @@ public class InterviewWorkflowCoordinator {
                 processingToken,
                 SessionProcessingStage.NEXT_TURN,
                 NEXT_TURN_MAX_ATTEMPTS);
+    }
+
+    @Transactional(readOnly = true)
+    public ClaimInspection inspectScoring(Long sessionId, UUID processingToken) {
+        return inspect(
+                sessionId,
+                processingToken,
+                SessionProcessingStage.SCORING,
+                SCORING_MAX_ATTEMPTS);
     }
 
     @Transactional
@@ -78,6 +89,22 @@ public class InterviewWorkflowCoordinator {
                 SessionProcessingStage.NEXT_TURN,
                 SessionFailureStage.NEXT_TURN,
                 NEXT_TURN_MAX_ATTEMPTS,
+                failure.isRetryable(),
+                failure.getStatusMessage(),
+                failure.getReason().name());
+    }
+
+    @Transactional
+    public FailureOutcome handleScoringFailure(
+            Long sessionId,
+            UUID processingToken,
+            InterviewScoringException failure) {
+        return handleFailure(
+                sessionId,
+                processingToken,
+                SessionProcessingStage.SCORING,
+                SessionFailureStage.SCORING,
+                SCORING_MAX_ATTEMPTS,
                 failure.isRetryable(),
                 failure.getStatusMessage(),
                 failure.getReason().name());

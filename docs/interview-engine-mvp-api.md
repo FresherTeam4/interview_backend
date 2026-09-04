@@ -1,6 +1,6 @@
 # Interview Engine MVP — Thiết kế kỹ thuật và API
 
-> Trạng thái: M00–M08 đã approved; M09 implementation review candidate
+> Trạng thái: M00–M08 đã approved; M09–M10 implementation review candidate
 > Tài liệu sản phẩm liên quan: [interview-engine-mvp-plan.md](./interview-engine-mvp-plan.md)  
 > Baseline: Java 17, Spring Boot 4.1.x, Spring MVC, Spring Security, Spring Data JPA,
 > MySQL, Liquibase, MinIO/S3, Spring AI và Gemini
@@ -1341,16 +1341,39 @@ POST /api/sessions/{sessionId}/complete
 - Có candidate answer: `SCORING`, `endReason = USER_COMPLETED_EARLY`, trả `202`.
 - Không có answer: tạo report `INSUFFICIENT_EVIDENCE`, chuyển `COMPLETED` trong cùng workflow.
 
+#### 8.8.1. Runtime contract đã triển khai trong M10
+
+- `POST /api/sessions/{sessionId}/complete` đã nhận `expectedVersion`, khóa session theo cả
+  `sessionId + currentUser` và trả `202 Accepted` kèm `Location`/`Retry-After`.
+- Chỉ nhận complete khi session đang `IN_PROGRESS` và chờ
+  `CANDIDATE_ANSWER`/`TRANSCRIPT_CONFIRMATION`; đang xử lý next turn bị từ chối bằng
+  `409 SESSION_INVALID_STATE` để không chạy đua với worker.
+- Transition `IN_PROGRESS -> SCORING`, `endReason = USER_COMPLETED_EARLY`,
+  `awaitingAction = REPORT` và processing stage `SCORING` được ghi atomically cùng transition log.
+- Có answer thì workflow claim và gọi scorer sau commit; provider call nằm ngoài transaction.
+- Không có answer thì report `INSUFFICIENT_EVIDENCE` và transition sang `COMPLETED` được commit
+  atomically, không gọi AI và không tạo criterion score/evidence giả.
+- Kết quả provider chỉ được persist sau khi criterion/level/score khớp rubric đã khóa và mọi quote
+  là exact substring của candidate turn thật. Score, evidence, highlights, overall score và
+  transition `SCORING -> COMPLETED` cùng commit hoặc cùng rollback.
+
 ### 8.9. Abandon
 
 ```http
 POST /api/sessions/{sessionId}/abandon
 ```
 
+```json
+{
+  "expectedVersion": 9
+}
+```
+
 - Dùng khi người dùng không muốn nhận report.
 - Chuyển `READY/IN_PROGRESS/PAUSED/FAILED -> ABANDONED`.
 - Không scoring.
 - Idempotent nếu session đã `ABANDONED`; terminal state khác trả conflict.
+- Response `200 OK` trả session ở `ABANDONED + NONE`.
 
 ### 8.10. Retry workflow
 
@@ -1366,10 +1389,10 @@ Body có `expectedVersion`. Cho phép khi:
 
 Server xác định stage từ persisted data, không cho client chọn stage. Trả `202 Accepted`.
 
-Trạng thái M09: retry đã hỗ trợ `IN_PROGRESS + ENGINE_RETRY + NEXT_TURN`,
-`FAILED/SCRIPT_GENERATION` và `FAILED/NEXT_TURN`; server đọc persisted state/stage, reset attempt rồi
-claim/dispatch workflow tương ứng. Scoring retry vẫn chờ M10. Các lỗi thường gặp: `expectedVersion`
-lệch trả `409 SESSION_VERSION_CONFLICT`, session hoặc stage không cho phép retry trả
+Runtime M10 hỗ trợ `IN_PROGRESS + ENGINE_RETRY + NEXT_TURN`, `FAILED/SCRIPT_GENERATION`,
+`FAILED/NEXT_TURN` và `FAILED/SCORING`; server đọc persisted state/stage, reset attempt rồi
+claim/dispatch workflow tương ứng. Các lỗi thường gặp: `expectedVersion` lệch trả
+`409 SESSION_VERSION_CONFLICT`, session hoặc stage không cho phép retry trả
 `409 SESSION_RETRY_NOT_ALLOWED`, session của user khác trả `404 SESSION_NOT_FOUND`.
 
 ---
@@ -1580,6 +1603,10 @@ Response:
 
 `INSUFFICIENT_EVIDENCE` trả `overallScore = null`, arrays rỗng hoặc lời hướng dẫn bắt đầu phiên
 mới, không tạo criterion score.
+
+Runtime M10 tải report, criterion scores, evidences và highlights bằng các query tách riêng để tránh
+Cartesian product. Session của user khác luôn trả `404 SESSION_NOT_FOUND`; scoring đang chạy trả
+`409 REPORT_NOT_READY`; scoring đã fail trả `409 SESSION_RETRY_REQUIRED`.
 
 ---
 

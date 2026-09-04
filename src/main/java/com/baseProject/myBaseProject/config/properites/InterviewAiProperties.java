@@ -23,11 +23,19 @@ public record InterviewAiProperties(
         @Size(max = 20, message = "app.interview.ai.follow-up-prompt-version vượt quá 20 ký tự")
         String followUpPromptVersion,
 
+        @NotBlank(message = "Thiếu app.interview.ai.scoring-prompt-version")
+        @Size(max = 20, message = "app.interview.ai.scoring-prompt-version vượt quá 20 ký tự")
+        String scoringPromptVersion,
+
         @Positive(message = "app.interview.ai.script-timeout-ms phải là số dương")
         @Max(value = 60000, message = "app.interview.ai.script-timeout-ms tối đa là 60000")
         long scriptTimeoutMs,
 
         @Positive(message = "app.interview.ai.follow-up-timeout-ms phải là số dương")
         @Max(value = 60000, message = "app.interview.ai.follow-up-timeout-ms tối đa là 60000")
-        long followUpTimeoutMs) {
+        long followUpTimeoutMs,
+
+        @Positive(message = "app.interview.ai.scoring-timeout-ms phải là số dương")
+        @Max(value = 60000, message = "app.interview.ai.scoring-timeout-ms tối đa là 60000")
+        long scoringTimeoutMs) {
 }

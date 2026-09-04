@@ -117,5 +117,9 @@ public enum ErrorCode {
     /** 400 — text answer vượt giới hạn ký tự cấu hình. */
     ANSWER_TOO_LONG,
     /** 503 — provider hoặc credential sinh nội dung phỏng vấn không dùng được. */
-    INTERVIEW_AI_UNAVAILABLE
+    INTERVIEW_AI_UNAVAILABLE,
+    /** 409 — scoring chưa hoàn tất nên report chưa thể đọc. */
+    REPORT_NOT_READY,
+    /** 409 — scoring đã thất bại và session cần retry. */
+    SESSION_RETRY_REQUIRED
 }

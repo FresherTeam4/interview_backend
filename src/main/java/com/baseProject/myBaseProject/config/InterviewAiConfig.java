@@ -21,6 +21,8 @@ public class InterviewAiConfig {
     public static final String SCRIPT_CHAT_MODEL = "interviewScriptChatModel";
     public static final String FOLLOW_UP_CLIENT = "interviewFollowUpGenAiClient";
     public static final String FOLLOW_UP_CHAT_MODEL = "interviewFollowUpChatModel";
+    public static final String SCORING_CLIENT = "interviewScoringGenAiClient";
+    public static final String SCORING_CHAT_MODEL = "interviewScoringChatModel";
 
     @Bean(name = SCRIPT_CLIENT, destroyMethod = "close")
     @Lazy
@@ -79,6 +81,38 @@ public class InterviewAiConfig {
             InterviewAiProperties properties) {
         return GoogleGenAiChatModel.builder()
                 .genAiClient(interviewFollowUpGenAiClient)
+                .options(GoogleGenAiChatOptions.builder()
+                        .model(properties.model())
+                        .build())
+                .retryTemplate(new RetryTemplate(RetryPolicy.withMaxRetries(0)))
+                .build();
+    }
+
+    @Bean(name = SCORING_CLIENT, destroyMethod = "close")
+    @Lazy
+    Client interviewScoringGenAiClient(
+            AiProperties credentialProperties,
+            InterviewAiProperties interviewAiProperties) {
+        if (!credentialProperties.hasApiKey()) {
+            throw new IllegalStateException("Thiếu cấu hình app.ai.api-key");
+        }
+
+        HttpOptions httpOptions = HttpOptions.builder()
+                .timeout(Math.toIntExact(interviewAiProperties.scoringTimeoutMs()))
+                .build();
+        return Client.builder()
+                .apiKey(credentialProperties.apiKey())
+                .httpOptions(httpOptions)
+                .build();
+    }
+
+    @Bean(name = SCORING_CHAT_MODEL)
+    @Lazy
+    GoogleGenAiChatModel interviewScoringChatModel(
+            @Qualifier(SCORING_CLIENT) Client interviewScoringGenAiClient,
+            InterviewAiProperties properties) {
+        return GoogleGenAiChatModel.builder()
+                .genAiClient(interviewScoringGenAiClient)
                 .options(GoogleGenAiChatOptions.builder()
                         .model(properties.model())
                         .build())

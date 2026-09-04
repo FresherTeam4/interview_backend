@@ -49,6 +49,16 @@ public interface InterviewSessionService {
             Long sessionId,
             SubmitTextAnswerRequest request);
 
+    InterviewSessionAcceptedResponse complete(
+            Long userId,
+            Long sessionId,
+            SessionVersionRequest request);
+
+    InterviewSessionAcceptedResponse abandon(
+            Long userId,
+            Long sessionId,
+            SessionVersionRequest request);
+
     InterviewSessionAcceptedResponse retry(
             Long userId,
             Long sessionId,

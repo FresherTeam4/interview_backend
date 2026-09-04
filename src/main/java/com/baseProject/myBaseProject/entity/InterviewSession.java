@@ -226,6 +226,15 @@ public class InterviewSession {
         totalQuestionCount = (short) questionCount;
     }
 
+    /** Denormalize điểm report để danh sách session không phải join toàn bộ report. */
+    public void recordOverallScore(BigDecimal score) {
+        if (score != null
+                && (score.signum() < 0 || score.compareTo(BigDecimal.valueOf(100)) > 0)) {
+            throw new IllegalArgumentException("Overall score must be between 0 and 100");
+        }
+        overallScore = score;
+    }
+
     /** Khởi tạo con trỏ hội thoại tại base question đầu tiên. */
     public int beginAtQuestion(short questionOrdinal) {
         currentQuestionOrdinal = questionOrdinal;

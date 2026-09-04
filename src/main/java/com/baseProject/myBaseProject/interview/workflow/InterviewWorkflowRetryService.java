@@ -45,7 +45,8 @@ public class InterviewWorkflowRetryService {
                 request.expectedVersion(),
                 Set.of(
                         SessionFailureStage.SCRIPT_GENERATION,
-                        SessionFailureStage.NEXT_TURN),
+                        SessionFailureStage.NEXT_TURN,
+                        SessionFailureStage.SCORING),
                 RETRY_TRANSITION_REASON);
         UUID processingToken = UUID.randomUUID();
         SessionProcessingStage processingStage = retrying.getProcessingStage();
@@ -62,8 +63,7 @@ public class InterviewWorkflowRetryService {
 
         InterviewSession claimedSession = sessionRepository.findByIdAndUserId(sessionId, userId)
                 .orElseThrow(SessionNotFoundException::new);
-        if (processingStage != SessionProcessingStage.SCRIPT_GENERATION
-                && processingStage != SessionProcessingStage.NEXT_TURN) {
+        if (processingStage == null) {
             throw new IllegalStateException(
                     "Unsupported retried processing stage " + processingStage);
         }

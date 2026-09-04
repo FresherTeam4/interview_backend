@@ -114,6 +114,20 @@ public final class Message {
             "Chưa tạo được câu hỏi tiếp theo hợp lệ; vui lòng thử lại";
     public static final String FOLLOW_UP_FAILED_UNEXPECTED =
             "Tạo câu hỏi tiếp theo thất bại; vui lòng thử lại sau";
+    public static final String SCORING_FAILED_NO_API_KEY =
+            "Máy chủ chưa cấu hình dịch vụ chấm điểm phỏng vấn";
+    public static final String SCORING_FAILED_TIMEOUT =
+            "Chấm điểm phỏng vấn quá lâu nên đã dừng; vui lòng thử lại";
+    public static final String SCORING_FAILED_AI_UNAVAILABLE =
+            "Dịch vụ chấm điểm phỏng vấn đang không phản hồi; vui lòng thử lại sau";
+    public static final String SCORING_FAILED_INVALID_OUTPUT =
+            "Chưa tạo được kết quả chấm điểm hợp lệ; vui lòng thử lại";
+    public static final String SCORING_FAILED_UNEXPECTED =
+            "Chấm điểm phỏng vấn thất bại; vui lòng thử lại sau";
+    public static final String REPORT_NOT_READY =
+            "Báo cáo phỏng vấn chưa sẵn sàng";
+    public static final String SESSION_RETRY_REQUIRED =
+            "Chấm điểm phiên phỏng vấn đã thất bại; vui lòng thử lại";
 
     // ---- status_message của lần bóc tách CV ----
     // Không trả qua HTTP: bóc tách chạy sau khi request đã kết thúc, nên chỗ đọc được là

@@ -86,6 +86,17 @@ public interface InterviewSessionRepository extends JpaRepository<InterviewSessi
             @Param("userId") Long userId);
 
     @Query("""
+            select distinct session
+            from InterviewSession session
+            join fetch session.rubricVersion rubricVersion
+            left join fetch rubricVersion.criteria criterion
+            left join fetch criterion.levels
+            where session.id = :sessionId
+            """)
+    Optional<InterviewSession> findByIdWithLockedRubric(
+            @Param("sessionId") Long sessionId);
+
+    @Query("""
             select session.id
             from InterviewSession session
             where session.status in :statuses
