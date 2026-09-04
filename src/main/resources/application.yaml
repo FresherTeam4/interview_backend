@@ -19,8 +19,8 @@ spring:
     change-log: classpath:db/changelog/db.changelog-master.yaml
   servlet:
     multipart:
-      max-file-size: 6MB
-      max-request-size: 8MB
+      max-file-size: 16MB
+      max-request-size: 17MB
 
 springdoc:
   api-docs:
@@ -84,6 +84,10 @@ app:
       script-timeout-ms: ${INTERVIEW_SCRIPT_TIMEOUT_MS:12000}
       follow-up-timeout-ms: ${INTERVIEW_FOLLOW_UP_TIMEOUT_MS:8000}
       scoring-timeout-ms: ${INTERVIEW_SCORING_TIMEOUT_MS:50000}
+  voice:
+    max-file-size-bytes: ${VOICE_MAX_FILE_SIZE_BYTES:15728640}
+    max-duration-ms: ${VOICE_MAX_DURATION_MS:300000}
+    audio-retention-days: ${VOICE_AUDIO_RETENTION_DAYS:30}
   storage:
     endpoint: ${STORAGE_ENDPOINT:http://localhost:9000}
     public-endpoint: ${STORAGE_PUBLIC_ENDPOINT:http://localhost:9000}

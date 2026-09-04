@@ -5,14 +5,18 @@ import com.baseProject.myBaseProject.dto.interview.InterviewRubricResponse;
 import com.baseProject.myBaseProject.dto.interview.InterviewSessionResponse;
 import com.baseProject.myBaseProject.dto.interview.InterviewSessionSummaryResponse;
 import com.baseProject.myBaseProject.entity.InterviewSession;
+import com.baseProject.myBaseProject.entity.SessionTurn;
+import com.baseProject.myBaseProject.entity.VoiceAnswerAttempt;
 import com.baseProject.myBaseProject.enums.SessionListScope;
 import com.baseProject.myBaseProject.enums.SessionStatus;
+import com.baseProject.myBaseProject.enums.TurnRole;
 import com.baseProject.myBaseProject.exception.SessionInvalidStateException;
 import com.baseProject.myBaseProject.exception.SessionNotFoundException;
 import com.baseProject.myBaseProject.mapper.InterviewSessionMapper;
 import com.baseProject.myBaseProject.mapper.RubricMapper;
 import com.baseProject.myBaseProject.repository.InterviewSessionRepository;
 import com.baseProject.myBaseProject.repository.SessionTurnRepository;
+import com.baseProject.myBaseProject.repository.VoiceAnswerAttemptRepository;
 import com.baseProject.myBaseProject.repository.projection.SessionSummaryProjection;
 
 import lombok.RequiredArgsConstructor;
@@ -25,6 +29,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Collection;
 import java.util.EnumSet;
+import java.util.List;
 import java.util.Set;
 
 @Service
@@ -45,6 +50,7 @@ public class InterviewSessionQueryService {
 
     private final InterviewSessionRepository sessionRepository;
     private final SessionTurnRepository turnRepository;
+    private final VoiceAnswerAttemptRepository voiceAttemptRepository;
     private final InterviewSessionMapper sessionMapper;
     private final RubricMapper rubricMapper;
 
@@ -52,7 +58,11 @@ public class InterviewSessionQueryService {
     public InterviewSessionResponse get(Long userId, Long sessionId) {
         InterviewSession session = sessionRepository.findByIdAndUserId(sessionId, userId)
                 .orElseThrow(SessionNotFoundException::new);
-        return sessionMapper.toResponse(session, turnRepository.findOwnedHistory(sessionId, userId));
+        List<SessionTurn> turns = turnRepository.findOwnedHistory(sessionId, userId);
+        return sessionMapper.toResponse(
+                session,
+                turns,
+                latestVoiceDraft(sessionId, turns));
     }
 
     @Transactional(readOnly = true)
@@ -98,5 +108,18 @@ public class InterviewSessionQueryService {
                     Sort.Order.desc("updatedAt"),
                     Sort.Order.desc("id"));
         };
+    }
+
+    private VoiceAnswerAttempt latestVoiceDraft(
+            Long sessionId,
+            List<SessionTurn> turns) {
+        return turns.stream()
+                .filter(turn -> turn.getRole() == TurnRole.INTERVIEWER)
+                .reduce((first, second) -> second)
+                .flatMap(turn -> voiceAttemptRepository
+                        .findFirstBySessionIdAndPromptTurnIdOrderByAttemptNoDesc(
+                                sessionId,
+                                turn.getId()))
+                .orElse(null);
     }
 }

@@ -5,6 +5,7 @@ import com.baseProject.myBaseProject.dto.interview.SessionVersionRequest;
 import com.baseProject.myBaseProject.entity.InterviewSession;
 import com.baseProject.myBaseProject.entity.SessionQuestion;
 import com.baseProject.myBaseProject.entity.SessionTurn;
+import com.baseProject.myBaseProject.entity.VoiceAnswerAttempt;
 import com.baseProject.myBaseProject.enums.AwaitingAction;
 import com.baseProject.myBaseProject.enums.SessionStatus;
 import com.baseProject.myBaseProject.enums.TurnRole;
@@ -14,6 +15,7 @@ import com.baseProject.myBaseProject.mapper.InterviewSessionMapper;
 import com.baseProject.myBaseProject.repository.InterviewSessionRepository;
 import com.baseProject.myBaseProject.repository.SessionQuestionRepository;
 import com.baseProject.myBaseProject.repository.SessionTurnRepository;
+import com.baseProject.myBaseProject.repository.VoiceAnswerAttemptRepository;
 
 import lombok.RequiredArgsConstructor;
 
@@ -34,6 +36,7 @@ public class InterviewSessionLifecycleService {
     private final InterviewSessionRepository sessionRepository;
     private final SessionQuestionRepository questionRepository;
     private final SessionTurnRepository turnRepository;
+    private final VoiceAnswerAttemptRepository voiceAttemptRepository;
     private final InterviewSessionMapper sessionMapper;
 
     @Transactional
@@ -70,9 +73,8 @@ public class InterviewSessionLifecycleService {
                 sessionId,
                 request.expectedVersion(),
                 PAUSE_TRANSITION_REASON);
-        return sessionMapper.toResponse(
-                paused,
-                turnRepository.findOwnedHistory(sessionId, userId));
+        List<SessionTurn> turns = turnRepository.findOwnedHistory(sessionId, userId);
+        return sessionMapper.toResponse(paused, turns, latestVoiceDraft(sessionId, turns));
     }
 
     @Transactional
@@ -87,9 +89,8 @@ public class InterviewSessionLifecycleService {
                 request.expectedVersion(),
                 restoredAction,
                 RESUME_TRANSITION_REASON);
-        return sessionMapper.toResponse(
-                resumed,
-                turnRepository.findOwnedHistory(sessionId, userId));
+        List<SessionTurn> turns = turnRepository.findOwnedHistory(sessionId, userId);
+        return sessionMapper.toResponse(resumed, turns, latestVoiceDraft(sessionId, turns));
     }
 
     private AwaitingAction resolveAwaitingAction(Long userId, Long sessionId) {
@@ -105,5 +106,18 @@ public class InterviewSessionLifecycleService {
             throw new SessionInvalidStateException();
         }
         return AwaitingAction.CANDIDATE_ANSWER;
+    }
+
+    private VoiceAnswerAttempt latestVoiceDraft(
+            Long sessionId,
+            List<SessionTurn> turns) {
+        return turns.stream()
+                .filter(turn -> turn.getRole() == TurnRole.INTERVIEWER)
+                .reduce((first, second) -> second)
+                .flatMap(turn -> voiceAttemptRepository
+                        .findFirstBySessionIdAndPromptTurnIdOrderByAttemptNoDesc(
+                                sessionId,
+                                turn.getId()))
+                .orElse(null);
     }
 }

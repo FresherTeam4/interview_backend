@@ -5,15 +5,21 @@ import com.baseProject.myBaseProject.dto.interview.InterviewSessionResponse;
 import com.baseProject.myBaseProject.dto.interview.InterviewSessionSummaryResponse;
 import com.baseProject.myBaseProject.entity.InterviewSession;
 import com.baseProject.myBaseProject.entity.SessionTurn;
+import com.baseProject.myBaseProject.entity.VoiceAnswerAttempt;
 import com.baseProject.myBaseProject.enums.TurnRole;
 import com.baseProject.myBaseProject.repository.projection.SessionSummaryProjection;
+
+import lombok.RequiredArgsConstructor;
 
 import org.springframework.stereotype.Component;
 
 import java.util.List;
 
 @Component
+@RequiredArgsConstructor
 public class InterviewSessionMapper {
+
+    private final VoiceAttemptMapper voiceAttemptMapper;
 
     public InterviewSessionAcceptedResponse toAcceptedResponse(InterviewSession session) {
         return new InterviewSessionAcceptedResponse(
@@ -27,6 +33,13 @@ public class InterviewSessionMapper {
     public InterviewSessionResponse toResponse(
             InterviewSession session,
             List<SessionTurn> turns) {
+        return toResponse(session, turns, null);
+    }
+
+    public InterviewSessionResponse toResponse(
+            InterviewSession session,
+            List<SessionTurn> turns,
+            VoiceAnswerAttempt voiceDraft) {
         List<InterviewSessionResponse.Turn> turnResponses = turns.stream()
                 .map(this::toTurn)
                 .toList();
@@ -48,7 +61,7 @@ public class InterviewSessionMapper {
                 session.getTotalQuestionCount(),
                 currentPrompt(session, turns),
                 turnResponses,
-                null,
+                voiceDraft == null ? null : voiceAttemptMapper.toResponse(voiceDraft),
                 session.getStatusMessage(),
                 session.getLastActivityAt(),
                 session.getStartedAt(),

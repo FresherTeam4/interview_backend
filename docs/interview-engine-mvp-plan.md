@@ -2073,7 +2073,7 @@ fake evidence, insufficient evidence và provider adapter. Full suite chạy ng�
 
 ### M11 — Timeout 24 giờ và durable workflow recovery
 
-**Trạng thái:** implementation đã hoàn thành, chờ `APPROVED M11`.
+**Trạng thái:** `APPROVED M11` ngày 2026-09-04.
 
 **Kết quả người dùng**
 
@@ -2152,14 +2152,16 @@ Sau kiểm tra, xóa hai biến môi trường hoặc mở terminal mới để 
 session; state được lock/recheck trước timeout; session rỗng complete atomically với insufficient-
 evidence report, session có answer dispatch partial scoring sau commit. Recovery script, next-turn
 và scoring được kiểm tra với stale cutoff/atomic claim; scoring retry dùng backoff 2s/10s. Focused
-focused tests pass `21/21`; full Maven suite ngày 2026-09-04 pass `125/125`, Liquibase xác nhận 17
+tests pass `21/21`; full Maven suite ngày 2026-09-04 pass `125/125`, Liquibase xác nhận 17
 changeset hiện có và Hibernate schema validation khởi tạo thành công trên MySQL local.
 
-**Điểm dừng:** chờ `APPROVED M11`.
+**Điểm dừng:** `APPROVED M11`.
 
 ---
 
 ### M12 — Voice recording và attempt storage foundation
+
+**Trạng thái:** implementation đã hoàn thành, chờ `APPROVED M12`.
 
 **Kết quả người dùng**
 
@@ -2199,6 +2201,34 @@ attempt riêng mà chưa biến chúng thành câu trả lời chính thức.
 - Retry cùng `clientAttemptId` không upload/tạo row lần hai.
 - Wrong prompt/session/mode bị từ chối.
 - Storage failure/DB failure được dịch và compensate đúng.
+
+**Runtime contract M12 đã triển khai**
+
+- `POST /api/sessions/{sessionId}/voice-attempts` nhận multipart `metadata` + `file`, trả
+  `202 Accepted`, `Location`, `Retry-After` và attempt `RECORDED`.
+- Chỉ session `VOICE_TURN_BASED + IN_PROGRESS + CANDIDATE_ANSWER` và đúng current prompt mới được
+  upload. M12 giữ `CANDIDATE_ANSWER`, chưa chuyển sang `TRANSCRIPT_CONFIRMATION`, nên text fallback
+  không bị khóa khi STT chưa có.
+- Validator đọc tối đa 15 MiB, nhận WebM/Opus hoặc MP4/AAC theo magic/container/codec thay vì tin
+  filename/MIME client. Duration tối đa 300 giây; duration trong container được đối chiếu khi có,
+  nếu browser không ghi duration thì giữ declared duration đã validate để M13 kiểm chứng tiếp tại
+  provider boundary.
+- Object key là UUID dưới `interview-audio/{userId}/{sessionId}/answers/`; API không trả storage key,
+  checksum hoặc presigned URL.
+- Replay đúng `clientAttemptId` trả attempt cũ trước khi upload. Concurrent replay được serialize
+  bằng session lock; object của request thua được xóa bù. DB/state failure sau upload cũng xóa bù
+  best effort.
+- `GET /api/sessions/{sessionId}/voice-attempts/{attemptId}` scope đồng thời theo user, session và
+  attempt. Session detail/resume trả latest attempt của đúng current prompt trong `voiceDraft`.
+- Migration `033` tạo đầy đủ cột/constraint/index cho lifecycle M12–M14; M12 chỉ ghi `RECORDED`,
+  không tạo candidate turn, raw transcript hay STT claim.
+
+**Kết quả verification M12:** focused tests pass `18/18`, bao phủ WebM/MP4 sniffing, size/duration,
+wrong mode/prompt, attempt numbering, exact replay, concurrent replay compensation, DB/storage
+failure, ownership, resume metadata và controller security. Full Maven suite ngày 2026-09-04 pass
+`143/143`; Liquibase apply migration 033 thành công, Spring Data parse 21 repository và Hibernate
+schema validation pass trên MySQL local. MinIO local kết nối được trong context verification nhưng
+không có audio thật hay credential STT nào được gửi ra provider.
 
 **Điểm dừng:** chờ `APPROVED M12`.
 

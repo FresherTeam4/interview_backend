@@ -121,5 +121,19 @@ public enum ErrorCode {
     /** 409 — scoring chưa hoàn tất nên report chưa thể đọc. */
     REPORT_NOT_READY,
     /** 409 — scoring đã thất bại và session cần retry. */
-    SESSION_RETRY_REQUIRED
+    SESSION_RETRY_REQUIRED,
+
+    // ---- Interview Voice ----
+    /** 400 — request không có audio hoặc audio rỗng. */
+    AUDIO_FILE_REQUIRED,
+    /** 400 — audio/container metadata hỏng hoặc không hợp lệ. */
+    AUDIO_INVALID,
+    /** 413 — audio vượt giới hạn dung lượng của voice feature. */
+    AUDIO_FILE_TOO_LARGE,
+    /** 413 — recording vượt giới hạn thời lượng. */
+    AUDIO_DURATION_TOO_LONG,
+    /** 415 — container/codec audio không được hỗ trợ. */
+    AUDIO_INVALID_FILE_TYPE,
+    /** 404 — voice attempt không thuộc session của người gọi. */
+    VOICE_ATTEMPT_NOT_FOUND
 }

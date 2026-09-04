@@ -129,6 +129,21 @@ public final class Message {
     public static final String SESSION_RETRY_REQUIRED =
             "Chấm điểm phiên phỏng vấn đã thất bại; vui lòng thử lại";
 
+    // ---- Interview Voice ----
+    public static final String AUDIO_FILE_REQUIRED = "Bản ghi âm không được để trống";
+    public static final String AUDIO_INVALID =
+            "Bản ghi âm hoặc thông tin thời lượng không hợp lệ";
+    public static final String AUDIO_FILE_TOO_LARGE =
+            "Bản ghi âm vượt quá dung lượng cho phép, tối đa %d MB";
+    public static final String AUDIO_DURATION_TOO_LONG =
+            "Bản ghi âm vượt quá thời lượng cho phép, tối đa %d giây";
+    public static final String AUDIO_INVALID_FILE_TYPE =
+            "Chỉ nhận bản ghi WebM/Opus hoặc MP4/AAC";
+    public static final String VOICE_ATTEMPT_NOT_FOUND =
+            "Không tìm thấy bản ghi âm này";
+    public static final String CLIENT_ATTEMPT_ID_REUSED =
+            "clientAttemptId này đã được dùng cho một bản ghi khác";
+
     // ---- status_message của lần bóc tách CV ----
     // Không trả qua HTTP: bóc tách chạy sau khi request đã kết thúc, nên chỗ đọc được là
     // cột status_message. Viết cho người dùng, không đổ stacktrace hay message thô của Gemini.

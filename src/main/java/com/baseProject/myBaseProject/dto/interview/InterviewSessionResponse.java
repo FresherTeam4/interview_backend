@@ -24,7 +24,7 @@ public record InterviewSessionResponse(
         short totalQuestionCount,
         CurrentPrompt currentPrompt,
         List<Turn> turns,
-        Object voiceDraft,
+        VoiceAttemptResponse voiceDraft,
         String statusMessage,
         Instant lastActivityAt,
         Instant startedAt,

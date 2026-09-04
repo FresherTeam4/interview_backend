@@ -1158,8 +1158,8 @@ Không trả các câu hỏi tương lai chưa được hỏi. Response:
 ```
 
 `turns` nhỏ và bị giới hạn bởi số câu/follow-up của MVP nên trả toàn bộ, không cần pagination.
-Trong runtime M07, `voiceDraft` và `currentPrompt.audioStatus` luôn `null`; hai field chỉ có dữ liệu
-khi các module voice tương ứng được triển khai.
+Từ runtime M12, `voiceDraft` chứa latest `RECORDED` attempt của đúng current prompt nếu có;
+`currentPrompt.audioStatus` vẫn `null` tới module TTS M15.
 
 ### 8.4. Xem rubric đã chốt
 
@@ -1399,7 +1399,7 @@ claim/dispatch workflow tương ứng. Các lỗi thường gặp: `expectedVers
 
 ## 9. Voice turn-based API
 
-### 9.1. Upload recording và bắt đầu STT
+### 9.1. Upload recording
 
 ```http
 POST /api/sessions/{sessionId}/voice-attempts
@@ -1440,21 +1440,27 @@ Storage key:
 interview-audio/{userId}/{sessionId}/answers/{uuid}.{validatedExtension}
 ```
 
-Flow:
+Flow runtime M12:
 
-1. Validate/read bytes ngoài transaction.
-2. Upload object.
-3. Trong transaction tạo attempt `TRANSCRIBING`, update session
-   `awaitingAction = TRANSCRIPT_CONFIRMATION`, update `lastActivityAt`.
-4. Nếu DB insert fail, xóa object best effort.
-5. Sau commit dispatch STT.
+1. Validate/read bytes ngoài transaction; sniff container/codec và kiểm duration metadata.
+2. Preflight ownership, mode/state, current prompt, version và exact idempotency replay.
+3. Upload object với UUID key không chứa filename client.
+4. Lock/recheck session rồi tạo attempt `RECORDED`, cấp `attemptNo` và update `lastActivityAt`.
+   Session vẫn `CANDIDATE_ANSWER`; chưa có candidate turn hoặc transcript.
+5. Nếu DB/state insert fail hoặc request thua concurrent idempotency race, xóa object mới best
+   effort. Retry exact `clientAttemptId` không upload object lần hai.
+
+M13 nối tiếp bằng transition `RECORDED -> TRANSCRIBING`, đổi session sang
+`TRANSCRIPT_CONFIRMATION` và dispatch STT sau commit.
 
 Response `202 Accepted`:
 
 ```json
 {
   "id": 301,
-  "status": "TRANSCRIBING",
+  "promptTurnId": 205,
+  "attemptNo": 1,
+  "status": "RECORDED",
   "version": 0,
   "rawText": null,
   "editedText": null,
@@ -1470,7 +1476,8 @@ Response `202 Accepted`:
 GET /api/sessions/{sessionId}/voice-attempts/{attemptId}
 ```
 
-- `TRANSCRIBING`: frontend tiếp tục spinner/poll.
+- `RECORDED`: M12 đã lưu recording; chưa bắt đầu STT.
+- `TRANSCRIBING`: frontend tiếp tục spinner/poll từ M13.
 - `TRANSCRIBED`: hiển thị raw/edited text để sửa.
 - `FAILED`: hiển thị message an toàn, cho retry recording hoặc text fallback.
 - Không trả storage key hay raw provider response.
@@ -1948,7 +1955,7 @@ App limits:
 
 - CV: giữ 5 MB.
 - JD: 2 MB.
-- Audio: 15 MB; M12 sẽ nâng servlet limit trước khi mở upload audio.
+- Audio: 15 MB; từ M12 servlet multipart limit là 16 MB/request 17 MB để chừa phần metadata.
 
 Global limit luôn lớn hơn hoặc bằng feature limit lớn nhất để request bình thường đi tới validator
 nghiệp vụ.

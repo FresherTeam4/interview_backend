@@ -235,6 +235,12 @@ public class InterviewSession {
         overallScore = score;
     }
 
+    /** Ghi nhận upload voice attempt là hoạt động thật của người dùng. */
+    public void recordVoiceAttempt(Instant now) {
+        lastActivityAt = now;
+        updatedAt = now;
+    }
+
     /** Khởi tạo con trỏ hội thoại tại base question đầu tiên. */
     public int beginAtQuestion(short questionOrdinal) {
         currentQuestionOrdinal = questionOrdinal;

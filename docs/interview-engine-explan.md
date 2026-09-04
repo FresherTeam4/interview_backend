@@ -1,7 +1,8 @@
 # Interview Engine — kiến trúc và luồng runtime
 
-> Phạm vi hiện tại: M03–M11. Script generation, text interview, adaptive follow-up, scoring,
-> report, inactivity timeout và durable workflow recovery đã có; voice thuộc các module sau.
+> Phạm vi hiện tại: M03–M12. Script generation, text interview, adaptive follow-up, scoring,
+> report, inactivity timeout, durable workflow recovery và voice recording storage đã có; STT,
+> transcript confirmation và TTS thuộc các module sau.
 
 Interview Engine cần xử lý nhiều hơn một lần gọi Gemini, nhưng không phải mọi phần của engine đều
 cần một class hoặc một tầng abstraction riêng. Kiến trúc hiện tại giữ các boundary quan trọng và
@@ -134,7 +135,7 @@ không thể ghi sau transition này.
 
 ## 8. Những phần chưa triển khai
 
-- M12–M15: voice attempt, STT, transcript confirmation và TTS.
+- M13–M15: STT, transcript confirmation và TTS.
 - M16: hardening và release verification.
 
 Không nên mô tả các nhánh này là behavior đang chạy cho tới khi module tương ứng được hoàn thành.
