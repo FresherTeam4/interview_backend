@@ -33,5 +33,6 @@ public enum ErrorCode {
     // ---- 405 / 500 / 503 ----
     METHOD_NOT_ALLOWED,
     INTERNAL_ERROR,
+    STORAGE_ERROR,
     GOOGLE_LOGIN_NOT_CONFIGURED
 }

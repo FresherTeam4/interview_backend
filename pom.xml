@@ -95,13 +95,11 @@
             <scope>runtime</scope>
         </dependency>
 
-        <!-- MinIO nói giao thức S3, nên dùng luôn client S3 của AWS SDK v2.
-             Artifact này chứa cả S3Client (đọc/ghi) và S3Presigner (link tải có hạn). -->
+        <!-- s3 protoco for minio -->
         <dependency>
             <groupId>software.amazon.awssdk</groupId>
             <artifactId>s3</artifactId>
             <exclusions>
-                <!-- Chỉ dùng client đồng bộ; bỏ client async để Netty không bị kéo vào -->
                 <exclusion>
                     <groupId>software.amazon.awssdk</groupId>
                     <artifactId>netty-nio-client</artifactId>
@@ -109,8 +107,7 @@
             </exclusions>
         </dependency>
 
-        <!-- Kiểm tra PDF tại chỗ trước khi gọi AI: mở được, không khoá mật khẩu,
-             đếm số trang. File hỏng bị chặn ở đây nên không tốn một lần gọi API. -->
+        <!-- work with pdf file -->
         <dependency>
             <groupId>org.apache.pdfbox</groupId>
             <artifactId>pdfbox</artifactId>

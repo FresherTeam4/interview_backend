@@ -29,6 +29,7 @@ app:
   jwt:
     secret: ${JWT_SECRET:eventhub-dev-only-secret-key-2026-doi-truoc-khi-deploy}
     expiration-ms: ${JWT_EXPIRATION_MS:900000}
+
   refresh-token:
     expiration-ms: ${REFRESH_TOKEN_EXPIRATION_MS:604800000}
     cookie-name: ${REFRESH_TOKEN_COOKIE_NAME:refresh_token}
@@ -37,10 +38,19 @@ app:
     cookie-secure: ${REFRESH_TOKEN_COOKIE_SECURE:false}
     cookie-same-site: ${REFRESH_TOKEN_COOKIE_SAME_SITE:Lax}
     cleanup-cron: ${REFRESH_TOKEN_CLEANUP_CRON:0 0 2 * * *}
+
   cors:
     allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173,http://localhost:3000}
+
   oauth:
     google:
       client-id: ${GOOGLE_CLIENT_ID:1063418979323-9esrkg9ef25jofnrjrrkdgcduhaffaia.apps.googleusercontent.com}
       jwk-set-uri: ${GOOGLE_JWK_SET_URI:https://www.googleapis.com/oauth2/v3/certs}
       issuers: ${GOOGLE_ISSUERS:https://accounts.google.com,accounts.google.com}
+
+  storage:
+      endpoint: ${STORAGE_ENDPOINT:http://localhost:9000}
+      access-key: ${STORAGE_ACCESS_KEY:minioadmin}
+      secret-key: ${STORAGE_SECRET_KEY:minioadmin}
+      bucket-name: ${STORAGE_BUCKET_NAME:interview-store}
+      region: ${STORAGE_REGION:us-east-1}
