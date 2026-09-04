@@ -9,6 +9,7 @@ import com.baseProject.myBaseProject.entity.VoiceAnswerAttempt;
 import com.baseProject.myBaseProject.enums.AwaitingAction;
 import com.baseProject.myBaseProject.enums.SessionStatus;
 import com.baseProject.myBaseProject.enums.TurnRole;
+import com.baseProject.myBaseProject.enums.VoiceAttemptStatus;
 import com.baseProject.myBaseProject.exception.SessionInvalidStateException;
 import com.baseProject.myBaseProject.exception.SessionNotFoundException;
 import com.baseProject.myBaseProject.mapper.InterviewSessionMapper;
@@ -74,7 +75,12 @@ public class InterviewSessionLifecycleService {
                 request.expectedVersion(),
                 PAUSE_TRANSITION_REASON);
         List<SessionTurn> turns = turnRepository.findOwnedHistory(sessionId, userId);
-        return sessionMapper.toResponse(paused, turns, latestVoiceDraft(sessionId, turns));
+        VoiceAnswerAttempt voiceDraft = latestVoiceDraft(sessionId, turns);
+        if (voiceDraft != null
+                && voiceDraft.getStatus() == VoiceAttemptStatus.TRANSCRIBING) {
+            throw new SessionInvalidStateException();
+        }
+        return sessionMapper.toResponse(paused, turns, voiceDraft);
     }
 
     @Transactional
@@ -105,7 +111,13 @@ public class InterviewSessionLifecycleService {
         if (latestTurn.getRole() != TurnRole.INTERVIEWER) {
             throw new SessionInvalidStateException();
         }
-        return AwaitingAction.CANDIDATE_ANSWER;
+        return voiceAttemptRepository
+                .findFirstBySessionIdAndPromptTurnIdOrderByAttemptNoDesc(
+                        sessionId,
+                        latestTurn.getId())
+                .isPresent()
+                ? AwaitingAction.TRANSCRIPT_CONFIRMATION
+                : AwaitingAction.CANDIDATE_ANSWER;
     }
 
     private VoiceAnswerAttempt latestVoiceDraft(

@@ -1,7 +1,10 @@
 package com.baseProject.myBaseProject.service.impl;
 
 import com.baseProject.myBaseProject.dto.interview.VoiceAttemptResponse;
+import com.baseProject.myBaseProject.dto.interview.VoiceAttemptConfirmRequest;
 import com.baseProject.myBaseProject.dto.interview.VoiceAttemptUploadRequest;
+import com.baseProject.myBaseProject.dto.interview.VoiceTranscriptUpdateRequest;
+import com.baseProject.myBaseProject.dto.interview.TextAnswerAcceptedResponse;
 import com.baseProject.myBaseProject.entity.VoiceAnswerAttempt;
 import com.baseProject.myBaseProject.exception.VoiceAttemptNotFoundException;
 import com.baseProject.myBaseProject.interview.voice.AudioRecordingProcessor;
@@ -9,6 +12,7 @@ import com.baseProject.myBaseProject.interview.voice.AudioRecordingProcessor.Pro
 import com.baseProject.myBaseProject.interview.voice.VoiceAttemptStore;
 import com.baseProject.myBaseProject.interview.voice.VoiceAttemptStore.PersistResult;
 import com.baseProject.myBaseProject.interview.voice.VoiceAttemptStore.VoiceAttemptDraft;
+import com.baseProject.myBaseProject.interview.voice.VoiceTranscriptionDispatcher;
 import com.baseProject.myBaseProject.mapper.VoiceAttemptMapper;
 import com.baseProject.myBaseProject.repository.VoiceAnswerAttemptRepository;
 import com.baseProject.myBaseProject.service.VoiceAttemptService;
@@ -37,6 +41,7 @@ public class VoiceAttemptServiceImpl implements VoiceAttemptService {
     private final VoiceAnswerAttemptRepository attemptRepository;
     private final VoiceAttemptMapper attemptMapper;
     private final FileStorageService fileStorage;
+    private final VoiceTranscriptionDispatcher transcriptionDispatcher;
 
     @Override
     public VoiceAttemptResponse upload(
@@ -56,6 +61,7 @@ public class VoiceAttemptServiceImpl implements VoiceAttemptService {
                 sessionId,
                 preflight);
         if (replay.isPresent()) {
+            transcriptionDispatcher.dispatchAfterCommit(replay.get().getId());
             return attemptMapper.toResponse(replay.get());
         }
 
@@ -79,6 +85,7 @@ public class VoiceAttemptServiceImpl implements VoiceAttemptService {
         if (!persisted.created()) {
             compensateUpload(userId, sessionId, storageKey);
         }
+        transcriptionDispatcher.dispatchAfterCommit(persisted.attempt().getId());
         return attemptMapper.toResponse(persisted.attempt());
     }
 
@@ -91,6 +98,35 @@ public class VoiceAttemptServiceImpl implements VoiceAttemptService {
                         userId)
                 .map(attemptMapper::toResponse)
                 .orElseThrow(VoiceAttemptNotFoundException::new);
+    }
+
+    @Override
+    public VoiceAttemptResponse editTranscript(
+            Long userId,
+            Long sessionId,
+            Long attemptId,
+            VoiceTranscriptUpdateRequest request) {
+        return attemptMapper.toResponse(attemptStore.editTranscript(
+                userId,
+                sessionId,
+                attemptId,
+                request.editedText(),
+                request.expectedAttemptVersion()));
+    }
+
+    @Override
+    public TextAnswerAcceptedResponse confirm(
+            Long userId,
+            Long sessionId,
+            Long attemptId,
+            VoiceAttemptConfirmRequest request) {
+        return attemptStore.confirm(
+                userId,
+                sessionId,
+                attemptId,
+                request.clientTurnId(),
+                request.expectedSessionVersion(),
+                request.expectedAttemptVersion());
     }
 
     private VoiceAttemptDraft draft(

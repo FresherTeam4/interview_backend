@@ -7,12 +7,19 @@ import static org.springframework.security.test.web.servlet.request.SecurityMock
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.baseProject.myBaseProject.dto.interview.VoiceAttemptResponse;
+import com.baseProject.myBaseProject.dto.interview.TextAnswerAcceptedResponse;
+import com.baseProject.myBaseProject.dto.interview.VoiceAttemptConfirmRequest;
 import com.baseProject.myBaseProject.dto.interview.VoiceAttemptUploadRequest;
+import com.baseProject.myBaseProject.dto.interview.VoiceTranscriptUpdateRequest;
+import com.baseProject.myBaseProject.enums.AwaitingAction;
+import com.baseProject.myBaseProject.enums.SessionStatus;
 import com.baseProject.myBaseProject.entity.UserAccount;
 import com.baseProject.myBaseProject.enums.UserRole;
 import com.baseProject.myBaseProject.enums.VoiceAttemptStatus;
@@ -136,6 +143,66 @@ class VoiceAttemptControllerTest {
                 .andExpect(jsonPath("$.promptTurnId").value(205));
 
         verify(voiceAttemptService).get(USER_ID, SESSION_ID, ATTEMPT_ID);
+    }
+
+    @Test
+    void editTranscriptReturnsUpdatedDraft() throws Exception {
+        VoiceTranscriptUpdateRequest request =
+                new VoiceTranscriptUpdateRequest("Bản đã sửa", 2L);
+        VoiceAttemptResponse response = new VoiceAttemptResponse(
+                ATTEMPT_ID,
+                205L,
+                (short) 1,
+                VoiceAttemptStatus.TRANSCRIBED,
+                3,
+                "Bản raw",
+                "Bản đã sửa",
+                5_000,
+                null,
+                NOW);
+        when(voiceAttemptService.editTranscript(USER_ID, SESSION_ID, ATTEMPT_ID, request))
+                .thenReturn(response);
+
+        mockMvc.perform(put(
+                        "/api/sessions/{sessionId}/voice-attempts/{attemptId}/transcript",
+                        SESSION_ID,
+                        ATTEMPT_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsBytes(request))
+                        .with(user(userDetails(UserRole.USER)))
+                        .with(csrf()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.rawText").value("Bản raw"))
+                .andExpect(jsonPath("$.editedText").value("Bản đã sửa"))
+                .andExpect(jsonPath("$.version").value(3));
+    }
+
+    @Test
+    void confirmReturnsAcceptedCandidateTurn() throws Exception {
+        VoiceAttemptConfirmRequest request =
+                new VoiceAttemptConfirmRequest("turn-1", 9L, 2L);
+        TextAnswerAcceptedResponse response = new TextAnswerAcceptedResponse(
+                SESSION_ID,
+                501L,
+                SessionStatus.IN_PROGRESS,
+                AwaitingAction.ENGINE_RESPONSE,
+                10L);
+        when(voiceAttemptService.confirm(USER_ID, SESSION_ID, ATTEMPT_ID, request))
+                .thenReturn(response);
+
+        mockMvc.perform(post(
+                        "/api/sessions/{sessionId}/voice-attempts/{attemptId}/confirm",
+                        SESSION_ID,
+                        ATTEMPT_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsBytes(request))
+                        .with(user(userDetails(UserRole.USER)))
+                        .with(csrf()))
+                .andExpect(status().isAccepted())
+                .andExpect(header().string("Location", "/api/sessions/42"))
+                .andExpect(header().string("Retry-After", "1"))
+                .andExpect(jsonPath("$.candidateTurnId").value(501))
+                .andExpect(jsonPath("$.awaitingAction").value("ENGINE_RESPONSE"));
     }
 
     @Test

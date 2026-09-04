@@ -1,6 +1,6 @@
 # Interview Engine MVP — Thiết kế kỹ thuật và API
 
-> Trạng thái: M00–M08 đã approved; M09–M10 implementation review candidate
+> Trạng thái: M00–M12 đã approved; M13–M14 implementation review candidate
 > Tài liệu sản phẩm liên quan: [interview-engine-mvp-plan.md](./interview-engine-mvp-plan.md)  
 > Baseline: Java 17, Spring Boot 4.1.x, Spring MVC, Spring Security, Spring Data JPA,
 > MySQL, Liquibase, MinIO/S3, Spring AI và Gemini
@@ -12,8 +12,8 @@ strategy.
 
 Các quyết định trong M00 là baseline kỹ thuật đã được người dùng phê duyệt bằng `APPROVED M00`.
 Sau approval, thay đổi ảnh hưởng API/schema phải được nêu rõ và review như một
-contract change. Hai lựa chọn provider STT/TTS được hoãn có chủ đích tới `M13`/`M15`; chúng không
-block schema hoặc các module text. Realtime voice và barge-in không thuộc phạm vi tài liệu này.
+contract change. M13 dùng Gemini multimodal sau `SpeechToTextClient`; lựa chọn TTS tiếp tục được
+hoãn tới M15. Realtime voice và barge-in không thuộc phạm vi tài liệu này.
 
 ---
 
@@ -224,7 +224,8 @@ ReportHighlightType = STRENGTH | IMPROVEMENT | NEXT_ACTION
 031-decouple-question-sources-from-live-profile.sql [M09 hardening]
 032-create-interview-report-tables.sql      [M10]
 033-create-voice-answer-attempts.sql        [M12]
-034-create-turn-audio-assets.sql            [M15]
+034-add-voice-transcription-retry-state.sql [M13]
+035-create-turn-audio-assets.sql            [M15]
 ```
 
 Migration `028` tạo `interview_sessions`, `session_context_snapshots` và
@@ -521,6 +522,8 @@ stt_provider        VARCHAR(50) NULL
 stt_confidence      DECIMAL(4,3) NULL
 processing_token    CHAR(36) NULL
 processing_started_at DATETIME(6) NULL
+processing_attempts SMALLINT NOT NULL DEFAULT 0
+next_retry_at       DATETIME(6) NULL
 status_message      VARCHAR(500) NULL
 audio_deleted_at    DATETIME(6) NULL
 created_at          DATETIME(6) NOT NULL
@@ -1158,7 +1161,8 @@ Không trả các câu hỏi tương lai chưa được hỏi. Response:
 ```
 
 `turns` nhỏ và bị giới hạn bởi số câu/follow-up của MVP nên trả toàn bộ, không cần pagination.
-Từ runtime M12, `voiceDraft` chứa latest `RECORDED` attempt của đúng current prompt nếu có;
+Từ runtime M13, `voiceDraft` chứa latest attempt của đúng current prompt ở trạng thái
+`RECORDED`, `TRANSCRIBING`, `TRANSCRIBED` hoặc `FAILED` nếu có;
 `currentPrompt.audioStatus` vẫn `null` tới module TTS M15.
 
 ### 8.4. Xem rubric đã chốt
@@ -1229,8 +1233,8 @@ Body:
   duplicate nhờ lock, version check và unique `(session_id, turn_index)`.
 - Detail/current prompt chỉ được dựng từ turns đã persist; không fetch hoặc serialize future base
   questions.
-- Pause giữ nguyên cursor/current prompt. M07 resume suy ra `CANDIDATE_ANSWER` từ interviewer turn
-  cuối; resolver sẽ được mở rộng bằng voice draft ở M13.
+- Pause giữ nguyên cursor/current prompt. Từ M13, resume suy ra `TRANSCRIPT_CONFIRMATION` khi
+  current prompt có voice draft; nếu không vẫn phục hồi `CANDIDATE_ANSWER`.
 - Session list dùng constructor projection, không load conversation graph. Rubric endpoint fetch
   graph qua locked `rubric_version_id`, không resolve current rubric tại thời điểm đọc.
 
@@ -1440,18 +1444,19 @@ Storage key:
 interview-audio/{userId}/{sessionId}/answers/{uuid}.{validatedExtension}
 ```
 
-Flow runtime M12:
+Flow runtime M13:
 
 1. Validate/read bytes ngoài transaction; sniff container/codec và kiểm duration metadata.
 2. Preflight ownership, mode/state, current prompt, version và exact idempotency replay.
 3. Upload object với UUID key không chứa filename client.
-4. Lock/recheck session rồi tạo attempt `RECORDED`, cấp `attemptNo` và update `lastActivityAt`.
-   Session vẫn `CANDIDATE_ANSWER`; chưa có candidate turn hoặc transcript.
+4. Lock/recheck session rồi tạo attempt `RECORDED`, cấp `attemptNo`, update `lastActivityAt` và
+   chuyển session sang `TRANSCRIPT_CONFIRMATION`; chưa có candidate turn.
 5. Nếu DB/state insert fail hoặc request thua concurrent idempotency race, xóa object mới best
    effort. Retry exact `clientAttemptId` không upload object lần hai.
 
-M13 nối tiếp bằng transition `RECORDED -> TRANSCRIBING`, đổi session sang
-`TRANSCRIPT_CONFIRMATION` và dispatch STT sau commit.
+6. Sau commit, atomic claim chuyển `RECORDED -> TRANSCRIBING`; voice executor download object và
+   gọi Gemini ngoài transaction. Success ghi raw transcript rồi chuyển `TRANSCRIBED`; lỗi transient
+   retry tối đa hai lần, lỗi cuối chuyển `FAILED` mà không xóa recording.
 
 Response `202 Accepted`:
 
@@ -1476,8 +1481,8 @@ Response `202 Accepted`:
 GET /api/sessions/{sessionId}/voice-attempts/{attemptId}
 ```
 
-- `RECORDED`: M12 đã lưu recording; chưa bắt đầu STT.
-- `TRANSCRIBING`: frontend tiếp tục spinner/poll từ M13.
+- `RECORDED`: đã lưu recording, đang chờ claim/retry STT.
+- `TRANSCRIBING`: frontend tiếp tục spinner/poll.
 - `TRANSCRIBED`: hiển thị raw/edited text để sửa.
 - `FAILED`: hiển thị message an toàn, cho retry recording hoặc text fallback.
 - Không trả storage key hay raw provider response.
@@ -2014,7 +2019,11 @@ app:
     max-file-size-bytes: ${VOICE_MAX_FILE_SIZE_BYTES:15728640}
     max-duration-ms: ${VOICE_MAX_DURATION_MS:300000}
     audio-retention-days: ${VOICE_AUDIO_RETENTION_DAYS:30}
+    transcription-enabled: ${VOICE_TRANSCRIPTION_ENABLED:true}
+    stt-model: ${VOICE_STT_MODEL:${GEMINI_MODEL:gemini-3.5-flash-lite}}
+    stt-prompt-version: ${VOICE_STT_PROMPT_VERSION:v1}
     stt-timeout-ms: ${VOICE_STT_TIMEOUT_MS:7000}
+    stt-processing-lease-seconds: ${VOICE_STT_PROCESSING_LEASE_SECONDS:30}
     tts-timeout-ms: ${VOICE_TTS_TIMEOUT_MS:5000}
 ```
 
@@ -2387,8 +2396,9 @@ Mỗi module dừng ở review gate. Chỉ `APPROVED Mxx` mới cho phép bắt 
 | `M10` | `032-create-interview-report-tables.sql` | Score, evidence, report, highlight |
 | `M11` | Không | Timeout/recovery dùng session/report tables |
 | `M12` | `033-create-voice-answer-attempts.sql` | Recording và transcript draft |
-| `M13–M14` | Không | STT/edit/confirm dùng voice attempts |
-| `M15` | `034-create-turn-audio-assets.sql` | TTS/replay |
+| `M13` | `034-add-voice-transcription-retry-state.sql` | Durable STT attempt/retry state |
+| `M14` | Không | Edit/confirm dùng voice attempts |
+| `M15` | `035-create-turn-audio-assets.sql` | TTS/replay |
 | `M16` | Không | Hardening và release verification |
 
 Không tạo skeleton hoặc migration của module tương lai. Focused verification chạy trong từng
@@ -2423,8 +2433,8 @@ tới đúng module gate, không phải blocker của M00.
 | `D-017` | Voice draft | `voice_answer_attempts`; chỉ confirm transcript mới tạo candidate turn | `LOCKED_M00` |
 | `D-018` | Audio boundary | 15 MB, 5 phút; WebM/Opus + MP4/AAC; retention 30 ngày | `LOCKED_M00` |
 | `D-019` | Question visibility | Frontend/API không trả future questions chưa được hỏi | `LOCKED_M00` |
-| `D-020` | Migration sequence | Dùng sequence `025–034`; `031` là snapshot-integrity fix và các migration dự kiến sau đó dịch một số; không sửa `001–024` | `REVISED_M09` |
-| `D-021` | STT provider | Chọn và benchmark trước khi bắt đầu `M13` | `DEFERRED_M13` |
+| `D-020` | Migration sequence | Dùng sequence `025–035`; `031` là snapshot-integrity fix, `034` bổ sung durable STT retry; không sửa changeset đã áp dụng | `REVISED_M13` |
+| `D-021` | STT provider | Gemini multimodal qua `SpeechToTextClient`; WebM/Opus + MP4/AAC inline; benchmark thật còn là release evidence | `LOCKED_M13` |
 | `D-022` | TTS provider | Chọn và benchmark trước khi bắt đầu `M15` | `DEFERRED_M15` |
 
 ---

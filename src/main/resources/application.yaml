@@ -88,6 +88,11 @@ app:
     max-file-size-bytes: ${VOICE_MAX_FILE_SIZE_BYTES:15728640}
     max-duration-ms: ${VOICE_MAX_DURATION_MS:300000}
     audio-retention-days: ${VOICE_AUDIO_RETENTION_DAYS:30}
+    transcription-enabled: ${VOICE_TRANSCRIPTION_ENABLED:true}
+    stt-model: ${VOICE_STT_MODEL:${GEMINI_MODEL:gemini-3.5-flash-lite}}
+    stt-prompt-version: ${VOICE_STT_PROMPT_VERSION:v1}
+    stt-timeout-ms: ${VOICE_STT_TIMEOUT_MS:7000}
+    stt-processing-lease-seconds: ${VOICE_STT_PROCESSING_LEASE_SECONDS:30}
   storage:
     endpoint: ${STORAGE_ENDPOINT:http://localhost:9000}
     public-endpoint: ${STORAGE_PUBLIC_ENDPOINT:http://localhost:9000}

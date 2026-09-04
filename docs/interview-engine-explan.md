@@ -1,8 +1,7 @@
 # Interview Engine — kiến trúc và luồng runtime
 
-> Phạm vi hiện tại: M03–M12. Script generation, text interview, adaptive follow-up, scoring,
-> report, inactivity timeout, durable workflow recovery và voice recording storage đã có; STT,
-> transcript confirmation và TTS thuộc các module sau.
+> Phạm vi hiện tại: M03–M14. Script generation, text interview, adaptive follow-up, scoring,
+> report, timeout/recovery, voice recording, STT, transcript edit và confirm đã có; TTS thuộc M15.
 
 Interview Engine cần xử lý nhiều hơn một lần gọi Gemini, nhưng không phải mọi phần của engine đều
 cần một class hoặc một tầng abstraction riêng. Kiến trúc hiện tại giữ các boundary quan trọng và
@@ -94,14 +93,30 @@ next-turn hoặc scoring chưa có claim, đã tới `nextRetryAt`, hoặc có l
 atomic-claim token mới trước khi dispatch. Kết quả từ worker mang token cũ bị bỏ qua khi commit, nên
 hai instance recovery có thể cùng scan nhưng không cùng sở hữu work.
 
-## 6. State hiện tại
+## 6. Voice transcription và confirm
+
+```text
+upload RECORDED
+  -> atomic claim TRANSCRIBING
+  -> download storage + SpeechToTextClient [không có transaction]
+  -> TRANSCRIBED hoặc retry/FAILED
+  -> user edit transcript [optimistic attempt version]
+  -> confirm [attempt + candidate turn + session NEXT_TURN trong một transaction]
+```
+
+`VoiceTranscriptionDispatcher` dùng executor riêng và `VoiceTranscriptionRecoveryJob` claim lại
+attempt chưa chạy, tới retry time hoặc có lease stale. Raw transcript không bị edit ghi đè.
+Re-record chỉ discard transcript tốt cũ sau khi bản mới thành công; confirm lặp không tạo turn thứ
+hai. Candidate voice sau confirm đi qua cùng next-turn/scoring workflow như candidate text.
+
+## 7. State hiện tại
 
 Public contract vẫn giữ hai trường:
 
 - `status`: lifecycle lớn của session.
 - `awaitingAction`: hành động frontend cần thực hiện.
 
-Các transition đang được sử dụng tới M11:
+Các transition đang được sử dụng tới M14:
 
 ```text
 CREATED -> SCRIPT_GENERATING -> READY -> IN_PROGRESS -> SCORING -> COMPLETED
@@ -115,7 +130,7 @@ commit score/report cùng transition sang `COMPLETED`. Provider failure có retr
 Timeout từ `READY`, `IN_PROGRESS` hoặc `PAUSED` cũng đi qua `SCORING`; worker đang giữ claim cũ
 không thể ghi sau transition này.
 
-## 7. Trách nhiệm của các class chính
+## 8. Trách nhiệm của các class chính
 
 | Class | Trách nhiệm |
 |---|---|
@@ -131,11 +146,14 @@ không thể ghi sau transition này.
 | `FollowUpDecisionValidator` | Validate decision, evidence quote và server-side budget |
 | `InterviewScoringStore` | Chuẩn bị scoring input và commit score/report atomically |
 | `InterviewScoringValidator` | Validate locked rubric, level, score và transcript evidence |
+| `VoiceTranscriptionStore` | Prepare/commit/fail STT với token, retry và re-record ordering |
+| `VoiceTranscriptionDispatcher` | Executor voice, delayed retry và queue rejection recovery |
+| `VoiceAttemptStore` | Upload attempt, optimistic edit và atomic voice confirm |
 | Gemini adapters | Prompt/schema, provider call, parse response và phân loại lỗi |
 
-## 8. Những phần chưa triển khai
+## 9. Những phần chưa triển khai
 
-- M13–M15: STT, transcript confirmation và TTS.
+- M15: TTS và phát lại interviewer turn.
 - M16: hardening và release verification.
 
 Không nên mô tả các nhánh này là behavior đang chạy cho tới khi module tương ứng được hoàn thành.

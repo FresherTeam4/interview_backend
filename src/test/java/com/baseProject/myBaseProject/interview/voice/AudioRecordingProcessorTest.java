@@ -30,7 +30,15 @@ class AudioRecordingProcessorTest {
     @BeforeEach
     void setUp() {
         processor = new AudioRecordingProcessor(
-                new VoiceProperties(MAX_FILE_SIZE, MAX_DURATION_MS, 30));
+                new VoiceProperties(
+                        MAX_FILE_SIZE,
+                        MAX_DURATION_MS,
+                        30,
+                        true,
+                        "gemini-test",
+                        "v1",
+                        7_000,
+                        30));
     }
 
     @Test

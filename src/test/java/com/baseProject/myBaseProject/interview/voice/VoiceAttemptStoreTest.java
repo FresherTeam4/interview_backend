@@ -23,6 +23,7 @@ import com.baseProject.myBaseProject.interview.voice.VoiceAttemptStore.VoiceAtte
 import com.baseProject.myBaseProject.repository.InterviewSessionRepository;
 import com.baseProject.myBaseProject.repository.SessionTurnRepository;
 import com.baseProject.myBaseProject.repository.VoiceAnswerAttemptRepository;
+import com.baseProject.myBaseProject.interview.workflow.InterviewWorkflowDispatcher;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -52,6 +53,8 @@ class VoiceAttemptStoreTest {
     @Mock
     private VoiceAnswerAttemptRepository attemptRepository;
     @Mock
+    private InterviewWorkflowDispatcher workflowDispatcher;
+    @Mock
     private InterviewSession session;
     @Mock
     private SessionTurn prompt;
@@ -68,6 +71,7 @@ class VoiceAttemptStoreTest {
                 sessionRepository,
                 turnRepository,
                 attemptRepository,
+                workflowDispatcher,
                 Clock.fixed(NOW, ZoneOffset.UTC));
     }
 
@@ -125,6 +129,13 @@ class VoiceAttemptStoreTest {
                         SESSION_ID, USER_ID))
                 .thenReturn(Optional.of(prompt));
         when(prompt.getId()).thenReturn(999L);
+        when(prompt.getRole()).thenReturn(TurnRole.INTERVIEWER);
+        when(prompt.getQuestion()).thenReturn(question);
+        when(prompt.getTurnIndex()).thenReturn(5);
+        when(question.getOrdinal()).thenReturn((short) 3);
+        when(session.getCurrentQuestionOrdinal()).thenReturn((short) 3);
+        when(session.getCurrentFollowupDepth()).thenReturn((short) 0);
+        when(session.getNextTurnIndex()).thenReturn(6);
 
         assertThatThrownBy(() -> store.findReplayOrValidate(USER_ID, SESSION_ID, draft()))
                 .isInstanceOf(CurrentPromptMismatchException.class);

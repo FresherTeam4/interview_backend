@@ -461,6 +461,10 @@ voice_answer_attempts
 - edited_text
 - stt_provider
 - stt_confidence
+- processing_token
+- processing_started_at
+- processing_attempts
+- next_retry_at
 - created_at
 - confirmed_at
 ```
@@ -904,7 +908,8 @@ Migration sequence được cập nhật sau snapshot-integrity refactor:
 031-decouple-question-sources-from-live-profile.sql [M09 hardening]
 032-create-interview-report-tables.sql      [M10]
 033-create-voice-answer-attempts.sql        [M12]
-034-create-turn-audio-assets.sql            [M15]
+034-add-voice-transcription-retry-state.sql [M13]
+035-create-turn-audio-assets.sql            [M15]
 ```
 
 Migration chỉ được tạo trong module sở hữu, không tạo placeholder trước và tuyệt đối không sửa
@@ -2161,7 +2166,7 @@ changeset hiện có và Hibernate schema validation khởi tạo thành công t
 
 ### M12 — Voice recording và attempt storage foundation
 
-**Trạng thái:** implementation đã hoàn thành, chờ `APPROVED M12`.
+**Trạng thái:** `APPROVED M12` ngày 2026-09-04.
 
 **Kết quả người dùng**
 
@@ -2230,11 +2235,13 @@ failure, ownership, resume metadata và controller security. Full Maven suite ng
 schema validation pass trên MySQL local. MinIO local kết nối được trong context verification nhưng
 không có audio thật hay credential STT nào được gửi ra provider.
 
-**Điểm dừng:** chờ `APPROVED M12`.
+**Điểm dừng:** `APPROVED M12` ngày 2026-09-04.
 
 ---
 
 ### M13 — STT, transcript draft và re-record
+
+**Trạng thái:** implementation đã hoàn thành cùng M14, chờ `APPROVED M13–M14`.
 
 **Kết quả người dùng**
 
@@ -2243,7 +2250,7 @@ chấm.
 
 **Điều kiện bắt đầu**
 
-- STT provider và browser-native audio formats đã được benchmark/chốt.
+- STT provider được khóa cho implementation; benchmark live được ghi riêng như release evidence.
 
 **Phạm vi kỹ thuật**
 
@@ -2274,11 +2281,35 @@ chấm.
 - Re-record failure vẫn cho confirm transcript tốt trước đó ở `M14`.
 - Reload ở mọi attempt state trả đúng dữ liệu.
 
+**Runtime contract M13 đã triển khai**
+
+- M13 khóa Gemini multimodal sau port `SpeechToTextClient`; prompt/schema `v1`, model và timeout
+  có cấu hình riêng. WebM/Opus và MP4/AAC được gửi inline sau khi đọc từ storage; không giữ database
+  transaction trong lúc download hoặc gọi provider.
+- Upload mới đưa session sang `TRANSCRIPT_CONFIRMATION`. Atomic claim chuyển attempt
+  `RECORDED -> TRANSCRIBING`; success ghi raw transcript/provider/confidence rồi chuyển
+  `TRANSCRIBED`, còn failure giữ nguyên recording và status message đã sanitize.
+- Timeout/rate-limit/5xx/network được retry tối đa hai lần với backoff 1 giây. Claim token, attempt
+  count, retry time và lease được persist; recovery chạy lúc application ready và theo cron nên
+  queue rejection/restart không làm mất work.
+- `PUT .../{attemptId}/transcript` chỉ sửa attempt `TRANSCRIBED` thuộc current prompt, kiểm
+  `expectedAttemptVersion`, không ghi đè raw transcript và lưu `editedText = NULL` nếu normalized
+  text giống raw.
+- Re-record tạo attempt mới. Transcript tốt cũ chỉ bị `DISCARDED` sau khi attempt mới transcribe
+  thành công; attempt mới fail vẫn giữ bản cũ để M14 confirm. Resume phục hồi
+  `TRANSCRIPT_CONFIRMATION` và latest voice draft.
+
+**Giới hạn verification provider:** adapter Gemini và mọi failure boundary được kiểm tra bằng mock;
+chưa gửi audio thật ra Gemini hoặc benchmark p95. Smoke/benchmark bằng dữ liệu tổng hợp vẫn là
+release evidence cần bổ sung trước deploy.
+
 **Điểm dừng:** chờ `APPROVED M13`.
 
 ---
 
 ### M14 — Confirm voice answer và conversation integration
+
+**Trạng thái:** implementation đã hoàn thành cùng M13, chờ `APPROVED M13–M14`.
 
 **Kết quả người dùng**
 
@@ -2308,6 +2339,28 @@ pipeline như text.
 - Confirm transaction rollback không để attempt `CONFIRMED` nhưng thiếu turn hoặc ngược lại.
 - Follow-up nhận đúng candidate answer đã confirm.
 - Text fallback giữ nguyên current prompt/context.
+
+**Runtime contract M14 đã triển khai**
+
+- `POST .../{attemptId}/confirm` khóa session rồi attempt, kiểm ownership/current prompt cùng cả
+  session và attempt version. Raw transcript được dùng khi chưa edit; nếu có edit thì dùng edited
+  transcript.
+- Candidate turn `VOICE_TURN_BASED`, liên kết `confirmedTurnId`, attempt `CONFIRMED`, discard mọi
+  attempt khác và session claim `NEXT_TURN` được ghi trong một transaction. Dispatcher chỉ chạy
+  sau commit nên rollback không thể để lại nửa trạng thái.
+- Retry confirm cùng `clientTurnId` trả candidate turn cũ và không insert lần hai. Prompt/attempt
+  stale hoặc reuse client ID khác bị từ chối.
+- Endpoint text M08 nhận `TRANSCRIPT_CONFIRMATION` trong voice session làm fallback, giữ nguyên
+  prompt/question context, tạo turn `TEXT`, discard voice draft và đi qua đúng next-turn/scoring
+  pipeline hiện có.
+
+**Kết quả verification M13–M14:** focused tests pass `37/37`, bao phủ provider success, missing
+credential, timeout, malformed response, retry/terminal failure, recovery, re-record, immutable raw
+text, optimistic edit, raw/edited confirm, confirm idempotency, resume/pause và text fallback. Full
+Maven suite ngày 2026-09-04 pass `163/163`; Liquibase có 19 changeset và migration `034` đã apply,
+Spring Data parse 21 repository, Hibernate schema validation pass trên MySQL local. MinIO không
+chạy ở lần verify cuối (`connection refused`) nhưng storage boundary dùng mock và suite vẫn pass;
+không có audio hay transcript nào được gửi tới Gemini thật.
 
 **Điểm dừng:** chờ `APPROVED M14`.
 
@@ -2428,8 +2481,8 @@ tích hợp frontend.
 | `D-017` | Voice answer tồn tại dưới dạng attempt/draft; chỉ confirm mới gửi vào conversation/scoring | `LOCKED_M00` |
 | `D-018` | Audio tối đa 15 MB/5 phút, WebM/Opus + MP4/AAC, retention 30 ngày | `LOCKED_M00` |
 | `D-019` | API không trả trước future questions | `LOCKED_M00` |
-| `D-020` | Migration dùng sequence `025–034`; `031` là snapshot-integrity fix và các migration dự kiến sau đó dịch một số; không sửa `001–024` | `REVISED_M09` |
-| `D-021` | Chọn/benchmark STT provider tại gate trước `M13` | `DEFERRED_M13` |
+| `D-020` | Migration dùng sequence `025–035`; `031` là snapshot-integrity fix, `034` bổ sung durable STT retry; không sửa changeset đã áp dụng | `REVISED_M13` |
+| `D-021` | Gemini multimodal qua `SpeechToTextClient`; nhận WebM/Opus + MP4/AAC inline; benchmark live trước deploy | `LOCKED_M13` |
 | `D-022` | Chọn/benchmark TTS provider tại gate trước `M15` | `DEFERRED_M15` |
 
 Realtime voice và barge-in vẫn nằm ngoài combined MVP, được làm tuần tự sau `M16`. Hai provider

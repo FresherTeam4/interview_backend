@@ -1,0 +1,12 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["transcript"],
+  "properties": {
+    "transcript": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 10000
+    }
+  }
+}

@@ -20,6 +20,7 @@ import com.baseProject.myBaseProject.interview.voice.AudioRecordingProcessor.Pro
 import com.baseProject.myBaseProject.interview.voice.VoiceAttemptStore;
 import com.baseProject.myBaseProject.interview.voice.VoiceAttemptStore.PersistResult;
 import com.baseProject.myBaseProject.interview.voice.VoiceAttemptStore.VoiceAttemptDraft;
+import com.baseProject.myBaseProject.interview.voice.VoiceTranscriptionDispatcher;
 import com.baseProject.myBaseProject.mapper.VoiceAttemptMapper;
 import com.baseProject.myBaseProject.repository.VoiceAnswerAttemptRepository;
 import com.baseProject.myBaseProject.storage.FileStorageService;
@@ -59,6 +60,8 @@ class VoiceAttemptServiceImplTest {
     @Mock
     private FileStorageService fileStorage;
     @Mock
+    private VoiceTranscriptionDispatcher transcriptionDispatcher;
+    @Mock
     private VoiceAnswerAttempt attempt;
 
     private MockMultipartFile file;
@@ -73,7 +76,8 @@ class VoiceAttemptServiceImplTest {
                 attemptStore,
                 attemptRepository,
                 attemptMapper,
-                fileStorage);
+                fileStorage,
+                transcriptionDispatcher);
         file = new MockMultipartFile("file", "voice.webm", "audio/webm", AUDIO);
         processed = new ProcessedAudio(
                 AudioFormat.WEBM_OPUS,

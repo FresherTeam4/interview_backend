@@ -143,6 +143,26 @@ public final class Message {
             "Không tìm thấy bản ghi âm này";
     public static final String CLIENT_ATTEMPT_ID_REUSED =
             "clientAttemptId này đã được dùng cho một bản ghi khác";
+    public static final String VOICE_ATTEMPT_INVALID_STATE =
+            "Bản ghi âm không ở trạng thái cho phép thao tác này";
+    public static final String VOICE_ATTEMPT_VERSION_CONFLICT =
+            "Bản ghi âm đã được cập nhật ở nơi khác; vui lòng tải lại";
+    public static final String TRANSCRIPT_REQUIRED =
+            "Nội dung transcript không được để trống";
+    public static final String STT_UNAVAILABLE =
+            "Dịch vụ chuyển giọng nói thành văn bản hiện chưa sẵn sàng";
+    public static final String STT_FAILED_NO_API_KEY =
+            "Máy chủ chưa cấu hình dịch vụ chuyển giọng nói thành văn bản";
+    public static final String STT_FAILED_TIMEOUT =
+            "Chuyển giọng nói thành văn bản quá lâu nên đã dừng; bạn có thể ghi lại hoặc dùng bản tốt trước đó";
+    public static final String STT_FAILED_UNAVAILABLE =
+            "Dịch vụ chuyển giọng nói thành văn bản đang không phản hồi; bạn có thể ghi lại hoặc dùng bản tốt trước đó";
+    public static final String STT_FAILED_INVALID_OUTPUT =
+            "Chưa nhận được transcript hợp lệ; bạn có thể ghi lại hoặc dùng bản tốt trước đó";
+    public static final String STT_FAILED_AUDIO_UNAVAILABLE =
+            "Không đọc lại được bản ghi âm; vui lòng ghi lại";
+    public static final String STT_FAILED_UNEXPECTED =
+            "Chuyển giọng nói thành văn bản thất bại; vui lòng thử ghi lại";
 
     // ---- status_message của lần bóc tách CV ----
     // Không trả qua HTTP: bóc tách chạy sau khi request đã kết thúc, nên chỗ đọc được là

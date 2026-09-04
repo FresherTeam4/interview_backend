@@ -139,6 +139,25 @@ public class SessionTurn {
         return turn;
     }
 
+    /** Tạo candidate turn chỉ sau khi người dùng xác nhận transcript cuối. */
+    public static SessionTurn candidateVoiceAnswer(
+            InterviewSession session,
+            SessionQuestion question,
+            int turnIndex,
+            String content,
+            String clientTurnId,
+            Instant now) {
+        SessionTurn turn = candidateTextAnswer(
+                session,
+                question,
+                turnIndex,
+                content,
+                clientTurnId,
+                now);
+        turn.inputMode = TurnInputMode.VOICE_TURN_BASED;
+        return turn;
+    }
+
     /** Tạo follow-up turn và liên kết với candidate turn đã làm phát sinh câu hỏi. */
     public static SessionTurn followUpPrompt(
             InterviewSession session,

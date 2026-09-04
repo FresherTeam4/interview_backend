@@ -2,7 +2,10 @@ package com.baseProject.myBaseProject.controller;
 
 import com.baseProject.myBaseProject.config.OpenApiConfig;
 import com.baseProject.myBaseProject.dto.interview.VoiceAttemptResponse;
+import com.baseProject.myBaseProject.dto.interview.VoiceAttemptConfirmRequest;
 import com.baseProject.myBaseProject.dto.interview.VoiceAttemptUploadRequest;
+import com.baseProject.myBaseProject.dto.interview.VoiceTranscriptUpdateRequest;
+import com.baseProject.myBaseProject.dto.interview.TextAnswerAcceptedResponse;
 import com.baseProject.myBaseProject.security.CustomUserDetails;
 import com.baseProject.myBaseProject.security.authorization.CurrentUser;
 import com.baseProject.myBaseProject.security.authorization.IsUser;
@@ -23,7 +26,9 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
@@ -69,5 +74,37 @@ public class VoiceAttemptController {
             @PathVariable Long sessionId,
             @PathVariable Long attemptId) {
         return voiceAttemptService.get(currentUser.getId(), sessionId, attemptId);
+    }
+
+    @PutMapping("/{attemptId}/transcript")
+    @Operation(summary = "Sửa transcript trước khi xác nhận")
+    public VoiceAttemptResponse editTranscript(
+            @CurrentUser CustomUserDetails currentUser,
+            @PathVariable Long sessionId,
+            @PathVariable Long attemptId,
+            @Valid @RequestBody VoiceTranscriptUpdateRequest request) {
+        return voiceAttemptService.editTranscript(
+                currentUser.getId(),
+                sessionId,
+                attemptId,
+                request);
+    }
+
+    @PostMapping("/{attemptId}/confirm")
+    @Operation(summary = "Xác nhận transcript và gửi câu trả lời voice vào interview workflow")
+    public ResponseEntity<TextAnswerAcceptedResponse> confirm(
+            @CurrentUser CustomUserDetails currentUser,
+            @PathVariable Long sessionId,
+            @PathVariable Long attemptId,
+            @Valid @RequestBody VoiceAttemptConfirmRequest request) {
+        TextAnswerAcceptedResponse response = voiceAttemptService.confirm(
+                currentUser.getId(),
+                sessionId,
+                attemptId,
+                request);
+        return ResponseEntity.status(HttpStatus.ACCEPTED)
+                .location(URI.create("/api/sessions/" + sessionId))
+                .header(HttpHeaders.RETRY_AFTER, POLL_RETRY_AFTER_SECONDS)
+                .body(response);
     }
 }

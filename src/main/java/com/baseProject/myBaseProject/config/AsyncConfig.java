@@ -12,6 +12,7 @@ public class AsyncConfig {
 
     public static final String CV_PARSE_EXECUTOR = "cvParseExecutor";
     public static final String INTERVIEW_AI_EXECUTOR = "interviewAiExecutor";
+    public static final String INTERVIEW_VOICE_EXECUTOR = "interviewVoiceExecutor";
     public static final String INTERVIEW_WORKFLOW_SCHEDULER = "interviewWorkflowScheduler";
 
     @Bean(CV_PARSE_EXECUTOR)
@@ -33,6 +34,18 @@ public class AsyncConfig {
         executor.setMaxPoolSize(4);
         executor.setQueueCapacity(20);
         executor.setThreadNamePrefix("interview-ai-");
+        executor.setWaitForTasksToCompleteOnShutdown(true);
+        executor.setAwaitTerminationSeconds(30);
+        return executor;
+    }
+
+    @Bean(INTERVIEW_VOICE_EXECUTOR)
+    public ThreadPoolTaskExecutor interviewVoiceExecutor() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setCorePoolSize(2);
+        executor.setMaxPoolSize(4);
+        executor.setQueueCapacity(20);
+        executor.setThreadNamePrefix("interview-voice-");
         executor.setWaitForTasksToCompleteOnShutdown(true);
         executor.setAwaitTerminationSeconds(30);
         return executor;

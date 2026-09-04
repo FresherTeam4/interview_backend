@@ -135,5 +135,13 @@ public enum ErrorCode {
     /** 415 — container/codec audio không được hỗ trợ. */
     AUDIO_INVALID_FILE_TYPE,
     /** 404 — voice attempt không thuộc session của người gọi. */
-    VOICE_ATTEMPT_NOT_FOUND
+    VOICE_ATTEMPT_NOT_FOUND,
+    /** 409 — attempt không ở trạng thái cho phép edit/confirm. */
+    VOICE_ATTEMPT_INVALID_STATE,
+    /** 409 — optimistic version của attempt đã cũ. */
+    VOICE_ATTEMPT_VERSION_CONFLICT,
+    /** 400 — transcript cuối cùng rỗng. */
+    TRANSCRIPT_REQUIRED,
+    /** 503 — STT credential/provider không dùng được. */
+    STT_UNAVAILABLE
 }

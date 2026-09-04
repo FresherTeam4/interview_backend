@@ -237,6 +237,13 @@ public class InterviewSession {
 
     /** Ghi nhận upload voice attempt là hoạt động thật của người dùng. */
     public void recordVoiceAttempt(Instant now) {
+        awaitingAction = AwaitingAction.TRANSCRIPT_CONFIRMATION;
+        lastActivityAt = now;
+        updatedAt = now;
+    }
+
+    /** Ghi nhận việc sửa transcript là hoạt động của người dùng, không phải provider. */
+    public void recordTranscriptEdit(Instant now) {
         lastActivityAt = now;
         updatedAt = now;
     }

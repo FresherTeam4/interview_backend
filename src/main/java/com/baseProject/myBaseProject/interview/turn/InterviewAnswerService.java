@@ -5,10 +5,13 @@ import com.baseProject.myBaseProject.dto.interview.SubmitTextAnswerRequest;
 import com.baseProject.myBaseProject.dto.interview.TextAnswerAcceptedResponse;
 import com.baseProject.myBaseProject.entity.InterviewSession;
 import com.baseProject.myBaseProject.entity.SessionTurn;
+import com.baseProject.myBaseProject.entity.VoiceAnswerAttempt;
 import com.baseProject.myBaseProject.enums.AwaitingAction;
+import com.baseProject.myBaseProject.enums.SessionMode;
 import com.baseProject.myBaseProject.enums.SessionProcessingStage;
 import com.baseProject.myBaseProject.enums.SessionStatus;
 import com.baseProject.myBaseProject.enums.TurnRole;
+import com.baseProject.myBaseProject.enums.VoiceAttemptStatus;
 import com.baseProject.myBaseProject.exception.AnswerRequiredException;
 import com.baseProject.myBaseProject.exception.AnswerTooLongException;
 import com.baseProject.myBaseProject.exception.ClientTurnIdReusedException;
@@ -19,6 +22,7 @@ import com.baseProject.myBaseProject.exception.SessionVersionConflictException;
 import com.baseProject.myBaseProject.interview.workflow.InterviewWorkflowDispatcher;
 import com.baseProject.myBaseProject.repository.InterviewSessionRepository;
 import com.baseProject.myBaseProject.repository.SessionTurnRepository;
+import com.baseProject.myBaseProject.repository.VoiceAnswerAttemptRepository;
 
 import lombok.RequiredArgsConstructor;
 
@@ -27,6 +31,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 
@@ -37,6 +42,7 @@ public class InterviewAnswerService {
     private final InterviewProperties properties;
     private final InterviewSessionRepository sessionRepository;
     private final SessionTurnRepository turnRepository;
+    private final VoiceAnswerAttemptRepository voiceAttemptRepository;
     private final InterviewWorkflowDispatcher workflowDispatcher;
     private final Clock clock;
 
@@ -62,8 +68,11 @@ public class InterviewAnswerService {
         }
 
         verifyVersion(session, request.expectedVersion());
+        boolean voiceTextFallback = session.getMode() == SessionMode.VOICE_TURN_BASED
+                && session.getAwaitingAction() == AwaitingAction.TRANSCRIPT_CONFIRMATION;
         if (session.getStatus() != SessionStatus.IN_PROGRESS
-                || session.getAwaitingAction() != AwaitingAction.CANDIDATE_ANSWER) {
+                || (session.getAwaitingAction() != AwaitingAction.CANDIDATE_ANSWER
+                        && !voiceTextFallback)) {
             throw new SessionInvalidStateException();
         }
 
@@ -97,6 +106,17 @@ public class InterviewAnswerService {
                 content,
                 clientTurnId,
                 now));
+        if (voiceTextFallback) {
+            List<VoiceAnswerAttempt> promptAttempts =
+                    voiceAttemptRepository.findPromptAttemptsForUpdate(
+                            sessionId,
+                            currentPrompt.getId());
+            promptAttempts.stream()
+                    .filter(attempt -> attempt.getStatus()
+                            != VoiceAttemptStatus.CONFIRMED)
+                    .forEach(attempt -> attempt.discard());
+            voiceAttemptRepository.saveAll(promptAttempts);
+        }
         sessionRepository.saveAndFlush(session);
         workflowDispatcher.dispatchAfterCommit(
                 sessionId,

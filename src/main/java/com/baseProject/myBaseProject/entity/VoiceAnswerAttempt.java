@@ -131,6 +131,12 @@ public class VoiceAnswerAttempt {
     @Column(name = "processing_started_at")
     private Instant processingStartedAt;
 
+    @Column(name = "processing_attempts", nullable = false)
+    private short processingAttempts;
+
+    @Column(name = "next_retry_at")
+    private Instant nextRetryAt;
+
     @Column(name = "status_message", length = 500)
     private String statusMessage;
 
@@ -172,5 +178,64 @@ public class VoiceAnswerAttempt {
         attempt.checksumSha256 = checksumSha256;
         attempt.createdAt = createdAt;
         return attempt;
+    }
+
+    public void completeTranscription(
+            String transcript,
+            String provider,
+            BigDecimal confidence,
+            Instant now) {
+        status = VoiceAttemptStatus.TRANSCRIBED;
+        rawText = transcript;
+        editedText = null;
+        sttProvider = provider;
+        sttConfidence = confidence;
+        processingToken = null;
+        processingStartedAt = null;
+        nextRetryAt = null;
+        statusMessage = null;
+        transcribedAt = now;
+    }
+
+    public void releaseTranscriptionForRetry(Instant retryAt, String message) {
+        status = VoiceAttemptStatus.RECORDED;
+        processingToken = null;
+        processingStartedAt = null;
+        nextRetryAt = retryAt;
+        statusMessage = message;
+    }
+
+    public void failTranscription(String message) {
+        status = VoiceAttemptStatus.FAILED;
+        processingToken = null;
+        processingStartedAt = null;
+        nextRetryAt = null;
+        statusMessage = message;
+    }
+
+    public void editTranscript(String normalizedText) {
+        editedText = rawText.equals(normalizedText) ? null : normalizedText;
+        statusMessage = null;
+    }
+
+    public void confirm(SessionTurn candidateTurn, Instant now) {
+        confirmedTurn = candidateTurn;
+        status = VoiceAttemptStatus.CONFIRMED;
+        processingToken = null;
+        processingStartedAt = null;
+        nextRetryAt = null;
+        statusMessage = null;
+        confirmedAt = now;
+    }
+
+    public void discard() {
+        if (status == VoiceAttemptStatus.CONFIRMED) {
+            throw new IllegalStateException("A confirmed voice attempt cannot be discarded");
+        }
+        status = VoiceAttemptStatus.DISCARDED;
+        processingToken = null;
+        processingStartedAt = null;
+        nextRetryAt = null;
+        statusMessage = null;
     }
 }
