@@ -1,0 +1,674 @@
+// ============================================================
+//  AI MOCK INTERVIEW PLATFORM — DATABASE SCHEMA (MVP v3)
+//  Dán toàn bộ file này vào https://dbdiagram.io/
+//
+//  Phạm vi: 16 user story của bản MVP 4 tuần
+//  Đã có sẵn trong code: user_accounts, refresh_tokens (giữ nguyên tên cột)
+//
+//  Quy ước:
+//    - Khóa chính: bigint auto increment (khớp GenerationType.IDENTITY)
+//    - Thời gian: timestamp (map sang java.time.Instant, lưu UTC)
+//    - Tên bảng: snake_case số nhiều
+// ============================================================
+
+
+// ============================================================
+//  ENUMS
+// ============================================================
+
+Enum user_role {
+  USER
+  ADMIN
+}
+
+Enum cv_document_status {
+  UPLOADED    [note: 'Vừa upload, chưa xử lý']
+  PARSING     [note: 'Đang bóc tách']
+  PARSED      [note: 'Bóc tách xong']
+  FAILED      [note: 'File hỏng hoặc parse lỗi']
+}
+
+Enum profile_source {
+  AUTO_PARSED [note: 'Nguyên bản do AI bóc tách']
+  USER_EDITED [note: 'Người dùng đã sửa — luôn ưu tiên bản này']
+}
+
+Enum session_mode {
+  TEXT
+  VOICE_TURN_BASED
+  VOICE_REALTIME
+}
+
+Enum session_status {
+  CREATED
+  SCRIPT_GENERATING
+  IN_PROGRESS
+  PAUSED
+  SCORING
+  COMPLETED
+  EXPIRED
+  ABANDONED
+}
+
+Enum session_end_reason {
+  USER_COMPLETED
+  USER_ABANDONED
+  TIMEOUT_24H
+  SYSTEM_ERROR
+}
+
+Enum turn_role {
+  INTERVIEWER
+  CANDIDATE
+}
+
+Enum turn_input_mode {
+  TEXT
+  VOICE_TURN_BASED
+  VOICE_REALTIME
+}
+
+Enum audio_asset_kind {
+  USER_RECORDING
+  AI_TTS
+}
+
+Enum report_highlight_type {
+  STRENGTH
+  IMPROVEMENT
+  NEXT_ACTION
+}
+
+
+// ============================================================
+//  1. TÀI KHOẢN & XÁC THỰC
+//     US: đăng nhập Google / đăng ký email + quên mật khẩu
+// ============================================================
+
+Table user_accounts {
+  id            bigint       [pk, increment]
+  full_name     varchar(150) [not null]
+  email         varchar(150) [not null, unique]
+  password_hash varchar(255) [note: 'NULL nếu chỉ đăng nhập bằng Google. bcrypt/argon2']
+  google_id     varchar(255) [unique, note: 'NULL nếu chỉ đăng ký bằng email']
+  avatar_url    varchar(1000)
+  role          user_role    [not null]
+  enabled       boolean      [not null, default: true]
+  email_verified_at timestamp [note: 'THÊM MỚI: NULL = chưa xác thực email']
+  created_at    timestamp    [not null]
+  updated_at    timestamp    [not null, note: 'DB tự cập nhật (entity đang để insertable=false, updatable=false)']
+
+  Note: '''
+  Bảng đã có sẵn trong code — giữ nguyên tên cột.
+  Chỉ đề xuất thêm email_verified_at để phục vụ luồng xác thực email.
+
+  Liên kết tài khoản: nếu đăng ký bằng email trước rồi đăng nhập Google
+  cùng email đó, ghi google_id vào chính hàng này (không tạo hàng mới).
+  '''
+}
+
+Table refresh_tokens {
+  id         bigint      [pk, increment]
+  token_hash varchar(64) [not null, unique]
+  family_id  varchar(36) [not null, note: 'Nhóm token để phát hiện tái sử dụng token đã xoay']
+  issued_at  timestamp   [not null]
+  expires_at timestamp   [not null]
+  revoked_at timestamp   [note: 'NULL = còn hiệu lực']
+  user_id    bigint      [not null]
+
+  indexes {
+    family_id  [name: 'idx_refresh_tokens_family_id']
+    user_id    [name: 'idx_refresh_tokens_user_id']
+    expires_at [name: 'idx_refresh_tokens_expires_at']
+  }
+
+  Note: 'Bảng đã có sẵn trong code — giữ nguyên.'
+}
+
+
+Table user_preferences {
+  id                 bigint          [pk, increment]
+  user_id            bigint          [not null, unique]
+  preferred_mode     session_mode    [not null, default: 'VOICE_TURN_BASED']
+  barge_in_enabled   boolean         [not null, default: true, note: 'AC ngắt lời: tắt được trong cài đặt']
+  tts_voice_code     varchar(50)
+  interview_language varchar(10)     [not null, default: 'vi', note: 'vi | en']
+  created_at         timestamp       [not null]
+  updated_at         timestamp       [not null]
+}
+
+
+// ============================================================
+//  2. CV & HỒ SƠ ỨNG VIÊN
+//     US: upload CV / bóc tách CV / sửa lại phần bóc tách sai
+// ============================================================
+
+Table cv_documents {
+  id                bigint             [pk, increment]
+  user_id           bigint             [not null]
+  storage_key       varchar(500)       [not null, note: 'Đường dẫn trên object storage (S3/MinIO), không lưu file trong DB']
+  original_filename varchar(255)       [not null]
+  content_type      varchar(100)       [not null, default: 'application/pdf']
+  file_size_bytes   bigint             [not null, note: 'AC: tối đa 5MB — chặn ở tầng ứng dụng']
+  checksum_sha256   varchar(64)        [note: 'Phát hiện upload trùng, tránh parse lại tốn tiền']
+  status            cv_document_status [not null, default: 'UPLOADED']
+  status_message    text               [note: 'Thông báo lỗi hiển thị cho người dùng khi FAILED']
+  is_active         boolean            [not null, default: true, note: 'AC: mỗi user giữ 1 CV đang hoạt động. Upload mới -> set false cho bản cũ, KHÔNG xóa cứng']
+  uploaded_at       timestamp          [not null]
+  parsed_at         timestamp
+
+  indexes {
+    (user_id, is_active) [note: 'Truy vấn CV đang hoạt động của user']
+    status
+  }
+}
+
+Table cv_parse_results {
+  id                bigint       [pk, increment]
+  cv_document_id    bigint       [not null, unique, note: 'Một document chỉ parse một lần']
+  raw_json          json         [not null, note: 'AC: JSON theo schema cố định. BẤT BIẾN — không sửa, dùng để đối chiếu khi user báo parse sai']
+  schema_version    varchar(20)  [not null]
+  model_name        varchar(100) [not null, note: 'Model nào đã parse — cần khi đổi model và so sánh chất lượng']
+  duration_ms       integer      [note: 'AC: dưới 30 giây']
+  token_cost        integer      [note: 'Theo dõi chi phí API']
+  created_at        timestamp    [not null]
+}
+
+Table candidate_profiles {
+  id               bigint         [pk, increment]
+  user_id          bigint         [not null, unique, note: 'Mỗi user một hồ sơ đang dùng']
+  cv_document_id   bigint         [not null, note: 'Hồ sơ này sinh ra từ CV nào']
+  headline         varchar(255)
+  years_experience decimal(3,1)
+  target_position  varchar(150)
+  seniority_level  varchar(30)    [note: 'STUDENT | FRESHER | JUNIOR | MID | SENIOR']
+  source           profile_source [not null, default: 'AUTO_PARSED']
+  confirmed_at     timestamp      [note: 'AC: phải bấm "Thông tin chính xác" mới cho bắt đầu phiên. NULL = chưa xác nhận']
+  created_at       timestamp      [not null]
+  updated_at       timestamp      [not null]
+
+  Note: '''
+  ĐÂY LÀ BẢN LÀM VIỆC, người dùng sửa trực tiếp trên các bảng con bên dưới.
+  cv_parse_results.raw_json giữ nguyên bản gốc của AI.
+  => "Bản đã sửa luôn được ưu tiên" được đảm bảo bằng thiết kế, không cần cờ ưu tiên.
+  '''
+}
+
+Table profile_educations {
+  id             bigint       [pk, increment]
+  profile_id     bigint       [not null]
+  school         varchar(255) [not null]
+  degree         varchar(150)
+  field_of_study varchar(150)
+  start_year     smallint
+  end_year       smallint
+  is_user_edited boolean      [not null, default: false, note: 'true = người dùng đã sửa/tự thêm']
+  display_order  smallint     [not null, default: 0]
+}
+
+Table profile_skills {
+  id             bigint      [pk, increment]
+  profile_id     bigint      [not null]
+  name           varchar(80) [not null, note: 'Java, Spring Boot, React, PostgreSQL...']
+  category       varchar(50) [note: 'LANGUAGE | FRAMEWORK | DATABASE | TOOL | SOFT']
+  is_user_edited boolean     [not null, default: false]
+  display_order  smallint    [not null, default: 0]
+
+  indexes {
+    (profile_id, name) [unique, note: 'Không cho trùng kỹ năng trong cùng hồ sơ']
+  }
+}
+
+Table profile_projects {
+  id             bigint       [pk, increment]
+  profile_id     bigint       [not null]
+  name           varchar(255) [not null]
+  description    text         [note: 'Nguyên liệu chính để sinh câu hỏi đào sâu']
+  role_in_project varchar(150)
+  tech_stack     text         [note: 'Chuỗi phân tách bằng dấu phẩy. Đủ dùng cho MVP, chưa cần bảng nối']
+  start_date     date
+  end_date       date
+  is_user_edited boolean      [not null, default: false]
+  display_order  smallint     [not null, default: 0]
+}
+
+
+// ============================================================
+//  3. RUBRIC CHẤM ĐIỂM (CÓ VERSION)
+//     US: chấm theo bộ tiêu chí công khai kèm dẫn chứng
+// ============================================================
+
+Table rubrics {
+  id          bigint       [pk, increment]
+  code        varchar(50)  [not null, unique, note: 'VD: TECH_INTERVIEW_FRESHER']
+  name        varchar(150) [not null]
+  description text
+  created_at  timestamp    [not null]
+}
+
+Table rubric_versions {
+  id           bigint    [pk, increment]
+  rubric_id    bigint    [not null]
+  version_no   smallint  [not null]
+  is_current   boolean   [not null, default: false]
+  published_at timestamp
+  change_note  text
+  created_at   timestamp [not null]
+
+  indexes {
+    (rubric_id, version_no) [unique]
+    (rubric_id, is_current)
+  }
+
+  Note: '''
+  QUAN TRỌNG: interview_sessions trỏ tới rubric_version_id, KHÔNG trỏ tới rubric_id.
+  Nhờ vậy sửa rubric không làm sai lệch báo cáo của các phiên đã chấm trước đó.
+  '''
+}
+
+Table rubric_criteria {
+  id                bigint        [pk, increment]
+  rubric_version_id bigint        [not null]
+  code              varchar(50)   [not null, note: 'VD: TECHNICAL_DEPTH, COMMUNICATION']
+  name              varchar(150)  [not null]
+  description       text
+  weight            decimal(4,3)  [not null, default: 1, note: 'Trọng số khi tính điểm tổng']
+  max_score         smallint      [not null, default: 4]
+  display_order     smallint      [not null, default: 0]
+
+  indexes {
+    (rubric_version_id, code) [unique]
+  }
+}
+
+Table rubric_criterion_levels {
+  id          bigint      [pk, increment]
+  criterion_id bigint     [not null]
+  level_no    smallint    [not null, note: 'AC: 4 mức điểm cho mỗi tiêu chí']
+  label       varchar(80) [not null, note: 'VD: Chưa đạt / Cơ bản / Tốt / Xuất sắc']
+  descriptor  text        [not null, note: 'Mô tả để AI và người dùng cùng hiểu mức này nghĩa là gì']
+  score_value decimal(4,2) [not null]
+
+  indexes {
+    (criterion_id, level_no) [unique]
+  }
+}
+
+
+// ============================================================
+//  4. PHIÊN PHỎNG VẤN
+//     US: phiên không mất khi đóng tab / câu hỏi bám CV / follow-up động
+// ============================================================
+
+Table interview_sessions {
+  id                bigint             [pk, increment]
+  user_id           bigint             [not null]
+  profile_id        bigint             [not null, note: 'Hồ sơ dùng để sinh câu hỏi tại thời điểm bắt đầu']
+  rubric_version_id bigint             [not null, note: 'Chốt version rubric ngay khi tạo phiên']
+  mode              session_mode       [not null]
+  status            session_status     [not null, default: 'CREATED']
+  current_turn_index smallint          [not null, default: 0, note: 'Khôi phục đúng chỗ đang dở khi mở lại']
+  end_reason        session_end_reason
+  started_at        timestamp
+  last_activity_at  timestamp          [not null, note: 'Job dọn dẹp: quá 24h không hoạt động -> EXPIRED và vẫn chấm phần đã làm']
+  completed_at      timestamp
+  overall_score     decimal(5,2)       [note: 'Denormalize từ session_reports để vẽ biểu đồ tiến bộ nhanh']
+  created_at        timestamp          [not null]
+
+  indexes {
+    (user_id, status)       [note: 'Tìm phiên dang dở để hiện nút "Tiếp tục" trên trang chủ']
+    (user_id, completed_at) [note: 'Danh sách lịch sử + biểu đồ điểm theo thời gian']
+    last_activity_at        [note: 'Job quét phiên quá hạn 24h']
+  }
+}
+
+Table session_state_transitions {
+  id          bigint         [pk, increment]
+  session_id  bigint         [not null]
+  from_status session_status [note: 'NULL ở lần chuyển đầu tiên']
+  to_status   session_status [not null]
+  reason      varchar(255)
+  actor       varchar(50)    [not null, default: 'SYSTEM', note: 'USER | SYSTEM | SCHEDULER']
+  occurred_at timestamp      [not null]
+
+  indexes {
+    (session_id, occurred_at)
+  }
+
+  Note: 'AC: "mọi lần chuyển trạng thái đều ghi log". Đây là nhật ký chỉ ghi thêm, không sửa.'
+}
+
+Table session_questions {
+  id                bigint       [pk, increment]
+  session_id        bigint       [not null]
+  ordinal           smallint     [not null, note: 'AC: 5-7 câu cho một phiên']
+  question_text     text         [not null]
+  topic             varchar(150)
+  difficulty        smallint     [note: '1-5']
+  source_project_id bigint       [note: 'Câu này đào sâu vào dự án nào trong CV — NULL nếu là câu nền tảng']
+  source_skill_id   bigint       [note: 'Câu này hỏi về kỹ năng nào trong CV']
+  generation_seed   varchar(64)  [note: 'AC: chạy lại cùng CV phải ra bộ câu khác']
+  created_at        timestamp    [not null]
+
+  indexes {
+    (session_id, ordinal) [unique]
+  }
+
+  Note: '''
+  Kịch bản được sinh TRƯỚC khi phiên bắt đầu (5-7 câu).
+  Các câu follow-up phát sinh trong lúc nói chuyện KHÔNG nằm ở đây —
+  chúng là session_turns có is_followup = true.
+  '''
+}
+
+Table session_turns {
+  id             bigint          [pk, increment]
+  session_id     bigint          [not null]
+  question_id    bigint          [note: 'Lượt này thuộc câu hỏi nào trong kịch bản. NULL với lời chào/kết thúc']
+  parent_turn_id bigint          [note: 'Follow-up trỏ về lượt trả lời mà nó đào sâu vào']
+  turn_index     smallint        [not null, note: 'Thứ tự trong toàn phiên, bắt đầu từ 0']
+  role           turn_role       [not null]
+  input_mode     turn_input_mode [not null]
+  content_text   text            [note: 'Với lượt CANDIDATE dùng giọng nói: đây là bản transcript cuối cùng đã dùng để chấm']
+  is_followup    boolean         [not null, default: false]
+  followup_depth smallint        [not null, default: 0, note: 'AC: tối đa 2 follow-up liên tiếp cho một chủ đề']
+  was_interrupted boolean        [not null, default: false, note: 'AC ngắt lời: đánh dấu lượt AI bị người dùng cắt ngang']
+  latency_ms     integer         [note: 'Từ lúc người dùng dứt lời tới lúc phát tiếng AI. Dùng tính p95 < 1200ms']
+  started_at     timestamp       [not null]
+  ended_at       timestamp
+
+  indexes {
+    (session_id, turn_index) [unique]
+    parent_turn_id
+  }
+}
+
+
+// ============================================================
+//  5. ÂM THANH & TRANSCRIPT
+//     US: nghe câu hỏi + ghi âm / sửa transcript / realtime / ngắt lời
+// ============================================================
+
+Table turn_audio_assets {
+  id          bigint           [pk, increment]
+  turn_id     bigint           [not null]
+  kind        audio_asset_kind [not null]
+  storage_key varchar(500)     [not null]
+  format      varchar(20)      [not null, note: 'webm | wav | mp3']
+  duration_ms integer
+  size_bytes  bigint
+  sample_rate integer
+  created_at  timestamp        [not null]
+
+  indexes {
+    (turn_id, kind)
+  }
+
+  Note: 'Cân nhắc job tự xóa file ghi âm sau N ngày; transcript vẫn giữ lại để xem lịch sử.'
+}
+
+Table turn_transcripts {
+  id               bigint       [pk, increment]
+  turn_id          bigint       [not null, unique]
+  raw_text         text         [not null, note: 'AC: BẢN GỐC từ STT — không bao giờ ghi đè']
+  edited_text      text         [note: 'AC: bản người dùng sửa. NULL = không sửa gì']
+  is_edited        boolean      [not null, default: false]
+  edited_at        timestamp
+  stt_provider     varchar(50)  [not null]
+  stt_confidence   decimal(4,3)
+  language_code    varchar(10)  [not null, default: 'vi']
+  word_timings     json         [note: 'Dấu thời gian mức từ. BẮT BUỘC cho phân tích giọng nói — xác nhận nhà cung cấp STT hỗ trợ trước']
+  duration_ms      integer
+  created_at       timestamp    [not null]
+
+  Note: 'Giữ cả raw_text và edited_text để đối chiếu chất lượng STT trên giọng Việt.'
+}
+
+Table session_voice_connections {
+  id                    bigint       [pk, increment]
+  session_id            bigint       [not null]
+  connected_at          timestamp    [not null]
+  disconnected_at       timestamp
+  client_platform       varchar(50)  [note: 'chrome-desktop | safari-ios ...']
+  fell_back_to_turn_based boolean    [not null, default: false, note: 'AC: mất kết nối thì lùi về turn-based, giữ nguyên ngữ cảnh']
+  p50_latency_ms        integer
+  p95_latency_ms        integer      [note: 'AC: mục tiêu < 1200ms — đo trên dữ liệu thật, không đoán']
+  disconnect_reason     varchar(255)
+
+  indexes {
+    session_id
+  }
+}
+
+
+// ============================================================
+//  6. CHẤM ĐIỂM & BÁO CÁO
+//     US: chấm theo rubric kèm dẫn chứng / báo cáo sau phiên
+// ============================================================
+
+Table session_scores {
+  id           bigint       [pk, increment]
+  session_id   bigint       [not null]
+  criterion_id bigint       [not null]
+  score        decimal(4,2) [not null]
+  max_score    decimal(4,2) [not null]
+  level_no     smallint     [note: 'Rơi vào mức nào trong 4 mức của tiêu chí']
+  comment      text         [not null, note: 'AC: mỗi tiêu chí phải giải thích được, không chấm khống']
+  scored_at    timestamp    [not null]
+  model_name   varchar(100)
+
+  indexes {
+    (session_id, criterion_id) [unique]
+  }
+}
+
+Table score_evidences {
+  id               bigint   [pk, increment]
+  session_score_id bigint   [not null]
+  turn_id          bigint   [not null, note: 'Dẫn chứng nằm ở lượt nói nào']
+  quote_text       text     [not null, note: 'AC: trích dẫn transcript làm bằng chứng']
+  start_offset     integer  [note: 'Vị trí ký tự trong transcript, để highlight trên giao diện']
+  end_offset       integer
+
+  indexes {
+    session_score_id
+  }
+
+  Note: 'Không có bảng này thì AC "kèm dẫn chứng" chỉ là lời hứa suông trong prompt.'
+}
+
+Table session_reports {
+  id            bigint       [pk, increment]
+  session_id    bigint       [not null, unique]
+  overall_score decimal(5,2) [not null]
+  summary_text  text         [not null]
+  disclaimer    text         [not null, note: 'AC: ghi rõ đây là công cụ luyện tập, không phải chứng nhận năng lực']
+  language_code varchar(10)  [not null, default: 'vi']
+  model_name    varchar(100) [not null]
+  duration_ms   integer      [note: 'AC: sinh xong dưới 60 giây']
+  generated_at  timestamp    [not null]
+}
+
+Table report_highlights {
+  id            bigint                [pk, increment]
+  report_id     bigint                [not null]
+  type          report_highlight_type [not null]
+  content       text                  [not null]
+  display_order smallint              [not null, default: 0]
+
+  indexes {
+    (report_id, type)
+  }
+
+  Note: 'AC: 3 điểm mạnh + 3 điểm cần cải thiện + gợi ý hành động. Tách hàng thay vì nhồi vào một cột text.'
+}
+
+
+// ============================================================
+//  7. PHÂN TÍCH GIỌNG NÓI
+//     US: biết mình nói nhanh/chậm, dùng bao nhiêu từ đệm
+// ============================================================
+
+Table filler_word_dictionary {
+  id            bigint      [pk, increment]
+  language_code varchar(10) [not null]
+  word          varchar(50) [not null, note: 'ừm, à, kiểu như, like, you know...']
+  is_active     boolean     [not null, default: true]
+
+  indexes {
+    (language_code, word) [unique]
+  }
+
+  Note: 'Để trong DB thay vì hardcode, để bổ sung từ mới mà không cần deploy lại.'
+}
+
+Table turn_speech_metrics {
+  id                bigint       [pk, increment]
+  turn_id           bigint       [not null, unique]
+  words_per_minute  decimal(6,2)
+  word_count        integer
+  filler_count      integer      [not null, default: 0]
+  speaking_ms       integer
+  silence_ms        integer      [not null, default: 0]
+  longest_pause_ms  integer
+  computed_at       timestamp    [not null]
+}
+
+Table turn_filler_occurrences {
+  id           bigint      [pk, increment]
+  turn_id      bigint      [not null]
+  word         varchar(50) [not null]
+  occurred_at_ms integer   [not null, note: 'Mốc thời gian trong bản ghi âm — để highlight trên transcript']
+
+  indexes {
+    turn_id
+  }
+}
+
+Table session_speech_metrics {
+  id                    bigint       [pk, increment]
+  session_id            bigint       [not null, unique]
+  words_per_minute      decimal(6,2)
+  total_word_count      integer
+  filler_count          integer      [not null, default: 0]
+  filler_per_100_words  decimal(6,2)
+  user_speaking_ms      integer
+  total_silence_ms      integer
+  session_duration_ms   integer
+  user_talk_ratio       decimal(4,3) [note: 'Tỉ lệ thời gian người dùng nói trên tổng thời lượng phiên']
+  reference_source      varchar(255) [not null, note: 'AC: nêu rõ khoảng tham chiếu lấy từ nguồn nào — bắt buộc, không để trống']
+  computed_at           timestamp    [not null]
+
+  Note: '''
+  CHỈ lưu các chỉ số đo được khách quan.
+  KHÔNG thêm cột kiểu confidence_score / attitude_score —
+  suy diễn tính cách từ giọng nói là vùng nhạy cảm và dễ thiên vị theo accent vùng miền.
+  '''
+}
+
+
+// ============================================================
+//  RELATIONSHIPS
+// ============================================================
+
+// -- Auth --
+Ref: refresh_tokens.user_id             > user_accounts.id [delete: cascade]
+Ref: user_preferences.user_id           - user_accounts.id [delete: cascade]
+
+// -- CV & hồ sơ --
+Ref: cv_documents.user_id            > user_accounts.id    [delete: cascade]
+Ref: cv_parse_results.cv_document_id - cv_documents.id     [delete: cascade]
+Ref: candidate_profiles.user_id      - user_accounts.id    [delete: cascade]
+Ref: candidate_profiles.cv_document_id > cv_documents.id   [delete: restrict]
+Ref: profile_educations.profile_id   > candidate_profiles.id [delete: cascade]
+Ref: profile_skills.profile_id       > candidate_profiles.id [delete: cascade]
+Ref: profile_projects.profile_id     > candidate_profiles.id [delete: cascade]
+
+// -- Rubric --
+Ref: rubric_versions.rubric_id          > rubrics.id          [delete: cascade]
+Ref: rubric_criteria.rubric_version_id  > rubric_versions.id  [delete: cascade]
+Ref: rubric_criterion_levels.criterion_id > rubric_criteria.id [delete: cascade]
+
+// -- Phiên phỏng vấn --
+Ref: interview_sessions.user_id           > user_accounts.id     [delete: cascade]
+Ref: interview_sessions.profile_id        > candidate_profiles.id [delete: restrict]
+Ref: interview_sessions.rubric_version_id > rubric_versions.id   [delete: restrict]
+Ref: session_state_transitions.session_id > interview_sessions.id [delete: cascade]
+Ref: session_questions.session_id         > interview_sessions.id [delete: cascade]
+Ref: session_questions.source_project_id  > profile_projects.id  [delete: set null]
+Ref: session_questions.source_skill_id    > profile_skills.id    [delete: set null]
+Ref: session_turns.session_id             > interview_sessions.id [delete: cascade]
+Ref: session_turns.question_id            > session_questions.id [delete: set null]
+Ref: session_turns.parent_turn_id         > session_turns.id     [delete: set null]
+
+// -- Âm thanh & transcript --
+Ref: turn_audio_assets.turn_id            > session_turns.id      [delete: cascade]
+Ref: turn_transcripts.turn_id             - session_turns.id      [delete: cascade]
+Ref: session_voice_connections.session_id > interview_sessions.id [delete: cascade]
+
+// -- Chấm điểm & báo cáo --
+Ref: session_scores.session_id       > interview_sessions.id [delete: cascade]
+Ref: session_scores.criterion_id     > rubric_criteria.id    [delete: restrict]
+Ref: score_evidences.session_score_id > session_scores.id    [delete: cascade]
+Ref: score_evidences.turn_id         > session_turns.id      [delete: cascade]
+Ref: session_reports.session_id      - interview_sessions.id [delete: cascade]
+Ref: report_highlights.report_id     > session_reports.id    [delete: cascade]
+
+// -- Phân tích giọng nói --
+Ref: turn_speech_metrics.turn_id       - session_turns.id       [delete: cascade]
+Ref: turn_filler_occurrences.turn_id   > session_turns.id       [delete: cascade]
+Ref: session_speech_metrics.session_id - interview_sessions.id  [delete: cascade]
+
+
+// ============================================================
+//  TABLE GROUPS (gom nhóm cho dễ nhìn trên dbdiagram)
+// ============================================================
+
+TableGroup "1. Tài khoản & Xác thực" {
+  user_accounts
+  refresh_tokens
+  user_preferences
+}
+
+TableGroup "2. CV & Hồ sơ" {
+  cv_documents
+  cv_parse_results
+  candidate_profiles
+  profile_educations
+  profile_skills
+  profile_projects
+}
+
+TableGroup "3. Rubric" {
+  rubrics
+  rubric_versions
+  rubric_criteria
+  rubric_criterion_levels
+}
+
+TableGroup "4. Phiên phỏng vấn" {
+  interview_sessions
+  session_state_transitions
+  session_questions
+  session_turns
+}
+
+TableGroup "5. Âm thanh & Transcript" {
+  turn_audio_assets
+  turn_transcripts
+  session_voice_connections
+}
+
+TableGroup "6. Chấm điểm & Báo cáo" {
+  session_scores
+  score_evidences
+  session_reports
+  report_highlights
+}
+
+TableGroup "7. Phân tích giọng nói" {
+  filler_word_dictionary
+  turn_speech_metrics
+  turn_filler_occurrences
+  session_speech_metrics
+}
