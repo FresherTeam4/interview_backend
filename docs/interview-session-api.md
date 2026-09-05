@@ -47,41 +47,26 @@ GET /api/interview-sessions/{sessionId}
 Authorization: Bearer <access-token>
 ```
 
-Successful preparation changes the status to `READY` and returns the opening message and ordered focus areas. Focus areas are competencies or experience areas, not pre-generated questions.
+Successful preparation changes the status to `READY`. The response only exposes data needed by the client to display and poll the preparation state. AI context and focus areas remain internal to the backend.
 
 Example:
 
 ```json
 {
   "id": 501,
-  "version": 2,
-  "templateId": 101,
-  "templateTitle": "Backend Java Developer",
-  "profileId": 35,
-  "profileName": "Minh profile",
   "status": "READY",
+  "templateTitle": "Backend Java Developer",
+  "profileName": "Minh profile",
   "languageCode": "vi",
   "durationMinutes": 30,
   "interviewerStyle": "PROFESSIONAL",
-  "jobContextSummary": "Vị trí Backend Java...",
-  "candidateContextSummary": "Ứng viên có kinh nghiệm Spring Boot...",
-  "openingMessage": "Chào Minh, hôm nay chúng ta sẽ có khoảng 30 phút...",
   "preparationErrorCode": null,
   "preparationErrorMessage": null,
-  "focusAreas": [
-    {
-      "code": "JAVA_SPRING",
-      "name": "Java and Spring Boot",
-      "description": "Kiểm chứng cách ứng viên thiết kế và triển khai backend",
-      "priority": "HIGH",
-      "reason": "Yêu cầu chính của JD và xuất hiện trong CV",
-      "plannedSeconds": 480,
-      "evidenceStatus": "NOT_EXPLORED",
-      "displayOrder": 0
-    }
-  ]
+  "preparedAt": "2026-09-06T08:00:00Z"
 }
 ```
+
+The backend loads summaries, the opening message, conversation state, and ordered focus areas directly from persisted session data when invoking the interview AI. Clients never receive or submit this internal context.
 
 ## Retry preparation
 

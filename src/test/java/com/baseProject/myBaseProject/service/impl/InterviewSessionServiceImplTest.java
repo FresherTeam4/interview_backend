@@ -11,8 +11,8 @@ import com.baseProject.myBaseProject.enums.InterviewerStyle;
 import com.baseProject.myBaseProject.exception.DomainException;
 import com.baseProject.myBaseProject.exception.ErrorCode;
 import com.baseProject.myBaseProject.interview.InterviewPreparationService;
-import com.baseProject.myBaseProject.interview.InterviewSessionTransitionRecorder;
-import com.baseProject.myBaseProject.interview.InterviewSnapshotFactory;
+import com.baseProject.myBaseProject.interview.support.InterviewSessionTransitionRecorder;
+import com.baseProject.myBaseProject.interview.support.InterviewSnapshotFactory;
 import com.baseProject.myBaseProject.mapper.InterviewSessionMapper;
 import com.baseProject.myBaseProject.repository.CandidateProfileRepository;
 import com.baseProject.myBaseProject.repository.InterviewFocusAreaRepository;
@@ -131,10 +131,6 @@ class InterviewSessionServiceImplTest {
                 preparationService, transitionRecorder, new InterviewSessionMapper(),
                 new InterviewSessionProperties(List.of("vi", "en"), List.of(15, 30, 45, 60)),
                 Clock.fixed(NOW, ZoneOffset.UTC), transactionManager());
-
-        private Fixture() {
-            when(focusAreas.findBySessionIdOrderByDisplayOrderAsc(any())).thenReturn(List.of());
-        }
 
         private void stubNewSession() {
             when(sessions.findByUserIdAndIdempotencyKey(USER_ID, "request-1"))

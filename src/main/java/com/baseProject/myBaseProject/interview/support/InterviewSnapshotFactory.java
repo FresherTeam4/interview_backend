@@ -1,4 +1,4 @@
-package com.baseProject.myBaseProject.interview;
+package com.baseProject.myBaseProject.interview.support;
 
 import com.baseProject.myBaseProject.dto.session.snapshot.CandidateProfileSnapshot;
 import com.baseProject.myBaseProject.dto.session.snapshot.InterviewTemplateSnapshot;

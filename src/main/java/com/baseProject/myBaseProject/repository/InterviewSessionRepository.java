@@ -14,7 +14,6 @@ import java.util.List;
 import java.util.Optional;
 
 public interface InterviewSessionRepository extends JpaRepository<InterviewSession, Long> {
-    @EntityGraph(attributePaths = {"template", "profile"})
     Optional<InterviewSession> findByIdAndUserId(Long id, Long userId);
 
     @EntityGraph(attributePaths = {"template", "profile"})

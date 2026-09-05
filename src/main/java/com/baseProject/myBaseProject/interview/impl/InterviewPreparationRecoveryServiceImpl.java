@@ -6,7 +6,7 @@ import com.baseProject.myBaseProject.enums.InterviewSessionStatus;
 import com.baseProject.myBaseProject.enums.InterviewTransitionActor;
 import com.baseProject.myBaseProject.exception.ErrorCode;
 import com.baseProject.myBaseProject.interview.InterviewPreparationRecoveryService;
-import com.baseProject.myBaseProject.interview.InterviewSessionTransitionRecorder;
+import com.baseProject.myBaseProject.interview.support.InterviewSessionTransitionRecorder;
 import com.baseProject.myBaseProject.repository.InterviewSessionRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

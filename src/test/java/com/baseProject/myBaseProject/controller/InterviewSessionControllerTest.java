@@ -1,12 +1,9 @@
 package com.baseProject.myBaseProject.controller;
 
-import com.baseProject.myBaseProject.dto.session.InterviewFocusAreaResponse;
 import com.baseProject.myBaseProject.dto.session.InterviewOptionResponse;
 import com.baseProject.myBaseProject.dto.session.InterviewSessionOptionsResponse;
-import com.baseProject.myBaseProject.dto.session.InterviewSessionResponse;
+import com.baseProject.myBaseProject.dto.session.InterviewSessionStatusResponse;
 import com.baseProject.myBaseProject.entity.UserAccount;
-import com.baseProject.myBaseProject.enums.InterviewEvidenceStatus;
-import com.baseProject.myBaseProject.enums.InterviewFocusPriority;
 import com.baseProject.myBaseProject.enums.InterviewSessionStatus;
 import com.baseProject.myBaseProject.enums.InterviewerStyle;
 import com.baseProject.myBaseProject.enums.UserRole;
@@ -116,16 +113,23 @@ class InterviewSessionControllerTest {
         verifyNoInteractions(service);
     }
 
-    private InterviewSessionResponse response(InterviewSessionStatus status) {
-        return new InterviewSessionResponse(
-                501L, 0L, 101L, "Backend Java", 35L, "Minh profile",
-                status, "vi", 30, InterviewerStyle.PROFESSIONAL,
-                null, null, null, null, null,
-                null, null, NOW, NOW,
-                List.of(new InterviewFocusAreaResponse(
-                        "JAVA", "Java", "Java experience", InterviewFocusPriority.HIGH,
-                        "Required by JD", 300, InterviewEvidenceStatus.NOT_EXPLORED,
-                        (short) 0)));
+    @Test
+    void statusResponseDoesNotExposeInternalAiContext() throws Exception {
+        when(service.get(7L, 501L)).thenReturn(response(InterviewSessionStatus.READY));
+
+        mockMvc.perform(get("/api/interview-sessions/501").with(user(userDetails())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("READY"))
+                .andExpect(jsonPath("$.jobContextSummary").doesNotExist())
+                .andExpect(jsonPath("$.candidateContextSummary").doesNotExist())
+                .andExpect(jsonPath("$.openingMessage").doesNotExist())
+                .andExpect(jsonPath("$.focusAreas").doesNotExist());
+    }
+
+    private InterviewSessionStatusResponse response(InterviewSessionStatus status) {
+        return new InterviewSessionStatusResponse(
+                501L, status, "Backend Java", "Minh profile", "vi", 30,
+                InterviewerStyle.PROFESSIONAL, null, null, NOW);
     }
 
     private CustomUserDetails userDetails() {

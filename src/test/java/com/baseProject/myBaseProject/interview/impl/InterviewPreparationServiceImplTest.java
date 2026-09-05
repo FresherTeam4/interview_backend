@@ -8,7 +8,7 @@ import com.baseProject.myBaseProject.enums.InterviewerStyle;
 import com.baseProject.myBaseProject.exception.DomainException;
 import com.baseProject.myBaseProject.exception.ErrorCode;
 import com.baseProject.myBaseProject.interview.InterviewPlanningService;
-import com.baseProject.myBaseProject.interview.InterviewSessionTransitionRecorder;
+import com.baseProject.myBaseProject.interview.support.InterviewSessionTransitionRecorder;
 import com.baseProject.myBaseProject.repository.InterviewFocusAreaRepository;
 import com.baseProject.myBaseProject.repository.InterviewSessionRepository;
 import org.junit.jupiter.api.Test;

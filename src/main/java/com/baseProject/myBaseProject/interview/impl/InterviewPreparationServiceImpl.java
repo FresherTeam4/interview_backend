@@ -13,7 +13,7 @@ import com.baseProject.myBaseProject.exception.DomainException;
 import com.baseProject.myBaseProject.exception.ErrorCode;
 import com.baseProject.myBaseProject.interview.InterviewPlanningService;
 import com.baseProject.myBaseProject.interview.InterviewPreparationService;
-import com.baseProject.myBaseProject.interview.InterviewSessionTransitionRecorder;
+import com.baseProject.myBaseProject.interview.support.InterviewSessionTransitionRecorder;
 import com.baseProject.myBaseProject.repository.InterviewFocusAreaRepository;
 import com.baseProject.myBaseProject.repository.InterviewSessionRepository;
 import lombok.extern.slf4j.Slf4j;

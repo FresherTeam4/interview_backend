@@ -1,4 +1,4 @@
-package com.baseProject.myBaseProject.interview;
+package com.baseProject.myBaseProject.interview.support;
 
 import com.baseProject.myBaseProject.dto.ai.JobAnalysis;
 import com.baseProject.myBaseProject.dto.profile.ProfileSkillDto;

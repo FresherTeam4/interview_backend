@@ -2,7 +2,7 @@ package com.baseProject.myBaseProject.controller;
 
 import com.baseProject.myBaseProject.config.OpenApiConfig;
 import com.baseProject.myBaseProject.dto.session.CreateInterviewSessionRequest;
-import com.baseProject.myBaseProject.dto.session.InterviewSessionResponse;
+import com.baseProject.myBaseProject.dto.session.InterviewSessionStatusResponse;
 import com.baseProject.myBaseProject.security.CustomUserDetails;
 import com.baseProject.myBaseProject.security.authorization.CurrentUser;
 import com.baseProject.myBaseProject.security.authorization.IsAuthenticated;
@@ -32,7 +32,7 @@ public class InterviewSessionController {
 
     @PostMapping
     @Operation(summary = "Create a session and prepare its adaptive interview plan")
-    public ResponseEntity<InterviewSessionResponse> create(
+    public ResponseEntity<InterviewSessionStatusResponse> create(
             @CurrentUser CustomUserDetails user,
             @RequestHeader(name = "Idempotency-Key", required = false) String idempotencyKey,
             @Valid @RequestBody CreateInterviewSessionRequest request) {
@@ -41,15 +41,15 @@ public class InterviewSessionController {
     }
 
     @GetMapping("/{id}")
-    @Operation(summary = "Get preparation status and prepared focus areas")
-    public InterviewSessionResponse get(
+    @Operation(summary = "Get interview session preparation status")
+    public InterviewSessionStatusResponse get(
             @CurrentUser CustomUserDetails user, @PathVariable Long id) {
         return service.get(user.getId(), id);
     }
 
     @PostMapping("/{id}/preparation/retry")
     @Operation(summary = "Retry a failed interview preparation")
-    public ResponseEntity<InterviewSessionResponse> retryPreparation(
+    public ResponseEntity<InterviewSessionStatusResponse> retryPreparation(
             @CurrentUser CustomUserDetails user, @PathVariable Long id) {
         return ResponseEntity.accepted()
                 .body(service.retryPreparation(user.getId(), id));

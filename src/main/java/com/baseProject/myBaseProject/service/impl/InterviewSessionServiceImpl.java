@@ -5,7 +5,7 @@ import com.baseProject.myBaseProject.constant.Message;
 import com.baseProject.myBaseProject.dto.session.CreateInterviewSessionRequest;
 import com.baseProject.myBaseProject.dto.session.InterviewOptionResponse;
 import com.baseProject.myBaseProject.dto.session.InterviewSessionOptionsResponse;
-import com.baseProject.myBaseProject.dto.session.InterviewSessionResponse;
+import com.baseProject.myBaseProject.dto.session.InterviewSessionStatusResponse;
 import com.baseProject.myBaseProject.entity.CandidateProfile;
 import com.baseProject.myBaseProject.entity.InterviewSession;
 import com.baseProject.myBaseProject.entity.InterviewTemplate;
@@ -15,8 +15,8 @@ import com.baseProject.myBaseProject.enums.InterviewerStyle;
 import com.baseProject.myBaseProject.exception.DomainException;
 import com.baseProject.myBaseProject.exception.ErrorCode;
 import com.baseProject.myBaseProject.interview.InterviewPreparationService;
-import com.baseProject.myBaseProject.interview.InterviewSessionTransitionRecorder;
-import com.baseProject.myBaseProject.interview.InterviewSnapshotFactory;
+import com.baseProject.myBaseProject.interview.support.InterviewSessionTransitionRecorder;
+import com.baseProject.myBaseProject.interview.support.InterviewSnapshotFactory;
 import com.baseProject.myBaseProject.mapper.InterviewSessionMapper;
 import com.baseProject.myBaseProject.repository.CandidateProfileRepository;
 import com.baseProject.myBaseProject.repository.InterviewFocusAreaRepository;
@@ -94,7 +94,7 @@ public class InterviewSessionServiceImpl implements InterviewSessionService {
     }
 
     @Override
-    public InterviewSessionResponse create(
+    public InterviewSessionStatusResponse create(
             Long userId, String rawIdempotencyKey, CreateInterviewSessionRequest request) {
         String idempotencyKey = normalizeIdempotencyKey(rawIdempotencyKey);
         String languageCode = normalizeLanguage(request.languageCode());
@@ -127,16 +127,15 @@ public class InterviewSessionServiceImpl implements InterviewSessionService {
 
     @Override
     @Transactional(readOnly = true)
-    public InterviewSessionResponse get(Long userId, Long sessionId) {
+    public InterviewSessionStatusResponse get(Long userId, Long sessionId) {
         InterviewSession session = sessions.findByIdAndUserId(sessionId, userId)
                 .orElseThrow(() -> new DomainException(ErrorCode.INTERVIEW_SESSION_NOT_FOUND));
 
-        return mapper.toResponse(
-                session, focusAreas.findBySessionIdOrderByDisplayOrderAsc(sessionId));
+        return mapper.toStatusResponse(session);
     }
 
     @Override
-    public InterviewSessionResponse retryPreparation(Long userId, Long sessionId) {
+    public InterviewSessionStatusResponse retryPreparation(Long userId, Long sessionId) {
         transactions.executeWithoutResult(status -> {
 
             // Khóa session để các request retry đồng thời không cùng khởi tạo lại kế hoạch.
