@@ -76,3 +76,9 @@ app:
     max-file-size-bytes: ${CV_MAX_FILE_SIZE_BYTES:5242880}
     max-pages: ${CV_MAX_PAGES:10}
     max-per-user: ${CV_MAX_PER_USER:10}
+
+  job-description:
+    max-file-size-bytes: ${JD_MAX_FILE_SIZE_BYTES:5242880}
+    max-pages: ${JD_MAX_PAGES:20}
+    max-per-user: ${JD_MAX_PER_USER:50}
+    max-text-characters: ${JD_MAX_TEXT_CHARACTERS:30000}

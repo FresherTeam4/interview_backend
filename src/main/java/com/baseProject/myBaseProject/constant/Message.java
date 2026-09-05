@@ -1,6 +1,30 @@
 package com.baseProject.myBaseProject.constant;
 
 public final class Message {
+    public static final String TEMPLATE_NOT_FOUND = "Interview template not found";
+    public static final String TEMPLATE_VERSION_CONFLICT = "Interview template changed; reload it and try again";
+    public static final String TEMPLATE_ARCHIVED = "Interview template is archived";
+    public static final String TEMPLATE_INVALID_ANALYSIS = "Job analysis did not match the required contract";
+    public static final String TEMPLATE_INSUFFICIENT_JD = "Please provide a job description with responsibilities or job requirements";
+    public static final String TEMPLATE_ALREADY_CONFIRMED = "Confirmed interview templates cannot be edited";
+    public static final String TEMPLATE_CONFIRM_REQUIRED = "Confirm the interview template before using or publishing it";
+
+    // Job description processing
+    public static final String JD_FILE_REQUIRED = "Job description file is required";
+    public static final String JD_INVALID_FILE_TYPE = "Job description must be a valid PDF file";
+    public static final String JD_FILE_TOO_LARGE = "Job description file exceeds the allowed size";
+    public static final String JD_FILE_CORRUPTED = "Job description file is corrupted, encrypted, or unreadable";
+    public static final String JD_TOO_MANY_PAGES = "Job description has too many pages";
+    public static final String JD_TEXT_TOO_LONG = "Job description text exceeds the allowed length";
+    public static final String JD_EMPTY_TEXT = "Job description contains no extractable text";
+    public static final String JD_LIMIT_REACHED = "Maximum number of job descriptions reached";
+    public static final String JD_NOT_FOUND = "Job description not found";
+    public static final String JD_PROCESSING_IN_PROGRESS = "Job description processing is already in progress";
+    public static final String JD_PROCESSING_NOT_RETRYABLE = "Only failed job description processing can be retried";
+    public static final String JD_FILE_NOT_AVAILABLE = "This job description was created from text and has no file";
+    public static final String JD_PROCESSING_FAILED = "Failed to process job description";
+    public static final String JD_ANALYSIS_NOT_READY = "Job description analysis is not ready";
+
     public static final String INVALID_CREDENTIALS = "Invalid email or password";
     public static final String AUTHENTICATION_REQUIRED = "Authentication is required to access this resource";
     public static final String ACCESS_DENIED = "You do not have permission to access this resource";

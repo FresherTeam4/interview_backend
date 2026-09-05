@@ -1,5 +1,7 @@
 # Hướng dẫn Database — AI Mock Interview Platform
 
+> Pipeline JD và mẫu phỏng vấn hiện tại dùng hai bảng JD cùng một bảng template trong [001-interview-templates.sql](migrations/001-interview-templates.sql) và [interview-template-schema.dbml](interview-template-schema.dbml). Xem [API đã triển khai](../docs/interview-template-api.md). Các mô tả interview/session rộng hơn bên dưới là thiết kế cũ, chưa phải schema của module mới.
+
 Tài liệu dành cho team dev. Mục tiêu: đọc xong hiểu được **vì sao** mỗi bảng tồn tại, chứ không chỉ biết nó có cột gì.
 
 Schema đầy đủ nằm ở `schema.dbml` (dán vào dbdiagram.io để xem sơ đồ).

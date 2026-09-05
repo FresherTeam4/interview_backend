@@ -67,3 +67,13 @@ Dự án áp dụng mô hình xử lý lỗi tập trung thông qua `DomainExcep
 - Vì đã có [`GlobalExceptionHandler`](file:///D:/Work/experiences/FresherFPT/TechTrain/TeamProject/my-interview/src/main/java/com/baseProject/myBaseProject/exception/GlobalExceptionHandler.java) bắt tự động `DomainException` và `Exception.class`, các method trong Service nên viết logic phẳng, để ngoại lệ tự nhiên lan truyền.
 - **Không** bọc `try-catch` tại Service chỉ để bắt rồi re-throw (`catch (DomainException ex) { throw ex; }`).
 - **Chỉ** sử dụng `try-catch` khi làm nhiệm vụ **dịch ngoại lệ (Exception Translation)**: Bắt checked exception (như `IOException`) hoặc ngoại lệ kỹ thuật của thư viện bên ngoài (Spring AI, RestClient, DB Driver...) để chuyển đổi thành `DomainException` / `AiException` mang đúng `ErrorCode`.
+
+---
+
+## 4. AI Prompt Resource Conventions
+
+- Khai báo tập trung mọi đường dẫn prompt trong `PromptConstant`; không hard-code đường dẫn `prompts/...` tại service hoặc component.
+- Nạp nội dung prompt một lần trong constructor của bean bằng `ClassPathResource` và `StandardCharsets.UTF_8` để ứng dụng fail-fast khi thiếu resource.
+- Lưu nội dung prompt trong field `final`; không dùng field mutable kết hợp `@PostConstruct` để nạp prompt.
+- Không đọc lại prompt trong mỗi request hoặc mỗi lần gọi method nghiệp vụ.
+- Chỉ tách `PromptLoader` dùng chung khi logic nạp prompt có thêm xử lý hoặc số nơi sử dụng đủ lớn để việc trừu tượng hóa làm giảm lặp code rõ rệt.

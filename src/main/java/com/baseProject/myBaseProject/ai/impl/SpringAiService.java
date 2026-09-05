@@ -104,7 +104,8 @@ public class SpringAiService implements AiService {
             String cleaned = stripCodeFences(responseText);
             return outputConverter.convert(cleaned);
         } catch (Exception e) {
-            log.error("Failed to parse AI output into {}: {}", responseClass.getSimpleName(), responseText, e);
+            log.warn("Failed to parse AI output into {}, response length={}",
+                    responseClass.getSimpleName(), responseText.length());
             throw new AiException(ErrorCode.AI_MALFORMED_OUTPUT, "Could not map AI response to " + responseClass.getSimpleName(), e);
         }
     }

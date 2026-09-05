@@ -1,0 +1,72 @@
+// Current JD ingestion and interview template module.
+// SQL in migrations/001-interview-templates.sql is authoritative for CHECK constraints.
+Project interview_template_creation {
+  database_type: 'MySQL'
+}
+
+Table user_accounts {
+  id bigint [pk, note: 'Existing table, shown only as an FK target']
+}
+
+Table job_description_documents {
+  id bigint [pk, increment]
+  owner_id bigint [not null]
+  source_type varchar(10) [not null, note: 'FILE or TEXT']
+  storage_key varchar(500)
+  original_filename varchar(255) [not null]
+  content_type varchar(100) [not null]
+  file_size_bytes bigint [not null]
+  checksum_sha256 char(64) [not null]
+  source_text mediumtext [note: 'Only populated for TEXT input']
+  status varchar(20) [not null, default: 'UPLOADED', note: 'UPLOADED / EXTRACTING / ANALYZING / READY / FAILED']
+  error_code varchar(80)
+  failure_stage varchar(20) [note: 'DISPATCH / EXTRACTION / ANALYSIS']
+  status_message text
+  is_active boolean [not null, default: true]
+  uploaded_at datetime(6) [not null]
+  processed_at datetime(6)
+  indexes {
+    (id, owner_id) [unique, name: 'uq_jd_owner_pair']
+    (owner_id, is_active) [name: 'idx_jd_owner_active']
+    status [name: 'idx_jd_status']
+    (owner_id, checksum_sha256) [name: 'idx_jd_owner_checksum']
+  }
+}
+
+Table job_description_analysis_results {
+  id bigint [pk, increment]
+  job_description_id bigint [not null, unique]
+  extracted_text mediumtext [not null]
+  analysis_json json [not null, note: 'Immutable grounded AI output']
+  schema_version varchar(20) [not null]
+  model_name varchar(100) [not null]
+  duration_ms int
+  token_count int
+  created_at datetime(6) [not null]
+}
+
+Table interview_templates {
+  id bigint [pk, increment]
+  owner_id bigint [not null]
+  source_job_description_id bigint [not null, unique]
+  title varchar(200) [not null]
+  job_title varchar(150)
+  target_seniority varchar(100)
+  content_json json [not null, note: 'Editable only before confirmed_at is set']
+  content_schema_version varchar(20) [not null]
+  confirmed_at datetime(6)
+  published_at datetime(6)
+  archived_at datetime(6)
+  version bigint [not null, default: 0, note: 'JPA optimistic lock']
+  created_at datetime(6) [not null]
+  updated_at datetime(6) [not null]
+  indexes {
+    (owner_id, created_at) [name: 'idx_template_owner']
+    (published_at, archived_at) [name: 'idx_template_public']
+  }
+}
+
+Ref: job_description_documents.owner_id > user_accounts.id [delete: restrict, update: restrict]
+Ref: job_description_analysis_results.job_description_id - job_description_documents.id [delete: restrict, update: restrict]
+Ref: interview_templates.owner_id > user_accounts.id [delete: restrict, update: restrict]
+Ref: interview_templates.(source_job_description_id, owner_id) > job_description_documents.(id, owner_id) [delete: restrict, update: restrict]

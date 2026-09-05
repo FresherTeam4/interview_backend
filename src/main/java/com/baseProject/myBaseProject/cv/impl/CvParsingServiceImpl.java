@@ -4,8 +4,6 @@ import com.baseProject.myBaseProject.ai.AiService;
 import com.baseProject.myBaseProject.constant.PromptConstant;
 import com.baseProject.myBaseProject.cv.CvParsingService;
 import com.baseProject.myBaseProject.dto.ai.CvExtractionResult;
-import jakarta.annotation.PostConstruct;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Service;
@@ -15,15 +13,13 @@ import java.nio.charset.StandardCharsets;
 
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class CvParsingServiceImpl implements CvParsingService {
 
     private final AiService aiService;
-    private String cvPrompt;
+    private final String cvPrompt;
 
-    @PostConstruct
-    public void init() throws IOException {
-        // nạp trước prompt từ resources lúc khởi động bean
+    public CvParsingServiceImpl(AiService aiService) throws IOException {
+        this.aiService = aiService;
         this.cvPrompt = new ClassPathResource(PromptConstant.CV_EXTRACT_PROMPT)
                 .getContentAsString(StandardCharsets.UTF_8);
     }
