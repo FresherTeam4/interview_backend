@@ -3,6 +3,7 @@ package com.baseProject.myBaseProject.cv.validation;
 import com.baseProject.myBaseProject.config.properites.CvProperties;
 import com.baseProject.myBaseProject.exception.DomainException;
 import com.baseProject.myBaseProject.exception.ErrorCode;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.pdfbox.Loader;
@@ -43,6 +44,7 @@ public class PdfBoxCvFileValidator implements CvFileValidator {
         requirePdfMagicBytes(content);
         // PDFBox xác nhận file mở được, không mã hóa và nằm trong giới hạn số trang.
         requireReadablePdf(content);
+
         return content;
     }
 

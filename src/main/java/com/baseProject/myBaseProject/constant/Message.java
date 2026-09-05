@@ -38,4 +38,11 @@ public final class Message {
     public static final String CV_PARSE_IN_PROGRESS = "CV parsing is already in progress";
     public static final String CV_PARSE_NOT_RETRYABLE = "Only failed CV parsing can be retried";
     public static final String STORAGE_UNAVAILABLE = "File storage is temporarily unavailable";
+
+    // Candidate profile
+    public static final String PROFILE_NOT_FOUND = "Candidate profile not found";
+    public static final String PROFILE_ITEM_NOT_FOUND = "Profile item not found";
+    public static final String DUPLICATE_SKILL_NAME = "Profile contains duplicate skill names";
+    public static final String PROFILE_VERSION_CONFLICT =
+            "Candidate profile was changed by another request; reload it and try again";
 }

@@ -3,6 +3,7 @@ package com.baseProject.myBaseProject.ai.impl;
 import com.baseProject.myBaseProject.ai.AiService;
 import com.baseProject.myBaseProject.exception.AiException;
 import com.baseProject.myBaseProject.exception.ErrorCode;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;

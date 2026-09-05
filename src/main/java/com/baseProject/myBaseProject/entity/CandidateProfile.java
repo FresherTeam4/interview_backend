@@ -15,6 +15,7 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToOne;
 import jakarta.persistence.Table;
+import jakarta.persistence.Version;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -42,15 +43,21 @@ public class CandidateProfile {
     private Long id;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "user_id", nullable = false)
+    @JoinColumn(name = "user_id", nullable = false, updatable = false)
     private UserAccount user;
 
     @OneToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "cv_document_id", nullable = false, unique = true)
+    @JoinColumn(name = "cv_document_id", nullable = false, unique = true, updatable = false)
     private CvDocument cvDocument;
+
+    @Column(nullable = false, length = 150)
+    private String name;
 
     @Column(length = 255)
     private String headline;
+
+    @Column(columnDefinition = "TEXT")
+    private String summary;
 
     @Column(name = "years_experience", precision = 3, scale = 1)
     private BigDecimal yearsExperience;
@@ -74,6 +81,10 @@ public class CandidateProfile {
 
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
+
+    @Version
+    @Column(nullable = false)
+    private long version;
 
     public boolean isConfirmed() {
         return confirmedAt != null;

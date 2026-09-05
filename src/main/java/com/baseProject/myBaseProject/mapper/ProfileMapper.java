@@ -1,6 +1,12 @@
 package com.baseProject.myBaseProject.mapper;
 
 import com.baseProject.myBaseProject.dto.ai.CvExtractionResult;
+import com.baseProject.myBaseProject.dto.profile.CandidateProfileResponse;
+import com.baseProject.myBaseProject.dto.profile.ProfileEducationDto;
+import com.baseProject.myBaseProject.dto.profile.ProfileProjectDto;
+import com.baseProject.myBaseProject.dto.profile.ProfileSkillDto;
+import com.baseProject.myBaseProject.dto.profile.ProfileSummaryResponse;
+import com.baseProject.myBaseProject.dto.profile.ProfileUpdateRequest;
 import com.baseProject.myBaseProject.entity.CandidateProfile;
 import com.baseProject.myBaseProject.entity.CvDocument;
 import com.baseProject.myBaseProject.entity.ProfileEducation;
@@ -19,6 +25,7 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Objects;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -48,7 +55,9 @@ public class ProfileMapper {
         return CandidateProfile.builder()
                 .user(document.getUser())
                 .cvDocument(document)
+                .name(defaultProfileName(document, result))
                 .headline(clamp(result.headline(), 255))
+                .summary(clamp(result.summary(), 5000))
                 .yearsExperience(clampYearsExperience(result.yearsExperience()))
                 .targetPosition(clamp(result.targetPosition(), 150))
                 .seniorityLevel(clamp(result.seniorityLevel(), 30))
@@ -150,9 +159,231 @@ public class ProfileMapper {
         return projects;
     }
 
-    private String normalizeSkillName(String value) {
+    public CandidateProfileResponse toResponse(CandidateProfile profile,
+                                               List<ProfileEducation> educations,
+                                               List<ProfileSkill> skills,
+                                               List<ProfileProject> projects) {
+        return new CandidateProfileResponse(
+                profile.getId(),
+                profile.getVersion(),
+                displayName(profile),
+                profile.getCvDocument().getId(),
+                profile.getCvDocument().getOriginalFilename(),
+                profile.getHeadline(),
+                profile.getSummary(),
+                profile.getYearsExperience(),
+                profile.getTargetPosition(),
+                profile.getSeniorityLevel(),
+                profile.getSource(),
+                profile.getConfirmedAt(),
+                profile.getCreatedAt(),
+                profile.getUpdatedAt(),
+                educations.stream().map(this::toDto).toList(),
+                skills.stream().map(this::toDto).toList(),
+                projects.stream().map(this::toDto).toList());
+    }
+
+    public ProfileSummaryResponse toSummary(CandidateProfile profile,
+                                            int educationCount,
+                                            int skillCount,
+                                            int projectCount) {
+        return new ProfileSummaryResponse(
+                profile.getId(),
+                profile.getVersion(),
+                displayName(profile),
+                profile.getCvDocument().getId(),
+                profile.getCvDocument().getOriginalFilename(),
+                profile.getHeadline(),
+                profile.getTargetPosition(),
+                profile.getSeniorityLevel(),
+                profile.getSource(),
+                profile.getConfirmedAt(),
+                educationCount,
+                skillCount,
+                projectCount,
+                profile.getCreatedAt(),
+                profile.getUpdatedAt());
+    }
+
+    public ProfileEducationDto toDto(ProfileEducation entity) {
+        return new ProfileEducationDto(
+                entity.getId(),
+                entity.getSchool(),
+                entity.getDegree(),
+                entity.getFieldOfStudy(),
+                entity.getStartYear(),
+                entity.getEndYear(),
+                entity.isUserEdited(),
+                entity.getDisplayOrder());
+    }
+
+    public ProfileSkillDto toDto(ProfileSkill entity) {
+        return new ProfileSkillDto(
+                entity.getId(),
+                entity.getName(),
+                entity.getCategory(),
+                entity.isUserEdited(),
+                entity.getDisplayOrder());
+    }
+
+    public ProfileProjectDto toDto(ProfileProject entity) {
+        return new ProfileProjectDto(
+                entity.getId(),
+                entity.getName(),
+                entity.getDescription(),
+                entity.getRoleInProject(),
+                entity.getTechStack(),
+                entity.getStartDate(),
+                entity.getEndDate(),
+                entity.isUserEdited(),
+                entity.getDisplayOrder());
+    }
+
+    public void applyScalars(CandidateProfile profile,
+                             ProfileUpdateRequest request,
+                             Instant updatedAt) {
+        profile.setName(request.name().trim());
+        profile.setHeadline(blankToNull(request.headline()));
+        profile.setSummary(blankToNull(request.summary()));
+        profile.setYearsExperience(request.yearsExperience());
+        profile.setTargetPosition(blankToNull(request.targetPosition()));
+        profile.setSeniorityLevel(blankToNull(request.seniorityLevel()));
+        profile.setSource(ProfileSource.USER_EDITED);
+        profile.setUpdatedAt(updatedAt);
+    }
+
+    public ProfileEducation newEducation(CandidateProfile profile,
+                                         ProfileEducationDto dto,
+                                         short displayOrder) {
+        return ProfileEducation.builder()
+                .profile(profile)
+                .school(dto.school().trim())
+                .degree(blankToNull(dto.degree()))
+                .fieldOfStudy(blankToNull(dto.fieldOfStudy()))
+                .startYear(dto.startYear())
+                .endYear(dto.endYear())
+                .userEdited(true)
+                .displayOrder(displayOrder)
+                .build();
+    }
+
+    public ProfileSkill newSkill(CandidateProfile profile,
+                                 ProfileSkillDto dto,
+                                 short displayOrder) {
+        return ProfileSkill.builder()
+                .profile(profile)
+                .name(normalizeSkillName(dto.name()))
+                .category(blankToNull(dto.category()))
+                .userEdited(true)
+                .displayOrder(displayOrder)
+                .build();
+    }
+
+    public ProfileProject newProject(CandidateProfile profile,
+                                     ProfileProjectDto dto,
+                                     short displayOrder) {
+        return ProfileProject.builder()
+                .profile(profile)
+                .name(dto.name().trim())
+                .description(blankToNull(dto.description()))
+                .roleInProject(blankToNull(dto.roleInProject()))
+                .techStack(blankToNull(dto.techStack()))
+                .startDate(dto.startDate())
+                .endDate(dto.endDate())
+                .userEdited(true)
+                .displayOrder(displayOrder)
+                .build();
+    }
+
+    public void apply(ProfileEducation entity, ProfileEducationDto dto, short displayOrder) {
+        String school = dto.school().trim();
+        String degree = blankToNull(dto.degree());
+        String fieldOfStudy = blankToNull(dto.fieldOfStudy());
+        if (!Objects.equals(entity.getSchool(), school)
+                || !Objects.equals(entity.getDegree(), degree)
+                || !Objects.equals(entity.getFieldOfStudy(), fieldOfStudy)
+                || !Objects.equals(entity.getStartYear(), dto.startYear())
+                || !Objects.equals(entity.getEndYear(), dto.endYear())) {
+            entity.setUserEdited(true);
+        }
+        entity.setSchool(school);
+        entity.setDegree(degree);
+        entity.setFieldOfStudy(fieldOfStudy);
+        entity.setStartYear(dto.startYear());
+        entity.setEndYear(dto.endYear());
+        entity.setDisplayOrder(displayOrder);
+    }
+
+    public void apply(ProfileSkill entity, ProfileSkillDto dto, short displayOrder) {
+        String name = normalizeSkillName(dto.name());
+        String category = blankToNull(dto.category());
+        if (!Objects.equals(entity.getName(), name)
+                || !Objects.equals(entity.getCategory(), category)) {
+            entity.setUserEdited(true);
+        }
+        entity.setName(name);
+        entity.setCategory(category);
+        entity.setDisplayOrder(displayOrder);
+    }
+
+    public void apply(ProfileProject entity, ProfileProjectDto dto, short displayOrder) {
+        String name = dto.name().trim();
+        String description = blankToNull(dto.description());
+        String roleInProject = blankToNull(dto.roleInProject());
+        String techStack = blankToNull(dto.techStack());
+        if (!Objects.equals(entity.getName(), name)
+                || !Objects.equals(entity.getDescription(), description)
+                || !Objects.equals(entity.getRoleInProject(), roleInProject)
+                || !Objects.equals(entity.getTechStack(), techStack)
+                || !Objects.equals(entity.getStartDate(), dto.startDate())
+                || !Objects.equals(entity.getEndDate(), dto.endDate())) {
+            entity.setUserEdited(true);
+        }
+        entity.setName(name);
+        entity.setDescription(description);
+        entity.setRoleInProject(roleInProject);
+        entity.setTechStack(techStack);
+        entity.setStartDate(dto.startDate());
+        entity.setEndDate(dto.endDate());
+        entity.setDisplayOrder(displayOrder);
+    }
+
+    public static String normalizeSkillName(String value) {
         String normalized = blankToNull(value);
         return normalized == null ? null : WHITESPACE.matcher(normalized).replaceAll(" ");
+    }
+
+    private String defaultProfileName(CvDocument document, CvExtractionResult result) {
+        String name = blankToNull(result.targetPosition());
+        if (name == null) {
+            name = blankToNull(result.headline());
+        }
+        if (name == null) {
+            name = withoutPdfExtension(document.getOriginalFilename());
+        }
+        return clamp(name == null ? "Candidate profile" : name, 150);
+    }
+
+    private String displayName(CandidateProfile profile) {
+        String name = blankToNull(profile.getName());
+        if (name == null) {
+            name = blankToNull(profile.getTargetPosition());
+        }
+        if (name == null) {
+            name = blankToNull(profile.getHeadline());
+        }
+        if (name == null) {
+            name = withoutPdfExtension(profile.getCvDocument().getOriginalFilename());
+        }
+        return name == null ? "Candidate profile" : name;
+    }
+
+    private String withoutPdfExtension(String filename) {
+        String value = blankToNull(filename);
+        if (value != null && value.toLowerCase(Locale.ROOT).endsWith(".pdf")) {
+            value = blankToNull(value.substring(0, value.length() - 4));
+        }
+        return value;
     }
 
     private BigDecimal clampYearsExperience(BigDecimal yearsExperience) {
@@ -201,7 +432,7 @@ public class ProfileMapper {
         }
     }
 
-    private String clamp(String rawValue, int maxLength) {
+    private static String clamp(String rawValue, int maxLength) {
         String value = blankToNull(rawValue);
         if (value == null || value.length() <= maxLength) {
             return value;
@@ -209,7 +440,7 @@ public class ProfileMapper {
         return blankToNull(value.substring(0, maxLength));
     }
 
-    private String blankToNull(String rawValue) {
+    private static String blankToNull(String rawValue) {
         if (rawValue == null) {
             return null;
         }

@@ -4,18 +4,13 @@ import com.baseProject.myBaseProject.config.AsyncConfig;
 import com.baseProject.myBaseProject.constant.Message;
 import com.baseProject.myBaseProject.cv.CvParsingService;
 import com.baseProject.myBaseProject.dto.ai.CvExtractionResult;
-import com.baseProject.myBaseProject.entity.CandidateProfile;
 import com.baseProject.myBaseProject.entity.CvDocument;
 import com.baseProject.myBaseProject.entity.CvParseResult;
 import com.baseProject.myBaseProject.enums.CvDocumentStatus;
-import com.baseProject.myBaseProject.mapper.ProfileMapper;
-import com.baseProject.myBaseProject.repository.CandidateProfileRepository;
 import com.baseProject.myBaseProject.repository.CvDocumentRepository;
 import com.baseProject.myBaseProject.repository.CvParseResultRepository;
-import com.baseProject.myBaseProject.repository.ProfileEducationRepository;
-import com.baseProject.myBaseProject.repository.ProfileProjectRepository;
-import com.baseProject.myBaseProject.repository.ProfileSkillRepository;
 import com.baseProject.myBaseProject.cv.CvProcessingService;
+import com.baseProject.myBaseProject.service.CandidateProfileService;
 import com.baseProject.myBaseProject.storage.StorageService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.model.ChatModel;
@@ -37,13 +32,9 @@ public class CvProcessingServiceImpl implements CvProcessingService {
 
     private final CvDocumentRepository cvDocumentRepository;
     private final CvParseResultRepository cvParseResultRepository;
-    private final CandidateProfileRepository candidateProfileRepository;
-    private final ProfileEducationRepository educationRepository;
-    private final ProfileSkillRepository skillRepository;
-    private final ProfileProjectRepository projectRepository;
     private final StorageService storageService;
     private final CvParsingService cvParsingService;
-    private final ProfileMapper profileMapper;
+    private final CandidateProfileService candidateProfileService;
     private final ChatModel chatModel;
     private final ObjectMapper objectMapper;
     private final Clock clock;
@@ -51,26 +42,18 @@ public class CvProcessingServiceImpl implements CvProcessingService {
 
     public CvProcessingServiceImpl(CvDocumentRepository cvDocumentRepository,
                                    CvParseResultRepository cvParseResultRepository,
-                                   CandidateProfileRepository candidateProfileRepository,
-                                   ProfileEducationRepository educationRepository,
-                                   ProfileSkillRepository skillRepository,
-                                   ProfileProjectRepository projectRepository,
                                    StorageService storageService,
                                    CvParsingService cvParsingService,
-                                   ProfileMapper profileMapper,
+                                   CandidateProfileService candidateProfileService,
                                    ChatModel chatModel,
                                    ObjectMapper objectMapper,
                                    Clock clock,
                                    PlatformTransactionManager transactionManager) {
         this.cvDocumentRepository = cvDocumentRepository;
         this.cvParseResultRepository = cvParseResultRepository;
-        this.candidateProfileRepository = candidateProfileRepository;
-        this.educationRepository = educationRepository;
-        this.skillRepository = skillRepository;
-        this.projectRepository = projectRepository;
         this.storageService = storageService;
         this.cvParsingService = cvParsingService;
-        this.profileMapper = profileMapper;
+        this.candidateProfileService = candidateProfileService;
         this.chatModel = chatModel;
         this.objectMapper = objectMapper;
         this.clock = clock;
@@ -147,11 +130,7 @@ public class CvProcessingServiceImpl implements CvProcessingService {
                     .build();
             cvParseResultRepository.save(parseResult);
 
-            CandidateProfile profile = candidateProfileRepository.save(
-                    profileMapper.newProfile(document, extraction, now));
-            educationRepository.saveAll(profileMapper.newEducations(profile, extraction));
-            skillRepository.saveAll(profileMapper.newSkills(profile, extraction));
-            projectRepository.saveAll(profileMapper.newProjects(profile, extraction));
+            candidateProfileService.createFromParse(document, extraction, now);
 
             document.markParsed(now);
         });

@@ -20,7 +20,6 @@ import com.baseProject.myBaseProject.dto.auth.GoogleUserInfo;
 import com.baseProject.myBaseProject.exception.DomainException;
 import com.baseProject.myBaseProject.exception.ErrorCode;
 
-import lombok.extern.slf4j.Slf4j;
 
 @Component
 public class GoogleIdTokenVerifier {
