@@ -12,9 +12,8 @@ import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.chat.prompt.PromptTemplate;
 import org.springframework.ai.content.Media;
 import org.springframework.ai.converter.BeanOutputConverter;
-import org.springframework.core.io.ByteArrayResource;
+import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
-import org.springframework.util.MimeTypeUtils;
 import org.springframework.web.client.RestClientResponseException;
 
 import java.io.InterruptedIOException;
@@ -22,7 +21,6 @@ import java.net.ConnectException;
 import java.net.SocketTimeoutException;
 import java.net.UnknownHostException;
 import java.net.http.HttpTimeoutException;
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -59,23 +57,27 @@ public class SpringAiService implements AiService {
     }
 
     @Override
-    public <T> T generateStructuredWithImages(String prompt, Map<String, Object> params, List<byte[]> imageBytesList, Class<T> responseClass) {
-        log.info("Generating structured AI vision output for type: {}, images: {}",
-                responseClass.getSimpleName(), imageBytesList != null ? imageBytesList.size() : 0);
+    public <T> T generateStructuredWithPdf(String prompt, Map<String, Object> params,
+                                           byte[] pdfBytes, Class<T> responseClass) {
+        if (pdfBytes == null || pdfBytes.length == 0) {
+            throw new IllegalArgumentException("PDF content must not be empty");
+        }
+
+        log.info("Generating structured AI output from PDF for type: {}, size: {} KB",
+                responseClass.getSimpleName(), pdfBytes.length / 1024);
 
         var outputConverter = new BeanOutputConverter<>(responseClass);
         String instructionText = buildPromptString(prompt, params, outputConverter.getFormat());
 
-        List<Media> mediaList = new ArrayList<>();
-        if (imageBytesList != null) {
-            for (byte[] imageBytes : imageBytesList) {
-                mediaList.add(new Media(MimeTypeUtils.IMAGE_PNG, new ByteArrayResource(imageBytes)));
-            }
-        }
+        Media pdf = Media.builder()
+                .mimeType(MediaType.APPLICATION_PDF)
+                .data(pdfBytes)
+                .name("candidate-cv.pdf")
+                .build();
 
         UserMessage userMessage = UserMessage.builder()
                 .text(instructionText)
-                .media(mediaList)
+                .media(pdf)
                 .build();
 
         ChatResponse response = executeCall(new Prompt(List.of(userMessage)));

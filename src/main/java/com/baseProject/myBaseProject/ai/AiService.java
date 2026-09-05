@@ -1,6 +1,5 @@
 package com.baseProject.myBaseProject.ai;
 
-import java.util.List;
 import java.util.Map;
 
 public interface AiService {
@@ -14,10 +13,10 @@ public interface AiService {
         return generateStructured(prompt, Map.of(), responseClass);
     }
 
-    // Vision AI phân tích ảnh và trả về dữ liệu có cấu trúc
-    <T> T generateStructuredWithImages(String prompt, Map<String, Object> params, List<byte[]> imageBytesList, Class<T> responseClass);
+    // AI phân tích trực tiếp file PDF và trả về dữ liệu có cấu trúc
+    <T> T generateStructuredWithPdf(String prompt, Map<String, Object> params, byte[] pdfBytes, Class<T> responseClass);
 
-    default <T> T generateStructuredWithImages(String prompt, List<byte[]> imageBytesList, Class<T> responseClass) {
-        return generateStructuredWithImages(prompt, Map.of(), imageBytesList, responseClass);
+    default <T> T generateStructuredWithPdf(String prompt, byte[] pdfBytes, Class<T> responseClass) {
+        return generateStructuredWithPdf(prompt, Map.of(), pdfBytes, responseClass);
     }
 }
