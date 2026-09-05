@@ -11,6 +11,7 @@ public class AsyncConfig {
 
     public static final String CV_PARSE_EXECUTOR = "cvParseExecutor";
     public static final String JD_PROCESS_EXECUTOR = "jobDescriptionExecutor";
+    public static final String INTERVIEW_PREPARATION_EXECUTOR = "interviewPreparationExecutor";
 
     @Bean(CV_PARSE_EXECUTOR)
     public ThreadPoolTaskExecutor cvParseExecutor() {
@@ -32,6 +33,18 @@ public class AsyncConfig {
         executor.setMaxPoolSize(4);
         executor.setQueueCapacity(20);
         executor.setThreadNamePrefix("jd-process-");
+        executor.setWaitForTasksToCompleteOnShutdown(true);
+        executor.setAwaitTerminationSeconds(30);
+        return executor;
+    }
+
+    @Bean(INTERVIEW_PREPARATION_EXECUTOR)
+    public ThreadPoolTaskExecutor interviewPreparationExecutor() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setCorePoolSize(2);
+        executor.setMaxPoolSize(4);
+        executor.setQueueCapacity(20);
+        executor.setThreadNamePrefix("interview-prepare-");
         executor.setWaitForTasksToCompleteOnShutdown(true);
         executor.setAwaitTerminationSeconds(30);
         return executor;

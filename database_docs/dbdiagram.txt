@@ -1,7 +1,8 @@
 // ============================================================
 //  AI MOCK INTERVIEW PLATFORM — DATABASE SCHEMA (MVP v3)
 //  Current template creation module: interview-template-schema.dbml and migrations/001-interview-templates.sql.
-//  Interview/session sections in this older full diagram are historical designs.
+//  Current session module: interview-session-schema.dbml and migrations/002-interview-sessions.sql.
+//  Interview/session sections below are historical designs and must not be used for implementation.
 //  Dán toàn bộ file này vào https://dbdiagram.io/
 //
 //  Phạm vi: 16 user story của bản MVP 4 tuần

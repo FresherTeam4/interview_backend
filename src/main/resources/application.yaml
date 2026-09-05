@@ -82,3 +82,7 @@ app:
     max-pages: ${JD_MAX_PAGES:20}
     max-per-user: ${JD_MAX_PER_USER:50}
     max-text-characters: ${JD_MAX_TEXT_CHARACTERS:30000}
+
+  interview-session:
+    supported-languages: ${INTERVIEW_SUPPORTED_LANGUAGES:vi,en}
+    supported-durations: ${INTERVIEW_SUPPORTED_DURATIONS:15,30,45,60}

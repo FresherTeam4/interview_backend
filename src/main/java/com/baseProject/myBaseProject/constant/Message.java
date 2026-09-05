@@ -9,6 +9,15 @@ public final class Message {
     public static final String TEMPLATE_ALREADY_CONFIRMED = "Confirmed interview templates cannot be edited";
     public static final String TEMPLATE_CONFIRM_REQUIRED = "Confirm the interview template before using or publishing it";
 
+    // Interview sessions
+    public static final String INTERVIEW_SESSION_NOT_FOUND = "Interview session not found";
+    public static final String INTERVIEW_SESSION_OPTION_INVALID = "Interview session option is not supported";
+    public static final String INTERVIEW_SESSION_IDEMPOTENCY_CONFLICT = "Idempotency key was already used with different session options";
+    public static final String INTERVIEW_SESSION_PREPARATION_NOT_RETRYABLE = "Only failed interview preparation can be retried";
+    public static final String INTERVIEW_SESSION_PREPARATION_FAILED = "Failed to prepare interview session";
+    public static final String INTERVIEW_PLAN_INVALID = "AI returned an invalid interview plan";
+    public static final String PROFILE_CONFIRM_REQUIRED = "Confirm the candidate profile before creating an interview session";
+
     // Job description processing
     public static final String JD_FILE_REQUIRED = "Job description file is required";
     public static final String JD_INVALID_FILE_TYPE = "Job description must be a valid PDF file";
@@ -39,8 +48,7 @@ public final class Message {
     public static final String MISSING_REFRESH_TOKEN = "Refresh token cookie is missing";
     public static final String INVALID_GOOGLE_TOKEN = "Google ID token is invalid or has expired";
     public static final String GOOGLE_EMAIL_NOT_VERIFIED = "This Google account has no verified email";
-    public static final String GOOGLE_LOGIN_NOT_CONFIGURED =
-            "Google login is not configured on this server";
+    public static final String GOOGLE_LOGIN_NOT_CONFIGURED = "Google login is not configured on this server";
 
     // AI & CV parsing
     public static final String AI_SERVICE_UNAVAILABLE = "AI service is temporarily unavailable";
@@ -67,6 +75,5 @@ public final class Message {
     public static final String PROFILE_NOT_FOUND = "Candidate profile not found";
     public static final String PROFILE_ITEM_NOT_FOUND = "Profile item not found";
     public static final String DUPLICATE_SKILL_NAME = "Profile contains duplicate skill names";
-    public static final String PROFILE_VERSION_CONFLICT =
-            "Candidate profile was changed by another request; reload it and try again";
+    public static final String PROFILE_VERSION_CONFLICT = "Candidate profile was changed by another request; reload it and try again";
 }
