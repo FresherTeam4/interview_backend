@@ -14,6 +14,7 @@ import com.baseProject.myBaseProject.exception.ErrorCode;
 import com.baseProject.myBaseProject.interview.InterviewPlanningService;
 import com.baseProject.myBaseProject.interview.InterviewPreparationService;
 import com.baseProject.myBaseProject.interview.support.InterviewSessionTransitionRecorder;
+import com.baseProject.myBaseProject.interview.support.InterviewerStyleInstructionProvider;
 import com.baseProject.myBaseProject.repository.InterviewFocusAreaRepository;
 import com.baseProject.myBaseProject.repository.InterviewSessionRepository;
 import lombok.extern.slf4j.Slf4j;
@@ -32,7 +33,8 @@ import java.util.List;
 @Service
 public class InterviewPreparationServiceImpl implements InterviewPreparationService {
     public static final String PLAN_SCHEMA_VERSION = "v1";
-    public static final String PLAN_PROMPT_VERSION = "v1";
+    public static final String PLAN_PROMPT_VERSION =
+            "v2-style-" + InterviewerStyleInstructionProvider.STYLE_POLICY_VERSION;
 
     private final InterviewSessionRepository sessions;
     private final InterviewFocusAreaRepository focusAreas;

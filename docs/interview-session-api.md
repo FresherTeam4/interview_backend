@@ -11,6 +11,12 @@ Authorization: Bearer <access-token>
 
 The response exposes the language codes and durations configured under `app.interview-session`, plus the supported interviewer styles.
 
+Interviewer styles change tone and probing behavior while preserving the same evidence standard:
+
+- `FRIENDLY`: warm and encouraging, with gentle but evidence-based follow-ups.
+- `PROFESSIONAL`: neutral, concise, and structured.
+- `CHALLENGING`: direct and rigorous about claims and trade-offs while remaining respectful.
+
 ## Create a session
 
 ```http

@@ -50,6 +50,7 @@ class InterviewPreparationServiceImplTest {
         assertThat(session.getStatus()).isEqualTo(InterviewSessionStatus.READY);
         assertThat(session.getPreparedAt()).isEqualTo(NOW);
         assertThat(session.getOpeningMessage()).startsWith("Chào Minh");
+        assertThat(session.getPlanPromptVersion()).isEqualTo("v2-style-v1");
         verify(focusAreas).saveAll(org.mockito.ArgumentMatchers.argThat(areas -> {
             var list = (List<?>) areas;
             return list.size() == 2;

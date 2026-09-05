@@ -7,6 +7,7 @@ import com.baseProject.myBaseProject.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.messages.SystemMessage;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.prompt.Prompt;
@@ -52,6 +53,32 @@ public class SpringAiService implements AiService {
         String finalPrompt = buildPromptString(prompt, params, outputConverter.getFormat());
 
         ChatResponse response = executeCall(new Prompt(finalPrompt));
+        String responseText = extractResponseText(response);
+
+        return parseStructuredOutput(responseText, outputConverter, responseClass);
+    }
+
+    @Override
+    public <T> T generateStructured(
+            String systemPrompt,
+            String userPrompt,
+            Map<String, Object> params,
+            Class<T> responseClass) {
+        log.info("Generating structured AI output for type: {}", responseClass.getSimpleName());
+
+        var outputConverter = new BeanOutputConverter<>(responseClass);
+        String format = outputConverter.getFormat();
+        String systemInstruction = buildPromptString(systemPrompt, params, format);
+        String userInstruction = buildPromptString(userPrompt, params, format);
+
+        SystemMessage systemMessage = SystemMessage.builder()
+                .text(systemInstruction)
+                .build();
+        UserMessage userMessage = UserMessage.builder()
+                .text(userInstruction)
+                .build();
+
+        ChatResponse response = executeCall(new Prompt(List.of(systemMessage, userMessage)));
         String responseText = extractResponseText(response);
 
         return parseStructuredOutput(responseText, outputConverter, responseClass);

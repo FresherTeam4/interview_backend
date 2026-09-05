@@ -5,8 +5,8 @@ import com.baseProject.myBaseProject.constant.PromptConstant;
 import com.baseProject.myBaseProject.dto.ai.interview.InterviewPlanResult;
 import com.baseProject.myBaseProject.enums.InterviewerStyle;
 import com.baseProject.myBaseProject.interview.InterviewPlanningService;
+import com.baseProject.myBaseProject.interview.support.InterviewerStyleInstructionProvider;
 import com.baseProject.myBaseProject.interview.validation.InterviewPlanValidator;
-
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Service;
 
@@ -18,14 +18,20 @@ import java.util.Map;
 public class InterviewPlanningServiceImpl implements InterviewPlanningService {
     private final AiService aiService;
     private final InterviewPlanValidator validator;
-    private final String prompt;
+    private final InterviewerStyleInstructionProvider styleInstructions;
+    private final String systemPrompt;
+    private final String userPrompt;
 
     public InterviewPlanningServiceImpl(
-            AiService aiService, InterviewPlanValidator validator) throws IOException {
+            AiService aiService,
+            InterviewPlanValidator validator,
+            InterviewerStyleInstructionProvider styleInstructions) throws IOException {
         this.aiService = aiService;
         this.validator = validator;
-        this.prompt = new ClassPathResource(PromptConstant.INTERVIEW_PLAN_PROMPT)
-                .getContentAsString(StandardCharsets.UTF_8);
+        this.styleInstructions = styleInstructions;
+        // Nạp cả hai prompt một lần để ứng dụng fail-fast khi thiếu resource.
+        this.systemPrompt = load(PromptConstant.INTERVIEW_PLAN_SYSTEM_PROMPT);
+        this.userPrompt = load(PromptConstant.INTERVIEW_PLAN_USER_PROMPT);
     }
 
     @Override
@@ -36,17 +42,23 @@ public class InterviewPlanningServiceImpl implements InterviewPlanningService {
             int durationMinutes,
             InterviewerStyle interviewerStyle) {
         InterviewPlanResult plan = aiService.generateStructured(
-                prompt,
+                systemPrompt,
+                userPrompt,
                 Map.of(
                         "templateSnapshot", templateSnapshotJson,
                         "profileSnapshot", profileSnapshotJson,
                         "languageCode", languageCode,
                         "durationMinutes", durationMinutes,
                         "durationSeconds", durationMinutes * 60,
-                        "interviewerStyle", interviewerStyle.name()),
+                        "interviewerStyle", interviewerStyle.name(),
+                        "styleInstruction", styleInstructions.instructionFor(interviewerStyle)),
                 InterviewPlanResult.class);
 
         // Luôn kiểm tra output AI trước khi kế hoạch được lưu vào session.
         return validator.validate(plan, languageCode, durationMinutes);
+    }
+
+    private String load(String path) throws IOException {
+        return new ClassPathResource(path).getContentAsString(StandardCharsets.UTF_8);
     }
 }

@@ -14,6 +14,7 @@ import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.http.MediaType;
 
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -76,6 +77,36 @@ class SpringAiServiceTest {
                 .hasMessage("PDF content must not be empty");
 
         verifyNoInteractions(chatClient);
+    }
+
+    @Test
+    void sendsTrustedInstructionsAsSystemMessageAndDataAsUserMessage() {
+        ChatResponse response = new ChatResponse(List.of(
+                new Generation(new AssistantMessage("{\"value\":\"ok\"}"))));
+
+        when(chatClient.prompt(any(Prompt.class))).thenReturn(requestSpec);
+        when(requestSpec.call()).thenReturn(responseSpec);
+        when(responseSpec.chatResponse()).thenReturn(response);
+
+        PdfResult result = aiService.generateStructured(
+                "Apply style: {styleInstruction}",
+                "Candidate data: {candidateData}\n{format}",
+                Map.of(
+                        "styleInstruction", "Use a professional tone",
+                        "candidateData", "Spring Boot experience"),
+                PdfResult.class);
+
+        assertThat(result.value()).isEqualTo("ok");
+
+        ArgumentCaptor<Prompt> promptCaptor = ArgumentCaptor.forClass(Prompt.class);
+        verify(chatClient).prompt(promptCaptor.capture());
+        Prompt prompt = promptCaptor.getValue();
+        assertThat(prompt.getSystemMessage().getText())
+                .contains("Use a professional tone")
+                .doesNotContain("Spring Boot experience");
+        assertThat(prompt.getUserMessage().getText())
+                .contains("Spring Boot experience")
+                .contains("JSON");
     }
 
     private record PdfResult(String value) {

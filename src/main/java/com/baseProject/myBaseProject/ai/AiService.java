@@ -13,6 +13,12 @@ public interface AiService {
         return generateStructured(prompt, Map.of(), responseClass);
     }
 
+    <T> T generateStructured(
+            String systemPrompt,
+            String userPrompt,
+            Map<String, Object> params,
+            Class<T> responseClass);
+
     // AI phân tích trực tiếp file PDF và trả về dữ liệu có cấu trúc
     <T> T generateStructuredWithPdf(String prompt, Map<String, Object> params, byte[] pdfBytes, Class<T> responseClass);
 
