@@ -68,7 +68,7 @@ public class SpringAiService implements AiService {
 
         var outputConverter = new BeanOutputConverter<>(responseClass);
         String format = outputConverter.getFormat();
-        String systemInstruction = buildPromptString(systemPrompt, params, format);
+        String systemInstruction = renderPrompt(systemPrompt, params);
         String userInstruction = buildPromptString(userPrompt, params, format);
 
         SystemMessage systemMessage = SystemMessage.builder()
@@ -216,12 +216,18 @@ public class SpringAiService implements AiService {
 
         if (prompt != null && prompt.contains("{format}")) {
             merged.put("format", format);
-            PromptTemplate template = new PromptTemplate(prompt);
-            return template.render(merged);
-        } else {
-            String rendered = (merged.isEmpty() || prompt == null) ? (prompt != null ? prompt : "") : new PromptTemplate(prompt).render(merged);
-            return rendered + "\n\n" + format;
+            return renderPrompt(prompt, merged);
         }
+        return renderPrompt(prompt, merged) + "\n\n" + format;
+    }
+
+    private String renderPrompt(String prompt, Map<String, Object> params) {
+        if (prompt == null) {
+            return "";
+        }
+        return params == null || params.isEmpty()
+                ? prompt
+                : new PromptTemplate(prompt).render(params);
     }
 
     private String extractResponseText(ChatResponse response) {

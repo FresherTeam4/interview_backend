@@ -1,4 +1,4 @@
-package com.baseProject.myBaseProject.dto.session.snapshot;
+package com.baseProject.myBaseProject.interview.model;
 
 import com.baseProject.myBaseProject.dto.ai.JobAnalysis;
 

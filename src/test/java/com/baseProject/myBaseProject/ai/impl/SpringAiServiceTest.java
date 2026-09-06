@@ -103,10 +103,13 @@ class SpringAiServiceTest {
         Prompt prompt = promptCaptor.getValue();
         assertThat(prompt.getSystemMessage().getText())
                 .contains("Use a professional tone")
-                .doesNotContain("Spring Boot experience");
+                .doesNotContain("Spring Boot experience")
+                .doesNotContain("\"value\"")
+                .doesNotContain("JSON");
         assertThat(prompt.getUserMessage().getText())
                 .contains("Spring Boot experience")
-                .contains("JSON");
+                .contains("JSON")
+                .contains("\"value\"");
     }
 
     private record PdfResult(String value) {

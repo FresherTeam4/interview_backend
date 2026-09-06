@@ -1,4 +1,4 @@
-package com.baseProject.myBaseProject.dto.session.snapshot;
+package com.baseProject.myBaseProject.interview.model;
 
 import com.baseProject.myBaseProject.dto.profile.ProfileEducationDto;
 import com.baseProject.myBaseProject.dto.profile.ProfileProjectDto;
@@ -20,4 +20,14 @@ public record CandidateProfileSnapshot(
         List<ProfileEducationDto> educations,
         List<ProfileSkillDto> skills,
         List<ProfileProjectDto> projects) {
+
+    public CandidateProfileSnapshot {
+        educations = immutable(educations);
+        skills = immutable(skills);
+        projects = immutable(projects);
+    }
+
+    private static <T> List<T> immutable(List<T> values) {
+        return values == null ? List.of() : List.copyOf(values);
+    }
 }

@@ -1,11 +1,11 @@
 package com.baseProject.myBaseProject.interview.support;
 
-import com.baseProject.myBaseProject.dto.session.snapshot.CandidateProfileSnapshot;
-import com.baseProject.myBaseProject.dto.session.snapshot.InterviewTemplateSnapshot;
 import com.baseProject.myBaseProject.entity.CandidateProfile;
 import com.baseProject.myBaseProject.entity.InterviewTemplate;
 import com.baseProject.myBaseProject.exception.DomainException;
 import com.baseProject.myBaseProject.exception.ErrorCode;
+import com.baseProject.myBaseProject.interview.model.CandidateProfileSnapshot;
+import com.baseProject.myBaseProject.interview.model.InterviewTemplateSnapshot;
 import com.baseProject.myBaseProject.jobdescription.mapper.JobAnalysisJsonMapper;
 import com.baseProject.myBaseProject.mapper.ProfileMapper;
 import com.baseProject.myBaseProject.repository.JobDescriptionAnalysisResultRepository;

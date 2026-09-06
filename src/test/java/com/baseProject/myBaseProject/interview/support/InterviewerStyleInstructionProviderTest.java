@@ -6,6 +6,7 @@ import org.junit.jupiter.api.Test;
 import java.util.Arrays;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class InterviewerStyleInstructionProviderTest {
 
@@ -36,5 +37,15 @@ class InterviewerStyleInstructionProviderTest {
                 .containsIgnoringCase("rigorous")
                 .containsIgnoringCase("respectful")
                 .containsIgnoringCase("evidence standard");
+    }
+
+    @Test
+    void rejectsMissingStyleInsteadOfReturningNullInstruction() throws Exception {
+        InterviewerStyleInstructionProvider provider =
+                new InterviewerStyleInstructionProvider();
+
+        assertThatThrownBy(() -> provider.instructionFor(null))
+                .isInstanceOf(NullPointerException.class)
+                .hasMessage("Interviewer style is required");
     }
 }
