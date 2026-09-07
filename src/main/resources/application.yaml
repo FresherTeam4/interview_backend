@@ -20,7 +20,7 @@ spring:
 
   ai:
     openai:
-      api-key: ${API_KEY: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}
+      api-key: ${OPENROUTER_API_KEY}
       base-url: ${AI_BASE_URL:https://openrouter.ai/api/v1/chat/completions}
       chat:
         timeout: ${AI_TIMEOUT:25s}
