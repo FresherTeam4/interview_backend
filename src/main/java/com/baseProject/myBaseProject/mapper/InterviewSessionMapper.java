@@ -17,6 +17,8 @@ public class InterviewSessionMapper {
                 session.getInterviewerStyle(),
                 session.getPreparationErrorCode(),
                 session.getPreparationErrorMessage(),
-                session.getPreparedAt());
+                session.getPreparedAt(),
+                session.getEndReason(),
+                session.getEndedAt());
     }
 }

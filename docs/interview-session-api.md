@@ -1,4 +1,4 @@
-# Interview session API — phase 1
+# Interview session API — phases 1 and 2
 
 Phase 1 creates an immutable interview context and asynchronously prepares a flexible interview plan. It does not start the timer or create a fixed question list.
 
@@ -93,3 +93,123 @@ PREPARATION_FAILED -> PREPARING
 ```
 
 Every transition is appended to `interview_session_transitions`.
+
+## Start the interview
+
+```http
+POST /api/interview-sessions/{sessionId}/start
+Authorization: Bearer <access-token>
+```
+
+Only a `READY` session can start. The operation atomically changes it to
+`IN_PROGRESS`, sets `startedAt` and `deadlineAt`, and persists the prepared
+opening message as interviewer turn `0`. Calling start again while the session
+is already `IN_PROGRESS` returns the current conversation without resetting the
+timer.
+
+The response contains the server clock state and persisted turns:
+
+```json
+{
+  "sessionId": 501,
+  "status": "IN_PROGRESS",
+  "startedAt": "2026-09-06T08:00:00Z",
+  "deadlineAt": "2026-09-06T08:30:00Z",
+  "remainingSeconds": 1800,
+  "currentTurnIndex": 0,
+  "turns": [
+    {
+      "id": 9001,
+      "turnIndex": 0,
+      "role": "INTERVIEWER",
+      "content": "Xin chào...",
+      "action": "OPENING",
+      "focusAreaCode": null,
+      "requestId": null,
+      "processingStatus": null,
+      "processingErrorCode": null,
+      "createdAt": "2026-09-06T08:00:00Z"
+    }
+  ]
+}
+```
+
+## Submit an answer
+
+```http
+POST /api/interview-sessions/{sessionId}/answers
+Authorization: Bearer <access-token>
+Idempotency-Key: 01991f7e-a4d4-7fb9-ae21-57989102fe05
+Content-Type: application/json
+
+{
+  "expectedTurnIndex": 0,
+  "answer": "Tôi đã xây dựng một REST API bằng Spring Boot..."
+}
+```
+
+`expectedTurnIndex` is the interviewer turn being answered. It prevents an old
+browser tab from answering the wrong question. The idempotency key belongs to
+this candidate answer and can be reused to retry after an AI timeout. Reusing
+it with different content or a different turn returns a conflict.
+
+Candidate turns expose `requestId`, `processingStatus`, and a standardized
+`processingErrorCode`. After a reload, the frontend can resubmit a `FAILED`
+candidate turn with its original request ID and content. A `PROCESSING` turn
+means another request is still generating the interviewer response.
+
+The backend commits the candidate turn before calling AI. The generated reply
+is committed in a second short transaction, so a slow model call never holds a
+database lock. AI chooses one action:
+
+- `EXPLORE`: introduce or continue a relevant focus area.
+- `FOLLOW_UP`: investigate evidence or reasoning from the latest answer.
+- `CLOSE`: finish naturally without another question.
+
+There is no fixed question list, difficulty, or follow-up quota. The server
+validates every selected focus area and prevents evidence from moving backward.
+
+## Resume the conversation
+
+```http
+GET /api/interview-sessions/{sessionId}/conversation
+Authorization: Bearer <access-token>
+```
+
+This returns the timer and the complete persisted turn history. The frontend
+can reconstruct the interview after refresh, reconnect, or opening another tab.
+
+## Finish early
+
+```http
+POST /api/interview-sessions/{sessionId}/finish
+Authorization: Bearer <access-token>
+```
+
+The backend advances the session to `SCORING` without adding an artificial
+interviewer turn. A scheduler applies the same transition when `deadlineAt` is
+reached. The response exposes `endReason` and `endedAt`, so the frontend owns
+the localized completion screen:
+
+```json
+{
+  "status": "SCORING",
+  "endReason": "CANDIDATE_FINISHED",
+  "endedAt": "2026-09-06T08:18:00Z",
+  "remainingSeconds": 0
+}
+```
+
+Possible reasons are `AI_COMPLETED`, `TIME_EXPIRED`, `CANDIDATE_FINISHED`, and
+`SYSTEM_TERMINATED`. Only an actual AI response with action `CLOSE` is stored as
+an interviewer closing turn. Actual scoring is the next implementation phase.
+
+## State transitions added in phase 2
+
+```text
+READY -> IN_PROGRESS
+IN_PROGRESS -> SCORING
+```
+
+Each transition updates the session activity time and appends an audit record
+in the same transaction.

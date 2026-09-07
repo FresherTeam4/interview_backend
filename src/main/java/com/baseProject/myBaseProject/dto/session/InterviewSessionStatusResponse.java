@@ -1,5 +1,6 @@
 package com.baseProject.myBaseProject.dto.session;
 
+import com.baseProject.myBaseProject.enums.InterviewEndReason;
 import com.baseProject.myBaseProject.enums.InterviewSessionStatus;
 import com.baseProject.myBaseProject.enums.InterviewerStyle;
 
@@ -15,5 +16,7 @@ public record InterviewSessionStatusResponse(
         InterviewerStyle interviewerStyle,
         String preparationErrorCode,
         String preparationErrorMessage,
-        Instant preparedAt) {
+        Instant preparedAt,
+        InterviewEndReason endReason,
+        Instant endedAt) {
 }

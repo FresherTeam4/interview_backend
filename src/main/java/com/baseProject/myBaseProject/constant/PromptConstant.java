@@ -11,6 +11,10 @@ public final class PromptConstant {
             "prompts/interview/planning-system-v2.st";
     public static final String INTERVIEW_PLAN_USER_PROMPT =
             "prompts/interview/planning-user-v2.st";
+    public static final String INTERVIEW_CONVERSATION_SYSTEM_PROMPT =
+            "prompts/interview/conversation-system-v1.st";
+    public static final String INTERVIEW_CONVERSATION_USER_PROMPT =
+            "prompts/interview/conversation-user-v1.st";
     public static final String INTERVIEW_STYLE_FRIENDLY =
             "prompts/interview/styles/friendly-v1.st";
     public static final String INTERVIEW_STYLE_PROFESSIONAL =

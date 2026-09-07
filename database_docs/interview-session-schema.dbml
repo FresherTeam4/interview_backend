@@ -1,5 +1,5 @@
-// Interview session v1 — phase 1 (creation and AI preparation)
-// Authoritative schema: database_docs/migrations/002-interview-sessions.sql
+// Interview session v2 — creation, AI preparation, and text conversation
+// Authoritative migrations: 002-interview-sessions.sql and 003-interview-conversation.sql
 
 Enum interview_session_status {
   PREPARING
@@ -37,6 +37,31 @@ Enum interview_transition_actor {
   SCHEDULER
 }
 
+Enum interview_turn_role {
+  INTERVIEWER
+  CANDIDATE
+}
+
+Enum interview_turn_action {
+  OPENING
+  EXPLORE
+  FOLLOW_UP
+  CLOSE
+}
+
+Enum interview_turn_processing_status {
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+Enum interview_end_reason {
+  AI_COMPLETED
+  TIME_EXPIRED
+  CANDIDATE_FINISHED
+  SYSTEM_TERMINATED
+}
+
 Table interview_sessions {
   id                        bigint                   [pk, increment]
   user_id                   bigint                   [not null]
@@ -66,6 +91,8 @@ Table interview_sessions {
   started_at                timestamp
   deadline_at               timestamp
   last_activity_at          timestamp
+  end_reason                interview_end_reason
+  ended_at                  timestamp
   completed_at              timestamp
   version                   bigint                   [not null, default: 0]
   created_at                timestamp                [not null]
@@ -118,8 +145,35 @@ Table interview_session_transitions {
   }
 }
 
+Table interview_turns {
+  id                    bigint                           [pk, increment]
+  session_id            bigint                           [not null]
+  reply_to_turn_id      bigint
+  turn_index            int                              [not null]
+  role                  interview_turn_role              [not null]
+  content_text          text                             [not null]
+  action                interview_turn_action
+  focus_area_code       varchar(50)
+  idempotency_key       varchar(100)
+  processing_status     interview_turn_processing_status
+  processing_started_at timestamp
+  processing_error_code varchar(80)
+  created_at            timestamp                        [not null]
+
+  indexes {
+    (session_id, turn_index) [unique]
+    (session_id, idempotency_key) [unique]
+    (session_id, created_at)
+    reply_to_turn_id [unique]
+  }
+
+  Note: 'Every message is durable. Candidate processing state makes AI retries idempotent.'
+}
+
 Ref: interview_sessions.user_id                   > user_accounts.id       [delete: restrict]
 Ref: interview_sessions.template_id               > interview_templates.id [delete: restrict]
 Ref: interview_sessions.profile_id                > candidate_profiles.id  [delete: restrict]
 Ref: interview_focus_areas.session_id             > interview_sessions.id  [delete: cascade]
 Ref: interview_session_transitions.session_id     > interview_sessions.id  [delete: cascade]
+Ref: interview_turns.session_id                   > interview_sessions.id  [delete: cascade]
+Ref: interview_turns.reply_to_turn_id             > interview_turns.id     [delete: set null]

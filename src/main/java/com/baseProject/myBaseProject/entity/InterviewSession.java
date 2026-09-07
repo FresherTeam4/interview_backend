@@ -1,5 +1,6 @@
 package com.baseProject.myBaseProject.entity;
 
+import com.baseProject.myBaseProject.enums.InterviewEndReason;
 import com.baseProject.myBaseProject.enums.InterviewSessionStatus;
 import com.baseProject.myBaseProject.enums.InterviewerStyle;
 import jakarta.persistence.Column;
@@ -136,6 +137,14 @@ public class InterviewSession {
     @Column(name = "last_activity_at")
     private Instant lastActivityAt;
 
+    @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
+    @Column(name = "end_reason", length = 30)
+    private InterviewEndReason endReason;
+
+    @Column(name = "ended_at")
+    private Instant endedAt;
+
     @Column(name = "completed_at")
     private Instant completedAt;
 
@@ -186,6 +195,34 @@ public class InterviewSession {
         preparationErrorCode = errorCode;
         preparationErrorMessage = errorMessage;
         preparedAt = null;
+        updatedAt = now;
+    }
+
+    public void start(Instant now) {
+        status = InterviewSessionStatus.IN_PROGRESS;
+        startedAt = now;
+        deadlineAt = now.plusSeconds(durationMinutes * 60L);
+        lastActivityAt = now;
+        endReason = null;
+        endedAt = null;
+        currentTurnIndex = 0;
+        updatedAt = now;
+    }
+
+    public void recordTurn(int turnIndex, String summary, Instant now) {
+        currentTurnIndex = turnIndex;
+        if (summary != null) {
+            conversationSummary = summary;
+        }
+        lastActivityAt = now;
+        updatedAt = now;
+    }
+
+    public void beginScoring(InterviewEndReason reason, Instant now) {
+        status = InterviewSessionStatus.SCORING;
+        endReason = reason;
+        endedAt = now;
+        lastActivityAt = now;
         updatedAt = now;
     }
 }

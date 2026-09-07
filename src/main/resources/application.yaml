@@ -86,3 +86,4 @@ app:
   interview-session:
     supported-languages: ${INTERVIEW_SUPPORTED_LANGUAGES:vi,en}
     supported-durations: ${INTERVIEW_SUPPORTED_DURATIONS:15,30,45,60}
+    deadline-sweep-ms: ${INTERVIEW_DEADLINE_SWEEP_MS:30000}

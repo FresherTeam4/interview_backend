@@ -83,4 +83,11 @@ public class InterviewFocusArea {
 
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
+
+    public void updateEvidence(
+            InterviewEvidenceStatus status, String summary, Instant now) {
+        evidenceStatus = status;
+        evidenceSummary = summary;
+        updatedAt = now;
+    }
 }
