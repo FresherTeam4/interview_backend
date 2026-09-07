@@ -8,6 +8,7 @@ import com.baseProject.myBaseProject.dto.session.SubmitInterviewAnswerRequest;
 import com.baseProject.myBaseProject.entity.InterviewFocusArea;
 import com.baseProject.myBaseProject.entity.InterviewSession;
 import com.baseProject.myBaseProject.entity.InterviewTurn;
+import com.baseProject.myBaseProject.enums.CandidateIntent;
 import com.baseProject.myBaseProject.enums.InterviewEndReason;
 import com.baseProject.myBaseProject.enums.InterviewEvidenceStatus;
 import com.baseProject.myBaseProject.enums.InterviewSessionStatus;
@@ -284,6 +285,7 @@ public class InterviewConversationServiceImpl implements InterviewConversationSe
                 turn.getTurnIndex(),
                 turn.getRole(),
                 turn.getContentText(),
+                turn.getCandidateIntent(),
                 turn.getAction(),
                 turn.getFocusAreaCode())).toList();
     }
@@ -313,7 +315,7 @@ public class InterviewConversationServiceImpl implements InterviewConversationSe
             applyEvidenceUpdates(sessionId, result.evidenceUpdates(), now);
             // Phản hồi đến sau deadline không được giả thành lời nói của interviewer.
             if (isDeadlineReached(session, now)) {
-                candidate.markCompleted();
+                candidate.markCompleted(result.candidateIntent());
                 session.recordTurn(candidate.getTurnIndex(), result.conversationSummary(), now);
                 sessionCloser.close(
                         session,
@@ -335,13 +337,19 @@ public class InterviewConversationServiceImpl implements InterviewConversationSe
                             ? null : result.focusAreaCode())
                     .createdAt(now)
                     .build());
-            candidate.markCompleted();
+            candidate.markCompleted(result.candidateIntent());
             session.recordTurn(replyIndex, result.conversationSummary(), now);
             if (result.action() == InterviewTurnAction.CLOSE) {
+                boolean candidateRequestedEnd = result.candidateIntent()
+                        == CandidateIntent.REQUEST_END;
                 sessionCloser.close(
                         session,
-                        InterviewEndReason.AI_COMPLETED,
-                        InterviewTransitionActor.SYSTEM,
+                        candidateRequestedEnd
+                                ? InterviewEndReason.CANDIDATE_FINISHED
+                                : InterviewEndReason.AI_COMPLETED,
+                        candidateRequestedEnd
+                                ? InterviewTransitionActor.USER
+                                : InterviewTransitionActor.SYSTEM,
                         now);
             }
         });
@@ -423,6 +431,7 @@ public class InterviewConversationServiceImpl implements InterviewConversationSe
                 turn.getTurnIndex(),
                 turn.getRole(),
                 turn.getContentText(),
+                turn.getCandidateIntent(),
                 turn.getAction(),
                 turn.getFocusAreaCode(),
                 turn.getIdempotencyKey(),

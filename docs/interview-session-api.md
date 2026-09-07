@@ -123,6 +123,7 @@ The response contains the server clock state and persisted turns:
       "turnIndex": 0,
       "role": "INTERVIEWER",
       "content": "Xin chào...",
+      "candidateIntent": null,
       "action": "OPENING",
       "focusAreaCode": null,
       "requestId": null,
@@ -154,9 +155,11 @@ this candidate answer and can be reused to retry after an AI timeout. Reusing
 it with different content or a different turn returns a conflict.
 
 Candidate turns expose `requestId`, `processingStatus`, and a standardized
-`processingErrorCode`. After a reload, the frontend can resubmit a `FAILED`
-candidate turn with its original request ID and content. A `PROCESSING` turn
-means another request is still generating the interviewer response.
+`processingErrorCode`. Once processed, they also expose the primary
+`candidateIntent` detected from the complete message. After a reload, the
+frontend can resubmit a `FAILED` candidate turn with its original request ID
+and content. A `PROCESSING` turn means another request is still generating the
+interviewer response; its intent remains `null` until AI processing succeeds.
 
 The backend commits the candidate turn before calling AI. The generated reply
 is committed in a second short transaction, so a slow model call never holds a
@@ -164,10 +167,20 @@ database lock. AI chooses one action:
 
 - `EXPLORE`: introduce or continue a relevant focus area.
 - `FOLLOW_UP`: investigate evidence or reasoning from the latest answer.
+- `HANDLE_REQUEST`: repeat, clarify, answer, acknowledge, or redirect before
+  continuing the interview.
 - `CLOSE`: finish naturally without another question.
 
 There is no fixed question list, difficulty, or follow-up quota. The server
 validates every selected focus area and prevents evidence from moving backward.
+The same AI call classifies the candidate message and creates the interviewer
+response; there is no additional classifier request. Candidate intents cover
+answers, repeat or clarification requests, thinking time, candidate questions,
+inability or refusal to answer, corrections, end requests, social/meta turns,
+off-topic or inappropriate content, and an `OTHER` fallback. Evidence may still
+be extracted from factual job-relevant statements anywhere in the message.
+When the candidate types an end request, AI may provide the natural closing
+turn while the session records `CANDIDATE_FINISHED` as the end reason.
 
 ## Resume the conversation
 

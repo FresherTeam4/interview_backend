@@ -1,5 +1,6 @@
 package com.baseProject.myBaseProject.entity;
 
+import com.baseProject.myBaseProject.enums.CandidateIntent;
 import com.baseProject.myBaseProject.enums.InterviewTurnAction;
 import com.baseProject.myBaseProject.enums.InterviewTurnProcessingStatus;
 import com.baseProject.myBaseProject.enums.InterviewTurnRole;
@@ -71,6 +72,11 @@ public class InterviewTurn {
 
     @Enumerated(EnumType.STRING)
     @JdbcTypeCode(SqlTypes.VARCHAR)
+    @Column(name = "candidate_intent", length = 40)
+    private CandidateIntent candidateIntent;
+
+    @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
     @Column(length = 20, updatable = false)
     private InterviewTurnAction action;
 
@@ -103,6 +109,11 @@ public class InterviewTurn {
     public void markCompleted() {
         processingStatus = InterviewTurnProcessingStatus.COMPLETED;
         processingErrorCode = null;
+    }
+
+    public void markCompleted(CandidateIntent intent) {
+        candidateIntent = intent;
+        markCompleted();
     }
 
     public void markFailed(String errorCode) {

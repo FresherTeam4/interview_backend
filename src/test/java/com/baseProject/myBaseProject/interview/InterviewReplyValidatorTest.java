@@ -1,6 +1,7 @@
 package com.baseProject.myBaseProject.interview;
 
 import com.baseProject.myBaseProject.dto.ai.interview.InterviewReplyResult;
+import com.baseProject.myBaseProject.enums.CandidateIntent;
 import com.baseProject.myBaseProject.enums.InterviewEvidenceStatus;
 import com.baseProject.myBaseProject.enums.InterviewFocusPriority;
 import com.baseProject.myBaseProject.enums.InterviewSessionStatus;
@@ -24,6 +25,7 @@ class InterviewReplyValidatorTest {
     void normalizesAValidFollowUpAndEvidenceUpdate() {
         InterviewReplyResult result = validator.validate(
                 new InterviewReplyResult(
+                        CandidateIntent.ANSWER,
                         InterviewTurnAction.FOLLOW_UP,
                         "  Bạn đã đo kết quả thay đổi đó như thế nào?  ",
                         " backend ",
@@ -48,6 +50,7 @@ class InterviewReplyValidatorTest {
     void rejectsUnknownFocusArea() {
         assertThatThrownBy(() -> validator.validate(
                 new InterviewReplyResult(
+                        CandidateIntent.ANSWER,
                         InterviewTurnAction.EXPLORE,
                         "Bạn có thể chia sẻ thêm không?",
                         "UNKNOWN",
@@ -64,6 +67,7 @@ class InterviewReplyValidatorTest {
     void rejectsEvidenceRegression() {
         assertThatThrownBy(() -> validator.validate(
                 new InterviewReplyResult(
+                        CandidateIntent.ANSWER,
                         InterviewTurnAction.FOLLOW_UP,
                         "Bạn có thể nói rõ hơn không?",
                         "BACKEND",
@@ -81,6 +85,7 @@ class InterviewReplyValidatorTest {
     void forcesCloseInsideClosingWindow() {
         assertThatThrownBy(() -> validator.validate(
                 new InterviewReplyResult(
+                        CandidateIntent.ANSWER,
                         InterviewTurnAction.EXPLORE,
                         "Câu hỏi tiếp theo?",
                         "BACKEND",
@@ -89,6 +94,90 @@ class InterviewReplyValidatorTest {
                 context(InterviewEvidenceStatus.PARTIAL),
                 true))
                 .isInstanceOf(DomainException.class);
+    }
+
+    @Test
+    void acceptsRequestHandlingWithoutFocusArea() {
+        InterviewReplyResult result = validator.validate(
+                new InterviewReplyResult(
+                        CandidateIntent.REQUEST_TIME,
+                        InterviewTurnAction.HANDLE_REQUEST,
+                        "Được, bạn cứ suy nghĩ một chút.",
+                        null,
+                        "Ứng viên xin thêm thời gian suy nghĩ.",
+                        List.of()),
+                context(InterviewEvidenceStatus.NOT_EXPLORED),
+                false);
+
+        assertThat(result.candidateIntent()).isEqualTo(CandidateIntent.REQUEST_TIME);
+        assertThat(result.action()).isEqualTo(InterviewTurnAction.HANDLE_REQUEST);
+        assertThat(result.focusAreaCode()).isNull();
+    }
+
+    @Test
+    void rejectsRequestThatIsTreatedAsExploration() {
+        assertThatThrownBy(() -> validator.validate(
+                new InterviewReplyResult(
+                        CandidateIntent.REQUEST_REPEAT,
+                        InterviewTurnAction.EXPLORE,
+                        "Chúng ta chuyển sang chủ đề khác nhé?",
+                        "BACKEND",
+                        "Ứng viên yêu cầu nhắc lại câu hỏi.",
+                        List.of()),
+                context(InterviewEvidenceStatus.NOT_EXPLORED),
+                false))
+                .isInstanceOf(DomainException.class);
+    }
+
+    @Test
+    void rejectsEndRequestWithoutCloseAction() {
+        assertThatThrownBy(() -> validator.validate(
+                new InterviewReplyResult(
+                        CandidateIntent.REQUEST_END,
+                        InterviewTurnAction.FOLLOW_UP,
+                        "Bạn hãy trả lời thêm một câu nữa nhé?",
+                        "BACKEND",
+                        "Ứng viên yêu cầu kết thúc.",
+                        List.of()),
+                context(InterviewEvidenceStatus.NOT_EXPLORED),
+                false))
+                .isInstanceOf(DomainException.class);
+    }
+
+    @Test
+    void keepsEvidenceFromARequestContainingJobRelevantFacts() {
+        InterviewReplyResult result = validator.validate(
+                new InterviewReplyResult(
+                        CandidateIntent.REQUEST_CLARIFICATION,
+                        InterviewTurnAction.HANDLE_REQUEST,
+                        "Tôi đang hỏi về hiệu năng. Bạn đã cấu hình TTL thế nào?",
+                        "BACKEND",
+                        "Ứng viên yêu cầu làm rõ và cho biết đã dùng Redis.",
+                        List.of(new InterviewReplyResult.EvidenceUpdate(
+                                "BACKEND",
+                                InterviewEvidenceStatus.PARTIAL,
+                                "Ứng viên đã dùng Redis nhưng chưa mô tả chiến lược cache."))),
+                context(InterviewEvidenceStatus.NOT_EXPLORED),
+                false);
+
+        assertThat(result.evidenceUpdates()).hasSize(1);
+    }
+
+    @Test
+    void rejectsMissingCandidateIntent() {
+        assertThatThrownBy(() -> validator.validate(
+                new InterviewReplyResult(
+                        null,
+                        InterviewTurnAction.FOLLOW_UP,
+                        "Bạn có thể nói rõ hơn không?",
+                        "BACKEND",
+                        "Ứng viên đã trả lời.",
+                        List.of()),
+                context(InterviewEvidenceStatus.NOT_EXPLORED),
+                false))
+                .isInstanceOfSatisfying(DomainException.class, exception ->
+                        assertThat(exception.getCode()).isEqualTo(
+                                ErrorCode.INTERVIEW_REPLY_INVALID));
     }
 
     private InterviewContext context(InterviewEvidenceStatus status) {

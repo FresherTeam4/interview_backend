@@ -7,6 +7,7 @@ import com.baseProject.myBaseProject.dto.session.InterviewSessionOptionsResponse
 import com.baseProject.myBaseProject.dto.session.InterviewSessionStatusResponse;
 import com.baseProject.myBaseProject.dto.session.InterviewTurnResponse;
 import com.baseProject.myBaseProject.entity.UserAccount;
+import com.baseProject.myBaseProject.enums.CandidateIntent;
 import com.baseProject.myBaseProject.enums.InterviewEndReason;
 import com.baseProject.myBaseProject.enums.InterviewSessionStatus;
 import com.baseProject.myBaseProject.enums.InterviewTurnAction;
@@ -153,12 +154,14 @@ class InterviewSessionControllerTest {
     void userCanSubmitAnswerForCurrentTurn() throws Exception {
         InterviewTurnResponse candidate = new InterviewTurnResponse(
                 2L, 1, InterviewTurnRole.CANDIDATE, "Tôi xây dựng REST API.",
+                CandidateIntent.ANSWER,
                 null, null, "answer-1",
                 com.baseProject.myBaseProject.enums.InterviewTurnProcessingStatus.COMPLETED,
                 null, NOW.plusSeconds(20));
         InterviewTurnResponse interviewer = new InterviewTurnResponse(
                 3L, 2, InterviewTurnRole.INTERVIEWER,
                 "Bạn đã xử lý lỗi API đó như thế nào?",
+                null,
                 InterviewTurnAction.FOLLOW_UP, "BACKEND",
                 null, null, null, NOW.plusSeconds(21));
         when(conversationService.answer(eq(7L), eq(501L), eq("answer-1"), any()))
@@ -186,6 +189,7 @@ class InterviewSessionControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.currentTurnIndex").value(2))
                 .andExpect(jsonPath("$.candidateTurn.role").value("CANDIDATE"))
+                .andExpect(jsonPath("$.candidateTurn.candidateIntent").value("ANSWER"))
                 .andExpect(jsonPath("$.interviewerTurn.action").value("FOLLOW_UP"))
                 .andExpect(jsonPath("$.interviewerTurn.focusAreaCode").value("BACKEND"));
     }
@@ -243,6 +247,7 @@ class InterviewSessionControllerTest {
                 0,
                 InterviewTurnRole.INTERVIEWER,
                 "Xin chào, bạn hãy giới thiệu về mình.",
+                null,
                 InterviewTurnAction.OPENING,
                 null,
                 null,

@@ -46,7 +46,24 @@ Enum interview_turn_action {
   OPENING
   EXPLORE
   FOLLOW_UP
+  HANDLE_REQUEST
   CLOSE
+}
+
+Enum candidate_intent {
+  ANSWER
+  REQUEST_REPEAT
+  REQUEST_CLARIFICATION
+  REQUEST_TIME
+  ASK_INTERVIEWER
+  CANNOT_ANSWER
+  DECLINE_OR_SKIP
+  CORRECT_PREVIOUS_ANSWER
+  REQUEST_END
+  SOCIAL_OR_META
+  OFF_TOPIC
+  INAPPROPRIATE
+  OTHER
 }
 
 Enum interview_turn_processing_status {
@@ -152,6 +169,7 @@ Table interview_turns {
   turn_index            int                              [not null]
   role                  interview_turn_role              [not null]
   content_text          text                             [not null]
+  candidate_intent      candidate_intent
   action                interview_turn_action
   focus_area_code       varchar(50)
   idempotency_key       varchar(100)

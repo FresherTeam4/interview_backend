@@ -2,6 +2,7 @@ package com.baseProject.myBaseProject.interview;
 
 import com.baseProject.myBaseProject.ai.AiService;
 import com.baseProject.myBaseProject.dto.ai.interview.InterviewReplyResult;
+import com.baseProject.myBaseProject.enums.CandidateIntent;
 import com.baseProject.myBaseProject.enums.InterviewEvidenceStatus;
 import com.baseProject.myBaseProject.enums.InterviewFocusPriority;
 import com.baseProject.myBaseProject.enums.InterviewSessionStatus;
@@ -42,6 +43,7 @@ class InterviewConversationEngineTest {
                 new InterviewerStyleInstructionProvider());
         when(aiService.generateStructured(any(), any(), any(), eq(InterviewReplyResult.class)))
                 .thenReturn(new InterviewReplyResult(
+                        CandidateIntent.ANSWER,
                         InterviewTurnAction.CLOSE,
                         "Cảm ơn bạn, buổi phỏng vấn kết thúc tại đây.",
                         null,
@@ -54,6 +56,7 @@ class InterviewConversationEngineTest {
                         1,
                         InterviewTurnRole.CANDIDATE,
                         "Tôi đã xây dựng REST API.",
+                        CandidateIntent.ANSWER,
                         null,
                         null)),
                 30);

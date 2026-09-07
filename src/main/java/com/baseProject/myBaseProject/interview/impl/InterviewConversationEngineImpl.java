@@ -20,7 +20,7 @@ import java.util.Map;
 @Service
 public class InterviewConversationEngineImpl implements InterviewConversationEngine {
     public static final String CONVERSATION_PROMPT_VERSION =
-            "v1-style-" + InterviewerStyleInstructionProvider.STYLE_POLICY_VERSION;
+            "v2-style-" + InterviewerStyleInstructionProvider.STYLE_POLICY_VERSION;
     private static final long CLOSING_WINDOW_SECONDS = 45;
 
     private final AiService aiService;

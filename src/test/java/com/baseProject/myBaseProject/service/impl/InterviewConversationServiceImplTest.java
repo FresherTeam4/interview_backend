@@ -5,6 +5,7 @@ import com.baseProject.myBaseProject.dto.session.SubmitInterviewAnswerRequest;
 import com.baseProject.myBaseProject.entity.InterviewFocusArea;
 import com.baseProject.myBaseProject.entity.InterviewSession;
 import com.baseProject.myBaseProject.entity.InterviewTurn;
+import com.baseProject.myBaseProject.enums.CandidateIntent;
 import com.baseProject.myBaseProject.enums.InterviewEndReason;
 import com.baseProject.myBaseProject.enums.InterviewEvidenceStatus;
 import com.baseProject.myBaseProject.enums.InterviewFocusPriority;
@@ -103,6 +104,7 @@ class InterviewConversationServiceImplTest {
         when(fixture.contextLoader.loadInternal(SESSION_ID)).thenReturn(context());
         when(fixture.engine.reply(any(), any(), any(Long.class))).thenReturn(
                 new InterviewReplyResult(
+                        CandidateIntent.ANSWER,
                         InterviewTurnAction.FOLLOW_UP,
                         "Bạn đã đo kết quả của thay đổi đó như thế nào?",
                         "BACKEND",
@@ -120,6 +122,8 @@ class InterviewConversationServiceImplTest {
 
         assertThat(response.status()).isEqualTo(InterviewSessionStatus.IN_PROGRESS);
         assertThat(response.candidateTurn().turnIndex()).isEqualTo(1);
+        assertThat(response.candidateTurn().candidateIntent())
+                .isEqualTo(CandidateIntent.ANSWER);
         assertThat(response.interviewerTurn().turnIndex()).isEqualTo(2);
         assertThat(response.interviewerTurn().action()).isEqualTo(
                 InterviewTurnAction.FOLLOW_UP);
@@ -166,6 +170,7 @@ class InterviewConversationServiceImplTest {
         var conversation = fixture.service.get(USER_ID, SESSION_ID);
         assertThat(conversation.turns()).last().satisfies(turn -> {
             assertThat(turn.requestId()).isEqualTo("answer-1");
+            assertThat(turn.candidateIntent()).isNull();
             assertThat(turn.processingStatus().name()).isEqualTo("FAILED");
             assertThat(turn.processingErrorCode()).isEqualTo("AI_TIMEOUT");
         });
@@ -226,6 +231,7 @@ class InterviewConversationServiceImplTest {
         when(fixture.contextLoader.loadInternal(SESSION_ID)).thenReturn(context());
         when(fixture.engine.reply(any(), any(), any(Long.class))).thenReturn(
                 new InterviewReplyResult(
+                        CandidateIntent.ANSWER,
                         InterviewTurnAction.CLOSE,
                         "Cảm ơn bạn đã chia sẻ. Buổi phỏng vấn kết thúc tại đây.",
                         null,
@@ -240,6 +246,8 @@ class InterviewConversationServiceImplTest {
 
         assertThat(response.status()).isEqualTo(InterviewSessionStatus.SCORING);
         assertThat(response.endReason()).isEqualTo(InterviewEndReason.AI_COMPLETED);
+        assertThat(response.candidateTurn().candidateIntent())
+                .isEqualTo(CandidateIntent.ANSWER);
         assertThat(response.interviewerTurn().content())
                 .isEqualTo("Cảm ơn bạn đã chia sẻ. Buổi phỏng vấn kết thúc tại đây.");
         assertThat(fixture.storedTurns).extracting(InterviewTurn::getRole)
@@ -247,6 +255,42 @@ class InterviewConversationServiceImplTest {
                         InterviewTurnRole.INTERVIEWER,
                         InterviewTurnRole.CANDIDATE,
                         InterviewTurnRole.INTERVIEWER);
+    }
+
+    @Test
+    void attributesTypedEndRequestToCandidate() {
+        InterviewSession session = inProgressSession();
+        Fixture fixture = new Fixture(session);
+        fixture.storedTurns.add(turn(
+                1L, session, 0, InterviewTurnRole.INTERVIEWER,
+                "Bạn hãy giới thiệu về mình.", InterviewTurnAction.OPENING));
+        when(fixture.contextLoader.loadInternal(SESSION_ID)).thenReturn(context());
+        when(fixture.engine.reply(any(), any(), any(Long.class))).thenReturn(
+                new InterviewReplyResult(
+                        CandidateIntent.REQUEST_END,
+                        InterviewTurnAction.CLOSE,
+                        "Cảm ơn bạn đã tham gia. Chúng ta sẽ kết thúc tại đây.",
+                        null,
+                        "Ứng viên chủ động yêu cầu kết thúc phỏng vấn.",
+                        List.of()));
+
+        var response = fixture.service.answer(
+                USER_ID,
+                SESSION_ID,
+                "answer-1",
+                new SubmitInterviewAnswerRequest(0, "Tôi muốn dừng phỏng vấn."));
+
+        assertThat(response.status()).isEqualTo(InterviewSessionStatus.SCORING);
+        assertThat(response.endReason()).isEqualTo(InterviewEndReason.CANDIDATE_FINISHED);
+        assertThat(response.candidateTurn().candidateIntent())
+                .isEqualTo(CandidateIntent.REQUEST_END);
+        verify(fixture.transitions).record(
+                session,
+                InterviewSessionStatus.IN_PROGRESS,
+                InterviewSessionStatus.SCORING,
+                "User ended interview",
+                com.baseProject.myBaseProject.enums.InterviewTransitionActor.USER,
+                NOW);
     }
 
     private static InterviewSession readySession() {

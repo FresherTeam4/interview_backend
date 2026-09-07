@@ -1,5 +1,6 @@
 package com.baseProject.myBaseProject.dto.session;
 
+import com.baseProject.myBaseProject.enums.CandidateIntent;
 import com.baseProject.myBaseProject.enums.InterviewTurnAction;
 import com.baseProject.myBaseProject.enums.InterviewTurnProcessingStatus;
 import com.baseProject.myBaseProject.enums.InterviewTurnRole;
@@ -11,6 +12,7 @@ public record InterviewTurnResponse(
         int turnIndex,
         InterviewTurnRole role,
         String content,
+        CandidateIntent candidateIntent,
         InterviewTurnAction action,
         String focusAreaCode,
         String requestId,

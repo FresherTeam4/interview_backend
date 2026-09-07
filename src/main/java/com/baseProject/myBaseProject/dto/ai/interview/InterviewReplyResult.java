@@ -1,11 +1,13 @@
 package com.baseProject.myBaseProject.dto.ai.interview;
 
+import com.baseProject.myBaseProject.enums.CandidateIntent;
 import com.baseProject.myBaseProject.enums.InterviewEvidenceStatus;
 import com.baseProject.myBaseProject.enums.InterviewTurnAction;
 
 import java.util.List;
 
 public record InterviewReplyResult(
+        CandidateIntent candidateIntent,
         InterviewTurnAction action,
         String interviewerMessage,
         String focusAreaCode,

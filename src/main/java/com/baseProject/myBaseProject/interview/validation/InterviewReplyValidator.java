@@ -1,6 +1,7 @@
 package com.baseProject.myBaseProject.interview.validation;
 
 import com.baseProject.myBaseProject.dto.ai.interview.InterviewReplyResult;
+import com.baseProject.myBaseProject.enums.CandidateIntent;
 import com.baseProject.myBaseProject.enums.InterviewEvidenceStatus;
 import com.baseProject.myBaseProject.enums.InterviewTurnAction;
 import com.baseProject.myBaseProject.exception.DomainException;
@@ -9,6 +10,7 @@ import com.baseProject.myBaseProject.interview.model.InterviewContext;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
+import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -21,14 +23,21 @@ public class InterviewReplyValidator {
     private static final int MAX_MESSAGE_LENGTH = 4000;
     private static final int MAX_CONVERSATION_SUMMARY_LENGTH = 12000;
     private static final int MAX_EVIDENCE_SUMMARY_LENGTH = 2000;
+    private static final Set<CandidateIntent> INTENTS_REQUIRING_HANDLING = EnumSet.of(
+            CandidateIntent.REQUEST_REPEAT,
+            CandidateIntent.REQUEST_CLARIFICATION,
+            CandidateIntent.REQUEST_TIME,
+            CandidateIntent.ASK_INTERVIEWER,
+            CandidateIntent.SOCIAL_OR_META,
+            CandidateIntent.OFF_TOPIC);
 
     public InterviewReplyResult validate(
             InterviewReplyResult result,
             InterviewContext context,
             boolean mustClose) {
         // Output AI không đáng tin cậy nên phải được chuẩn hóa trước khi cập nhật session.
-        if (result == null || result.action() == null) {
-            throw invalid("Missing interviewer action");
+        if (result == null || result.candidateIntent() == null || result.action() == null) {
+            throw invalid("Missing candidate intent or interviewer action");
         }
         if (result.action() == InterviewTurnAction.OPENING) {
             throw invalid("Opening is not a valid action after a candidate answer");
@@ -36,6 +45,7 @@ public class InterviewReplyValidator {
         if (mustClose && result.action() != InterviewTurnAction.CLOSE) {
             throw invalid("Interviewer must close because the session is out of time");
         }
+        validateIntentAction(result.candidateIntent(), result.action(), mustClose);
 
         String message = required(
                 result.interviewerMessage(), MAX_MESSAGE_LENGTH, "interviewer message");
@@ -51,6 +61,10 @@ public class InterviewReplyValidator {
         String focusCode = normalizeCode(result.focusAreaCode());
         if (result.action() == InterviewTurnAction.CLOSE) {
             focusCode = null;
+        } else if (result.action() == InterviewTurnAction.HANDLE_REQUEST) {
+            if (focusCode != null && !areas.containsKey(focusCode)) {
+                throw invalid("Interviewer selected an unknown focus area");
+            }
         } else if (focusCode == null || !areas.containsKey(focusCode)) {
             throw invalid("Interviewer selected an unknown focus area");
         }
@@ -78,7 +92,36 @@ public class InterviewReplyValidator {
         }
 
         return new InterviewReplyResult(
-                result.action(), message, focusCode, summary, List.copyOf(updates));
+                result.candidateIntent(),
+                result.action(),
+                message,
+                focusCode,
+                summary,
+                List.copyOf(updates));
+    }
+
+    private void validateIntentAction(
+            CandidateIntent intent,
+            InterviewTurnAction action,
+            boolean mustClose) {
+        if (mustClose) {
+            return;
+        }
+        if (intent == CandidateIntent.REQUEST_END
+                && action != InterviewTurnAction.CLOSE) {
+            throw invalid("End request must produce a closing action");
+        }
+        if (action == InterviewTurnAction.CLOSE) {
+            return;
+        }
+        if (INTENTS_REQUIRING_HANDLING.contains(intent)
+                && action != InterviewTurnAction.HANDLE_REQUEST) {
+            throw invalid("Candidate request must be handled before continuing");
+        }
+        if (intent == CandidateIntent.INAPPROPRIATE
+                && action != InterviewTurnAction.HANDLE_REQUEST) {
+            throw invalid("Inappropriate content must be handled or closed");
+        }
     }
 
     private List<InterviewReplyResult.EvidenceUpdate> safe(
