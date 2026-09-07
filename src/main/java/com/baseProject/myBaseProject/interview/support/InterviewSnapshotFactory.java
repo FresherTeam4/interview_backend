@@ -44,6 +44,7 @@ public class InterviewSnapshotFactory {
                 source.getExtractedText());
 
         Long profileId = profile.getId();
+
         // Đọc các danh sách theo displayOrder để thứ tự trong JSON snapshot luôn ổn định.
         CandidateProfileSnapshot profileSnapshot = new CandidateProfileSnapshot(
                 SNAPSHOT_SCHEMA_VERSION,

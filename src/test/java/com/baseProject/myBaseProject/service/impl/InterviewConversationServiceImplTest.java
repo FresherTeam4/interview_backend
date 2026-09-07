@@ -25,6 +25,7 @@ import com.baseProject.myBaseProject.repository.InterviewSessionRepository;
 import com.baseProject.myBaseProject.repository.InterviewTurnRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.TransactionStatus;
@@ -198,6 +199,9 @@ class InterviewConversationServiceImplTest {
                 "User ended interview",
                 com.baseProject.myBaseProject.enums.InterviewTransitionActor.USER,
                 NOW);
+        verify(fixture.events).publishEvent(
+                new com.baseProject.myBaseProject.interview.model.InterviewScoringRequestedEvent(
+                        SESSION_ID));
     }
 
     @Test
@@ -395,6 +399,8 @@ class InterviewConversationServiceImplTest {
         private final InterviewConversationEngine engine = mock(InterviewConversationEngine.class);
         private final InterviewSessionTransitionRecorder transitions =
                 mock(InterviewSessionTransitionRecorder.class);
+        private final ApplicationEventPublisher events =
+                mock(ApplicationEventPublisher.class);
         private final List<InterviewTurn> storedTurns = new ArrayList<>();
         private final AtomicReference<InterviewTurn> candidate = new AtomicReference<>();
         private final AtomicReference<InterviewTurn> interviewerReply = new AtomicReference<>();
@@ -451,7 +457,7 @@ class InterviewConversationServiceImplTest {
                     contextLoader,
                     engine,
                     transitions,
-                    new InterviewSessionCloser(turns, transitions),
+                    new InterviewSessionCloser(turns, transitions, events),
                     Clock.fixed(NOW, ZoneOffset.UTC),
                     transactionManager());
         }

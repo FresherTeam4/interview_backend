@@ -37,6 +37,9 @@ public interface InterviewSessionRepository extends JpaRepository<InterviewSessi
     List<InterviewSession> findByStatusAndCreatedAtBefore(
             InterviewSessionStatus status, Instant createdBefore);
 
+    List<InterviewSession> findByStatusAndEndedAtBefore(
+            InterviewSessionStatus status, Instant endedBefore);
+
     List<InterviewSession> findTop100ByStatusAndDeadlineAtLessThanEqualOrderByDeadlineAtAsc(
             InterviewSessionStatus status, Instant deadline);
 }

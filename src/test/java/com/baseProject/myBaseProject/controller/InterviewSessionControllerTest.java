@@ -1,14 +1,18 @@
 package com.baseProject.myBaseProject.controller;
 
-import com.baseProject.myBaseProject.dto.session.InterviewOptionResponse;
 import com.baseProject.myBaseProject.dto.session.InterviewAnswerResponse;
 import com.baseProject.myBaseProject.dto.session.InterviewConversationResponse;
+import com.baseProject.myBaseProject.dto.session.InterviewOptionResponse;
+import com.baseProject.myBaseProject.dto.session.InterviewReportResponse;
 import com.baseProject.myBaseProject.dto.session.InterviewSessionOptionsResponse;
 import com.baseProject.myBaseProject.dto.session.InterviewSessionStatusResponse;
 import com.baseProject.myBaseProject.dto.session.InterviewTurnResponse;
 import com.baseProject.myBaseProject.entity.UserAccount;
 import com.baseProject.myBaseProject.enums.CandidateIntent;
+import com.baseProject.myBaseProject.enums.InterviewAssessmentConfidence;
 import com.baseProject.myBaseProject.enums.InterviewEndReason;
+import com.baseProject.myBaseProject.enums.InterviewEvidenceStatus;
+import com.baseProject.myBaseProject.enums.InterviewFocusPriority;
 import com.baseProject.myBaseProject.enums.InterviewSessionStatus;
 import com.baseProject.myBaseProject.enums.InterviewTurnAction;
 import com.baseProject.myBaseProject.enums.InterviewTurnRole;
@@ -16,6 +20,7 @@ import com.baseProject.myBaseProject.enums.InterviewerStyle;
 import com.baseProject.myBaseProject.enums.UserRole;
 import com.baseProject.myBaseProject.security.CustomUserDetails;
 import com.baseProject.myBaseProject.service.InterviewConversationService;
+import com.baseProject.myBaseProject.service.InterviewReportService;
 import com.baseProject.myBaseProject.service.InterviewSessionService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -25,6 +30,7 @@ import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 
@@ -52,6 +58,9 @@ class InterviewSessionControllerTest {
 
     @MockitoBean
     private InterviewConversationService conversationService;
+
+    @MockitoBean
+    private InterviewReportService reportService;
 
     @Test
     void authenticatedUserCanCreateSession() throws Exception {
@@ -235,10 +244,38 @@ class InterviewSessionControllerTest {
         verifyNoInteractions(conversationService);
     }
 
+    @Test
+    void userCanReadCompletedInterviewReport() throws Exception {
+        when(reportService.get(7L, 501L)).thenReturn(reportResponse());
+
+        mockMvc.perform(get("/api/interview-sessions/501/report")
+                        .with(user(userDetails())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("COMPLETED"))
+                .andExpect(jsonPath("$.overallScore").value(74.0))
+                .andExpect(jsonPath("$.strengths[0].evidenceTurnIds[0]").value(11))
+                .andExpect(jsonPath("$.focusAreas[0].code").value("BACKEND"));
+    }
+
+    @Test
+    void retryScoringReturnsAcceptedStatus() throws Exception {
+        InterviewReportResponse response = new InterviewReportResponse(
+                501L, InterviewSessionStatus.SCORING,
+                null, null, null, null, null, null, null, null,
+                List.of(), List.of(), List.of(), null, List.of(), null);
+        when(reportService.retryScoring(7L, 501L)).thenReturn(response);
+
+        mockMvc.perform(post("/api/interview-sessions/501/scoring/retry")
+                        .with(user(userDetails())))
+                .andExpect(status().isAccepted())
+                .andExpect(jsonPath("$.status").value("SCORING"));
+    }
+
     private InterviewSessionStatusResponse response(InterviewSessionStatus status) {
         return new InterviewSessionStatusResponse(
                 501L, status, "Backend Java", "Minh profile", "vi", 30,
-                InterviewerStyle.PROFESSIONAL, null, null, NOW, null, null);
+                InterviewerStyle.PROFESSIONAL, null, null, null, null,
+                NOW, null, null, null);
     }
 
     private InterviewConversationResponse conversationResponse() {
@@ -264,6 +301,40 @@ class InterviewSessionControllerTest {
                 1800,
                 0,
                 List.of(opening));
+    }
+
+    private InterviewReportResponse reportResponse() {
+        return new InterviewReportResponse(
+                501L,
+                InterviewSessionStatus.COMPLETED,
+                null,
+                null,
+                new BigDecimal("75.00"),
+                new BigDecimal("70.00"),
+                new BigDecimal("74.00"),
+                new BigDecimal("100.00"),
+                InterviewAssessmentConfidence.HIGH,
+                "Ứng viên có nền tảng backend.",
+                List.of(new InterviewReportResponse.ReportItem(
+                        "Nắm backend", "Có ví dụ thực tế", List.of(11L))),
+                List.of(),
+                List.of(),
+                "Trình bày rõ ràng.",
+                List.of(new InterviewReportResponse.FocusAreaResult(
+                        21L,
+                        "BACKEND",
+                        "Backend",
+                        InterviewFocusPriority.HIGH,
+                        (short) 0,
+                        new BigDecimal("75.00"),
+                        InterviewAssessmentConfidence.HIGH,
+                        InterviewEvidenceStatus.SUFFICIENT,
+                        "Có ví dụ REST API.",
+                        List.of("Hiểu Spring"),
+                        List.of("Thiếu metrics"),
+                        "Nên bổ sung kết quả.",
+                        List.of(11L))),
+                NOW);
     }
 
     private CustomUserDetails userDetails() {

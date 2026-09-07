@@ -145,6 +145,15 @@ public class InterviewSession {
     @Column(name = "ended_at")
     private Instant endedAt;
 
+    @Column(name = "scoring_started_at")
+    private Instant scoringStartedAt;
+
+    @Column(name = "scoring_error_code", length = 80)
+    private String scoringErrorCode;
+
+    @Column(name = "scoring_error_message", columnDefinition = "TEXT")
+    private String scoringErrorMessage;
+
     @Column(name = "completed_at")
     private Instant completedAt;
 
@@ -222,7 +231,43 @@ public class InterviewSession {
         status = InterviewSessionStatus.SCORING;
         endReason = reason;
         endedAt = now;
+        scoringStartedAt = null;
+        scoringErrorCode = null;
+        scoringErrorMessage = null;
+        completedAt = null;
         lastActivityAt = now;
+        updatedAt = now;
+    }
+
+    public void markScoringStarted(Instant now) {
+        scoringStartedAt = now;
+        scoringErrorCode = null;
+        scoringErrorMessage = null;
+        updatedAt = now;
+    }
+
+    public void retryScoring(Instant now) {
+        status = InterviewSessionStatus.SCORING;
+        scoringStartedAt = null;
+        scoringErrorCode = null;
+        scoringErrorMessage = null;
+        completedAt = null;
+        updatedAt = now;
+    }
+
+    public void markScoringCompleted(Instant now) {
+        status = InterviewSessionStatus.COMPLETED;
+        scoringErrorCode = null;
+        scoringErrorMessage = null;
+        completedAt = now;
+        updatedAt = now;
+    }
+
+    public void markScoringFailed(String errorCode, String errorMessage, Instant now) {
+        status = InterviewSessionStatus.SCORING_FAILED;
+        scoringErrorCode = errorCode;
+        scoringErrorMessage = errorMessage;
+        completedAt = null;
         updatedAt = now;
     }
 }

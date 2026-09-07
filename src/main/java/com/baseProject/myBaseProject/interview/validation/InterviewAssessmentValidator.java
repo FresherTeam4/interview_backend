@@ -1,0 +1,235 @@
+package com.baseProject.myBaseProject.interview.validation;
+
+import com.baseProject.myBaseProject.dto.ai.interview.InterviewAssessmentResult;
+import com.baseProject.myBaseProject.enums.InterviewAssessmentConfidence;
+import com.baseProject.myBaseProject.enums.InterviewEvidenceStatus;
+import com.baseProject.myBaseProject.enums.InterviewTurnRole;
+import com.baseProject.myBaseProject.exception.DomainException;
+import com.baseProject.myBaseProject.exception.ErrorCode;
+import com.baseProject.myBaseProject.interview.model.InterviewScoringContext;
+import org.springframework.stereotype.Component;
+
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
+
+@Component
+public class InterviewAssessmentValidator {
+    private static final int MAX_SUMMARY_LENGTH = 8000;
+    private static final int MAX_FEEDBACK_LENGTH = 4000;
+    private static final int MAX_ITEM_TEXT_LENGTH = 1000;
+    private static final int MAX_LIST_ITEMS = 5;
+    private static final int MAX_EVIDENCE_TURNS = 20;
+
+    public InterviewAssessmentResult validate(
+            InterviewAssessmentResult result, InterviewScoringContext context) {
+        // Kết quả AI chỉ được dùng sau khi mọi mã focus area và evidence turn đã được xác minh.
+        if (result == null || context == null || context.focusAreas().isEmpty()) {
+            throw invalid("Missing assessment result or scoring focus areas");
+        }
+
+        Map<String, InterviewScoringContext.FocusArea> knownAreas = new HashMap<>();
+        for (InterviewScoringContext.FocusArea area : context.focusAreas()) {
+            if (area == null || area.code() == null) {
+                throw invalid("Scoring context contains an invalid focus area");
+            }
+            knownAreas.put(area.code().toUpperCase(Locale.ROOT), area);
+        }
+        Set<Long> candidateTurnIds = new HashSet<>();
+        // Chỉ candidate turn có thật trong transcript mới được phép làm evidence.
+        for (InterviewScoringContext.Turn turn : context.turns()) {
+            if (turn != null && turn.id() != null
+                    && turn.role() == InterviewTurnRole.CANDIDATE) {
+                candidateTurnIds.add(turn.id());
+            }
+        }
+
+        List<InterviewAssessmentResult.FocusAreaAssessment> requested =
+                result.focusAreaAssessments();
+        if (requested == null || requested.size() != knownAreas.size()) {
+            throw invalid("Assessment must contain every focus area exactly once");
+        }
+
+        Set<String> assessedCodes = new HashSet<>();
+        List<InterviewAssessmentResult.FocusAreaAssessment> assessments = new ArrayList<>();
+        // Mỗi focus area phải xuất hiện đúng một lần để calculator không bỏ sót hoặc tính trùng.
+        for (InterviewAssessmentResult.FocusAreaAssessment assessment : requested) {
+            assessments.add(validateFocusArea(
+                    assessment, knownAreas, assessedCodes, candidateTurnIds));
+        }
+        if (!assessedCodes.equals(knownAreas.keySet())) {
+            throw invalid("Assessment must contain every focus area exactly once");
+        }
+
+        Integer communicationScore = optionalScore(
+                result.communicationScore(), "communication score");
+        if (candidateTurnIds.isEmpty() && communicationScore != null) {
+            throw invalid("Communication cannot be scored without a candidate turn");
+        }
+
+        return new InterviewAssessmentResult(
+                required(result.overallSummary(), MAX_SUMMARY_LENGTH, "overall summary"),
+                List.copyOf(assessments),
+                communicationScore,
+                required(result.communicationFeedback(), MAX_FEEDBACK_LENGTH,
+                        "communication feedback"),
+                validateReportItems(
+                        result.strengths(), candidateTurnIds, true, "strength"),
+                validateReportItems(
+                        result.improvements(), candidateTurnIds, false, "improvement"),
+                validateActionPlan(result.actionPlan()));
+    }
+
+    private InterviewAssessmentResult.FocusAreaAssessment validateFocusArea(
+            InterviewAssessmentResult.FocusAreaAssessment assessment,
+            Map<String, InterviewScoringContext.FocusArea> knownAreas,
+            Set<String> assessedCodes,
+            Set<Long> candidateTurnIds) {
+        if (assessment == null || assessment.confidence() == null
+                || assessment.evidenceStatus() == null) {
+            throw invalid("Focus area assessment is incomplete");
+        }
+        String code = normalizeCode(assessment.focusAreaCode());
+        if (!knownAreas.containsKey(code) || !assessedCodes.add(code)) {
+            throw invalid("Focus area assessments must reference unique known areas");
+        }
+
+        List<Long> evidenceIds = validateEvidenceIds(
+                assessment.evidenceTurnIds(), candidateTurnIds,
+                "focus area evidence");
+        Integer score = optionalScore(assessment.score(), "focus area score");
+        if (assessment.evidenceStatus() == InterviewEvidenceStatus.NOT_EXPLORED) {
+            if (score != null || !evidenceIds.isEmpty()
+                    || assessment.confidence() != InterviewAssessmentConfidence.LOW) {
+                throw invalid("An unexplored focus area must be unscored with low confidence");
+            }
+        } else if (assessment.evidenceStatus() == InterviewEvidenceStatus.PARTIAL
+                && assessment.confidence() == InterviewAssessmentConfidence.HIGH) {
+            throw invalid("Partial evidence cannot produce high confidence");
+        } else if (score == null || evidenceIds.isEmpty()) {
+            throw invalid("A scored focus area must cite candidate evidence");
+        }
+
+        return new InterviewAssessmentResult.FocusAreaAssessment(
+                code,
+                score,
+                assessment.confidence(),
+                assessment.evidenceStatus(),
+                required(assessment.rationale(), MAX_FEEDBACK_LENGTH, "focus rationale"),
+                validateTextList(assessment.strengths(), "focus strength"),
+                validateTextList(assessment.gaps(), "focus gap"),
+                required(assessment.feedback(), MAX_FEEDBACK_LENGTH, "focus feedback"),
+                evidenceIds);
+    }
+
+    private List<InterviewAssessmentResult.ReportItem> validateReportItems(
+            List<InterviewAssessmentResult.ReportItem> items,
+            Set<Long> candidateTurnIds,
+            boolean evidenceRequired,
+            String field) {
+        List<InterviewAssessmentResult.ReportItem> safeItems = safe(items);
+        if (safeItems.size() > MAX_LIST_ITEMS) {
+            throw invalid("Too many " + field + " items");
+        }
+        List<InterviewAssessmentResult.ReportItem> normalized = new ArrayList<>();
+        for (InterviewAssessmentResult.ReportItem item : safeItems) {
+            if (item == null) {
+                throw invalid("Incomplete " + field + " item");
+            }
+            List<Long> evidenceIds = validateEvidenceIds(
+                    item.evidenceTurnIds(), candidateTurnIds, field + " evidence");
+            if (evidenceRequired && evidenceIds.isEmpty()) {
+                throw invalid("A strength must cite candidate evidence");
+            }
+            normalized.add(new InterviewAssessmentResult.ReportItem(
+                    required(item.title(), MAX_ITEM_TEXT_LENGTH, field + " title"),
+                    required(item.description(), MAX_ITEM_TEXT_LENGTH,
+                            field + " description"),
+                    evidenceIds));
+        }
+        return List.copyOf(normalized);
+    }
+
+    private List<InterviewAssessmentResult.ActionPlanItem> validateActionPlan(
+            List<InterviewAssessmentResult.ActionPlanItem> items) {
+        List<InterviewAssessmentResult.ActionPlanItem> safeItems = safe(items);
+        if (safeItems.size() > MAX_LIST_ITEMS) {
+            throw invalid("Action plan contains too many items");
+        }
+        Set<Integer> priorities = new HashSet<>();
+        List<InterviewAssessmentResult.ActionPlanItem> normalized = new ArrayList<>();
+        for (InterviewAssessmentResult.ActionPlanItem item : safeItems) {
+            if (item == null || item.priority() == null
+                    || item.priority() < 1 || item.priority() > MAX_LIST_ITEMS
+                    || !priorities.add(item.priority())) {
+                throw invalid("Action plan priorities must be unique values from 1 to 5");
+            }
+            normalized.add(new InterviewAssessmentResult.ActionPlanItem(
+                    item.priority(),
+                    required(item.action(), MAX_ITEM_TEXT_LENGTH, "action"),
+                    required(item.reason(), MAX_ITEM_TEXT_LENGTH, "action reason"),
+                    required(item.suggestion(), MAX_ITEM_TEXT_LENGTH,
+                            "action suggestion")));
+        }
+        return List.copyOf(normalized);
+    }
+
+    private List<String> validateTextList(List<String> values, String field) {
+        List<String> safeValues = safe(values);
+        if (safeValues.size() > MAX_LIST_ITEMS) {
+            throw invalid("Too many " + field + " items");
+        }
+        return safeValues.stream()
+                .map(value -> required(value, MAX_ITEM_TEXT_LENGTH, field))
+                .toList();
+    }
+
+    private List<Long> validateEvidenceIds(
+            List<Long> values, Set<Long> candidateTurnIds, String field) {
+        List<Long> safeValues = safe(values);
+        if (safeValues.size() > MAX_EVIDENCE_TURNS) {
+            throw invalid("Too many " + field + " references");
+        }
+        Set<Long> unique = new HashSet<>();
+        for (Long id : safeValues) {
+            if (id == null || !candidateTurnIds.contains(id) || !unique.add(id)) {
+                throw invalid(field + " must reference unique candidate turns");
+            }
+        }
+        return List.copyOf(safeValues);
+    }
+
+    private Integer optionalScore(Integer value, String field) {
+        if (value != null && (value < 0 || value > 100)) {
+            throw invalid(field + " must be between 0 and 100");
+        }
+        return value;
+    }
+
+    private String normalizeCode(String value) {
+        return value == null ? null : value.strip().toUpperCase(Locale.ROOT);
+    }
+
+    private String required(String value, int maxLength, String field) {
+        if (value == null) {
+            throw invalid("Missing " + field);
+        }
+        String normalized = value.strip();
+        if (normalized.isEmpty() || normalized.length() > maxLength) {
+            throw invalid("Missing or oversized " + field);
+        }
+        return normalized;
+    }
+
+    private <T> List<T> safe(List<T> values) {
+        return values == null ? List.of() : values;
+    }
+
+    private DomainException invalid(String detail) {
+        return new DomainException(ErrorCode.INTERVIEW_ASSESSMENT_INVALID, detail);
+    }
+}

@@ -215,13 +215,94 @@ the localized completion screen:
 
 Possible reasons are `AI_COMPLETED`, `TIME_EXPIRED`, `CANDIDATE_FINISHED`, and
 `SYSTEM_TERMINATED`. Only an actual AI response with action `CLOSE` is stored as
-an interviewer closing turn. Actual scoring is the next implementation phase.
+an interviewer closing turn. After this transaction commits, the scoring worker
+starts automatically.
+
+## Read scoring status and report
+
+```http
+GET /api/interview-sessions/{sessionId}/report
+Authorization: Bearer <access-token>
+```
+
+While the worker is running, the endpoint returns a status-only response:
+
+```json
+{
+  "sessionId": 501,
+  "status": "SCORING",
+  "strengths": [],
+  "improvements": [],
+  "actionPlan": [],
+  "focusAreas": []
+}
+```
+
+After scoring completes, it returns the persisted report:
+
+```json
+{
+  "sessionId": 501,
+  "status": "COMPLETED",
+  "technicalScore": 75.00,
+  "communicationScore": 70.00,
+  "overallScore": 74.00,
+  "coveragePercentage": 100.00,
+  "confidence": "HIGH",
+  "overallSummary": "The candidate demonstrated a solid backend foundation.",
+  "strengths": [
+    {
+      "title": "Backend fundamentals",
+      "description": "Explained a concrete REST API implementation.",
+      "evidenceTurnIds": [11]
+    }
+  ],
+  "improvements": [],
+  "actionPlan": [],
+  "communicationFeedback": "The answers were clear and relevant.",
+  "focusAreas": [
+    {
+      "focusAreaId": 21,
+      "code": "BACKEND",
+      "name": "Backend",
+      "priority": "HIGH",
+      "displayOrder": 0,
+      "score": 75.00,
+      "confidence": "HIGH",
+      "evidenceStatus": "SUFFICIENT",
+      "rationale": "The candidate described a concrete implementation.",
+      "strengths": ["Understands Spring Boot"],
+      "gaps": ["Did not quantify production impact"],
+      "feedback": "Add measurable outcomes to project examples.",
+      "evidenceTurnIds": [11]
+    }
+  ],
+  "completedAt": "2026-09-07T08:00:00Z"
+}
+```
+
+When coverage is below the configured threshold, `overallScore` is `null` even
+though focus-area feedback remains available.
+
+## Retry failed scoring
+
+```http
+POST /api/interview-sessions/{sessionId}/scoring/retry
+Authorization: Bearer <access-token>
+```
+
+Only `SCORING_FAILED` sessions can be retried. The response is `202 Accepted`
+with status `SCORING`; the worker is dispatched after the retry transaction
+commits.
 
 ## State transitions added in phase 2
 
 ```text
 READY -> IN_PROGRESS
 IN_PROGRESS -> SCORING
+SCORING -> COMPLETED
+SCORING -> SCORING_FAILED
+SCORING_FAILED -> SCORING
 ```
 
 Each transition updates the session activity time and appends an audit record

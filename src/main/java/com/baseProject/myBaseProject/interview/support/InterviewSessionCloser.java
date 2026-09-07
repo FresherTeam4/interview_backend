@@ -6,8 +6,10 @@ import com.baseProject.myBaseProject.enums.InterviewEndReason;
 import com.baseProject.myBaseProject.enums.InterviewSessionStatus;
 import com.baseProject.myBaseProject.enums.InterviewTransitionActor;
 import com.baseProject.myBaseProject.enums.InterviewTurnRole;
+import com.baseProject.myBaseProject.interview.model.InterviewScoringRequestedEvent;
 import com.baseProject.myBaseProject.repository.InterviewTurnRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Component;
 
 import java.time.Instant;
@@ -17,6 +19,7 @@ import java.time.Instant;
 public class InterviewSessionCloser {
     private final InterviewTurnRepository turns;
     private final InterviewSessionTransitionRecorder transitionRecorder;
+    private final ApplicationEventPublisher events;
 
     public void close(
             InterviewSession session,
@@ -39,6 +42,9 @@ public class InterviewSessionCloser {
             transitionReason(endReason),
             actor,
             now);
+
+        // Event được publish trong transaction; listener chỉ dispatch scoring sau commit.
+        events.publishEvent(new InterviewScoringRequestedEvent(session.getId()));
     }
 
     private String transitionReason(InterviewEndReason endReason) {

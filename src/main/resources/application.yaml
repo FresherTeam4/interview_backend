@@ -87,3 +87,8 @@ app:
     supported-languages: ${INTERVIEW_SUPPORTED_LANGUAGES:vi,en}
     supported-durations: ${INTERVIEW_SUPPORTED_DURATIONS:15,30,45,60}
     deadline-sweep-ms: ${INTERVIEW_DEADLINE_SWEEP_MS:30000}
+
+  interview-scoring:
+    minimum-coverage-percentage: ${INTERVIEW_MINIMUM_SCORING_COVERAGE:50}
+    technical-weight: ${INTERVIEW_TECHNICAL_SCORE_WEIGHT:0.8}
+    communication-weight: ${INTERVIEW_COMMUNICATION_SCORE_WEIGHT:0.2}

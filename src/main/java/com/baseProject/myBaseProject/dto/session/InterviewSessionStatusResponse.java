@@ -16,7 +16,10 @@ public record InterviewSessionStatusResponse(
         InterviewerStyle interviewerStyle,
         String preparationErrorCode,
         String preparationErrorMessage,
+        String scoringErrorCode,
+        String scoringErrorMessage,
         Instant preparedAt,
         InterviewEndReason endReason,
-        Instant endedAt) {
+        Instant endedAt,
+        Instant completedAt) {
 }

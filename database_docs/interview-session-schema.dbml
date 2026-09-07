@@ -1,5 +1,5 @@
 // Interview session v2 — creation, AI preparation, and text conversation
-// Authoritative migrations: 002-interview-sessions.sql and 003-interview-conversation.sql
+// Authoritative migrations: 002-interview-sessions.sql through 005-interview-scoring.sql
 
 Enum interview_session_status {
   PREPARING
@@ -79,6 +79,12 @@ Enum interview_end_reason {
   SYSTEM_TERMINATED
 }
 
+Enum interview_assessment_confidence {
+  LOW
+  MEDIUM
+  HIGH
+}
+
 Table interview_sessions {
   id                        bigint                   [pk, increment]
   user_id                   bigint                   [not null]
@@ -110,6 +116,9 @@ Table interview_sessions {
   last_activity_at          timestamp
   end_reason                interview_end_reason
   ended_at                  timestamp
+  scoring_started_at        timestamp
+  scoring_error_code        varchar(80)
+  scoring_error_message     text
   completed_at              timestamp
   version                   bigint                   [not null, default: 0]
   created_at                timestamp                [not null]
@@ -188,6 +197,44 @@ Table interview_turns {
   Note: 'Every message is durable. Candidate processing state makes AI retries idempotent.'
 }
 
+Table interview_assessments {
+  id                     bigint                          [pk, increment]
+  session_id             bigint                          [not null, unique]
+  technical_score        decimal(5,2)
+  communication_score    decimal(5,2)
+  overall_score          decimal(5,2)
+  coverage_percentage    decimal(5,2)                    [not null]
+  confidence             interview_assessment_confidence [not null]
+  overall_summary        text                            [not null]
+  strengths_json         json                            [not null]
+  improvements_json      json                            [not null]
+  action_plan_json       json                            [not null]
+  communication_feedback text                            [not null]
+  schema_version         varchar(20)                     [not null]
+  model_name             varchar(100)                    [not null]
+  prompt_version         varchar(20)                     [not null]
+  created_at             timestamp                       [not null]
+}
+
+Table interview_focus_area_results {
+  id                       bigint                          [pk, increment]
+  assessment_id            bigint                          [not null]
+  focus_area_id            bigint                          [not null]
+  score                    decimal(5,2)
+  confidence               interview_assessment_confidence [not null]
+  evidence_status          interview_evidence_status       [not null]
+  rationale                text                            [not null]
+  strengths_json           json                            [not null]
+  gaps_json                json                            [not null]
+  feedback                 text                            [not null]
+  evidence_turn_ids_json   json                            [not null]
+
+  indexes {
+    (assessment_id, focus_area_id) [unique]
+    assessment_id
+  }
+}
+
 Ref: interview_sessions.user_id                   > user_accounts.id       [delete: restrict]
 Ref: interview_sessions.template_id               > interview_templates.id [delete: restrict]
 Ref: interview_sessions.profile_id                > candidate_profiles.id  [delete: restrict]
@@ -195,3 +242,6 @@ Ref: interview_focus_areas.session_id             > interview_sessions.id  [dele
 Ref: interview_session_transitions.session_id     > interview_sessions.id  [delete: cascade]
 Ref: interview_turns.session_id                   > interview_sessions.id  [delete: cascade]
 Ref: interview_turns.reply_to_turn_id             > interview_turns.id     [delete: set null]
+Ref: interview_assessments.session_id             - interview_sessions.id  [delete: cascade]
+Ref: interview_focus_area_results.assessment_id   > interview_assessments.id [delete: cascade]
+Ref: interview_focus_area_results.focus_area_id   > interview_focus_areas.id [delete: cascade]
