@@ -16,49 +16,31 @@ public class AsyncConfig {
 
     @Bean(CV_PARSE_EXECUTOR)
     public ThreadPoolTaskExecutor cvParseExecutor() {
-        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
-        // Giới hạn cả số worker và hàng đợi để upload lớn không làm cạn tài nguyên server.
-        executor.setCorePoolSize(2);
-        executor.setMaxPoolSize(4);
-        executor.setQueueCapacity(20);
-        executor.setThreadNamePrefix("cv-parse-");
-        executor.setWaitForTasksToCompleteOnShutdown(true);
-        executor.setAwaitTerminationSeconds(30);
-        return executor;
+        return createExecutor("cv-parse-");
     }
 
     @Bean(JD_PROCESS_EXECUTOR)
     public ThreadPoolTaskExecutor jobDescriptionExecutor() {
-        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
-        executor.setCorePoolSize(2);
-        executor.setMaxPoolSize(4);
-        executor.setQueueCapacity(20);
-        executor.setThreadNamePrefix("jd-process-");
-        executor.setWaitForTasksToCompleteOnShutdown(true);
-        executor.setAwaitTerminationSeconds(30);
-        return executor;
+        return createExecutor("jd-process-");
     }
 
     @Bean(INTERVIEW_PREPARATION_EXECUTOR)
     public ThreadPoolTaskExecutor interviewPreparationExecutor() {
-        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
-        executor.setCorePoolSize(2);
-        executor.setMaxPoolSize(4);
-        executor.setQueueCapacity(20);
-        executor.setThreadNamePrefix("interview-prepare-");
-        executor.setWaitForTasksToCompleteOnShutdown(true);
-        executor.setAwaitTerminationSeconds(30);
-        return executor;
+        return createExecutor("interview-prepare-");
     }
 
-    @Bean(name = INTERVIEW_SCORING_EXECUTOR)
+    @Bean(INTERVIEW_SCORING_EXECUTOR)
     public ThreadPoolTaskExecutor interviewScoringExecutor() {
+        return createExecutor("interview-scoring-");
+    }
+
+    private ThreadPoolTaskExecutor createExecutor(String threadNamePrefix) {
         ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
-        // Pool riêng ngăn tác vụ scoring chờ AI chiếm worker của chuẩn bị interview hoặc xử lý CV.
+        // Giới hạn cả số worker và hàng đợi để tác vụ lớn không làm cạn tài nguyên server.
         executor.setCorePoolSize(2);
         executor.setMaxPoolSize(4);
         executor.setQueueCapacity(20);
-        executor.setThreadNamePrefix("interview-scoring-");
+        executor.setThreadNamePrefix(threadNamePrefix);
         executor.setWaitForTasksToCompleteOnShutdown(true);
         executor.setAwaitTerminationSeconds(30);
         return executor;

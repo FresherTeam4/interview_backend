@@ -1,12 +1,11 @@
 package com.baseProject.myBaseProject.interview.support;
 
+import com.baseProject.myBaseProject.ai.PromptResourceLoader;
 import com.baseProject.myBaseProject.constant.PromptConstant;
 import com.baseProject.myBaseProject.enums.InterviewerStyle;
-import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.util.EnumMap;
 import java.util.Map;
 import java.util.Objects;
@@ -21,7 +20,7 @@ public class InterviewerStyleInstructionProvider {
         // Nạp toàn bộ policy khi khởi động để fail-fast nếu thiếu bất kỳ style resource nào.
         EnumMap<InterviewerStyle, String> loaded = new EnumMap<>(InterviewerStyle.class);
         for (InterviewerStyle style : InterviewerStyle.values()) {
-            loaded.put(style, load(pathFor(style)));
+            loaded.put(style, PromptResourceLoader.loadRequired(pathFor(style)));
         }
         instructions = Map.copyOf(loaded);
     }
@@ -36,15 +35,5 @@ public class InterviewerStyleInstructionProvider {
             case PROFESSIONAL -> PromptConstant.INTERVIEW_STYLE_PROFESSIONAL;
             case CHALLENGING -> PromptConstant.INTERVIEW_STYLE_CHALLENGING;
         };
-    }
-
-    private String load(String path) throws IOException {
-        String instruction = new ClassPathResource(path)
-                .getContentAsString(StandardCharsets.UTF_8)
-                .strip();
-        if (instruction.isEmpty()) {
-            throw new IllegalStateException("Interviewer style policy is empty: " + path);
-        }
-        return instruction;
     }
 }

@@ -1,15 +1,14 @@
 package com.baseProject.myBaseProject.cv.impl;
 
 import com.baseProject.myBaseProject.ai.AiService;
+import com.baseProject.myBaseProject.ai.PromptResourceLoader;
 import com.baseProject.myBaseProject.constant.PromptConstant;
 import com.baseProject.myBaseProject.cv.CvParsingService;
 import com.baseProject.myBaseProject.dto.ai.CvExtractionResult;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 
 @Slf4j
 @Service
@@ -20,8 +19,7 @@ public class CvParsingServiceImpl implements CvParsingService {
 
     public CvParsingServiceImpl(AiService aiService) throws IOException {
         this.aiService = aiService;
-        this.cvPrompt = new ClassPathResource(PromptConstant.CV_EXTRACT_PROMPT)
-                .getContentAsString(StandardCharsets.UTF_8);
+        this.cvPrompt = PromptResourceLoader.loadRequired(PromptConstant.CV_EXTRACT_PROMPT);
     }
 
     @Override

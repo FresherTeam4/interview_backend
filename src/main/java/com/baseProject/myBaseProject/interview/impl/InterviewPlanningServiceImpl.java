@@ -1,17 +1,16 @@
 package com.baseProject.myBaseProject.interview.impl;
 
 import com.baseProject.myBaseProject.ai.AiService;
+import com.baseProject.myBaseProject.ai.PromptResourceLoader;
 import com.baseProject.myBaseProject.constant.PromptConstant;
 import com.baseProject.myBaseProject.dto.ai.interview.InterviewPlanResult;
 import com.baseProject.myBaseProject.enums.InterviewerStyle;
 import com.baseProject.myBaseProject.interview.InterviewPlanningService;
 import com.baseProject.myBaseProject.interview.support.InterviewerStyleInstructionProvider;
 import com.baseProject.myBaseProject.interview.validation.InterviewPlanValidator;
-import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.util.Map;
 
 @Service
@@ -30,8 +29,10 @@ public class InterviewPlanningServiceImpl implements InterviewPlanningService {
         this.validator = validator;
         this.styleInstructions = styleInstructions;
         // Nạp cả hai prompt một lần để ứng dụng fail-fast khi thiếu resource.
-        this.systemPrompt = load(PromptConstant.INTERVIEW_PLAN_SYSTEM_PROMPT);
-        this.userPrompt = load(PromptConstant.INTERVIEW_PLAN_USER_PROMPT);
+        this.systemPrompt = PromptResourceLoader.loadRequired(
+                PromptConstant.INTERVIEW_PLAN_SYSTEM_PROMPT);
+        this.userPrompt = PromptResourceLoader.loadRequired(
+                PromptConstant.INTERVIEW_PLAN_USER_PROMPT);
     }
 
     @Override
@@ -56,9 +57,5 @@ public class InterviewPlanningServiceImpl implements InterviewPlanningService {
 
         // Luôn kiểm tra output AI trước khi kế hoạch được lưu vào session.
         return validator.validate(plan, languageCode, durationMinutes);
-    }
-
-    private String load(String path) throws IOException {
-        return new ClassPathResource(path).getContentAsString(StandardCharsets.UTF_8);
     }
 }

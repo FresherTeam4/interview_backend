@@ -24,6 +24,7 @@ import com.baseProject.myBaseProject.repository.InterviewSessionRepository;
 import com.baseProject.myBaseProject.repository.InterviewTemplateRepository;
 import com.baseProject.myBaseProject.repository.UserAccountRepository;
 import com.baseProject.myBaseProject.service.InterviewSessionService;
+import com.baseProject.myBaseProject.util.IdempotencyKeyNormalizer;
 import org.springframework.core.task.TaskRejectedException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
@@ -39,8 +40,6 @@ import java.util.Locale;
 
 @Service
 public class InterviewSessionServiceImpl implements InterviewSessionService {
-    private static final int MAX_IDEMPOTENCY_KEY_LENGTH = 100;
-
     private final InterviewSessionRepository sessions;
     private final InterviewTemplateRepository templates;
     private final CandidateProfileRepository profiles;
@@ -96,7 +95,7 @@ public class InterviewSessionServiceImpl implements InterviewSessionService {
     @Override
     public InterviewSessionStatusResponse create(
             Long userId, String rawIdempotencyKey, CreateInterviewSessionRequest request) {
-        String idempotencyKey = normalizeIdempotencyKey(rawIdempotencyKey);
+        String idempotencyKey = IdempotencyKeyNormalizer.normalize(rawIdempotencyKey);
         String languageCode = normalizeLanguage(request.languageCode());
         int durationMinutes = requireDuration(request.durationMinutes());
 
@@ -264,20 +263,6 @@ public class InterviewSessionServiceImpl implements InterviewSessionService {
         if (!same) {
             throw new DomainException(ErrorCode.INTERVIEW_SESSION_IDEMPOTENCY_CONFLICT);
         }
-    }
-
-    private String normalizeIdempotencyKey(String rawValue) {
-        if (rawValue == null || rawValue.isBlank()) {
-            throw new DomainException(
-                    ErrorCode.VALIDATION_FAILED, "Idempotency-Key header is required");
-        }
-        String value = rawValue.strip();
-        if (value.length() > MAX_IDEMPOTENCY_KEY_LENGTH) {
-            throw new DomainException(
-                    ErrorCode.VALIDATION_FAILED,
-                    "Idempotency-Key must not exceed 100 characters");
-        }
-        return value;
     }
 
     private String normalizeLanguage(String rawValue) {

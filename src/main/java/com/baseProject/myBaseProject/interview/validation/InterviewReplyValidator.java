@@ -2,7 +2,6 @@ package com.baseProject.myBaseProject.interview.validation;
 
 import com.baseProject.myBaseProject.dto.ai.interview.InterviewReplyResult;
 import com.baseProject.myBaseProject.enums.CandidateIntent;
-import com.baseProject.myBaseProject.enums.InterviewEvidenceStatus;
 import com.baseProject.myBaseProject.enums.InterviewTurnAction;
 import com.baseProject.myBaseProject.exception.DomainException;
 import com.baseProject.myBaseProject.exception.ErrorCode;
@@ -81,7 +80,7 @@ public class InterviewReplyValidator {
                 throw invalid("Evidence updates must reference unique known focus areas");
             }
             // Evidence chỉ được tiến lên để một lượt sau không xóa kết quả đã thu thập.
-            if (rank(update.status()) < rank(area.evidenceStatus())) {
+            if (!update.status().isAtLeast(area.evidenceStatus())) {
                 throw invalid("Evidence status cannot move backwards");
             }
             updates.add(new InterviewReplyResult.EvidenceUpdate(
@@ -127,14 +126,6 @@ public class InterviewReplyValidator {
     private List<InterviewReplyResult.EvidenceUpdate> safe(
             List<InterviewReplyResult.EvidenceUpdate> updates) {
         return updates == null ? List.of() : updates;
-    }
-
-    private int rank(InterviewEvidenceStatus status) {
-        return switch (status) {
-            case NOT_EXPLORED -> 0;
-            case PARTIAL -> 1;
-            case SUFFICIENT -> 2;
-        };
     }
 
     private String normalizeCode(String value) {

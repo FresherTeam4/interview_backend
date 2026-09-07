@@ -10,7 +10,6 @@ import com.baseProject.myBaseProject.entity.InterviewSession;
 import com.baseProject.myBaseProject.entity.InterviewTurn;
 import com.baseProject.myBaseProject.enums.CandidateIntent;
 import com.baseProject.myBaseProject.enums.InterviewEndReason;
-import com.baseProject.myBaseProject.enums.InterviewEvidenceStatus;
 import com.baseProject.myBaseProject.enums.InterviewSessionStatus;
 import com.baseProject.myBaseProject.enums.InterviewTransitionActor;
 import com.baseProject.myBaseProject.enums.InterviewTurnAction;
@@ -28,6 +27,7 @@ import com.baseProject.myBaseProject.repository.InterviewFocusAreaRepository;
 import com.baseProject.myBaseProject.repository.InterviewSessionRepository;
 import com.baseProject.myBaseProject.repository.InterviewTurnRepository;
 import com.baseProject.myBaseProject.service.InterviewConversationService;
+import com.baseProject.myBaseProject.util.IdempotencyKeyNormalizer;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
@@ -44,7 +44,6 @@ import java.util.Map;
 
 @Service
 public class InterviewConversationServiceImpl implements InterviewConversationService {
-    private static final int MAX_IDEMPOTENCY_KEY_LENGTH = 100;
     private static final Duration STALE_PROCESSING_AFTER = Duration.ofSeconds(60);
 
     private final InterviewSessionRepository sessions;
@@ -130,7 +129,7 @@ public class InterviewConversationServiceImpl implements InterviewConversationSe
             Long sessionId,
             String rawIdempotencyKey,
             SubmitInterviewAnswerRequest request) {
-        String idempotencyKey = normalizeIdempotencyKey(rawIdempotencyKey);
+        String idempotencyKey = IdempotencyKeyNormalizer.normalize(rawIdempotencyKey);
         String answer = request.answer().strip();
 
         // lưu câu trả lời vào db
@@ -367,18 +366,10 @@ public class InterviewConversationServiceImpl implements InterviewConversationSe
         for (InterviewReplyResult.EvidenceUpdate update : updates) {
             InterviewFocusArea area = byCode.get(update.focusAreaCode());
             // Giữ evidence đơn điệu tăng ngay cả khi có kết quả AI đến muộn hoặc đồng thời.
-            if (area != null && evidenceRank(update.status()) >= evidenceRank(area.getEvidenceStatus())) {
+            if (area != null && update.status().isAtLeast(area.getEvidenceStatus())) {
                 area.updateEvidence(update.status(), update.evidenceSummary(), now);
             }
         }
-    }
-
-    private int evidenceRank(InterviewEvidenceStatus status) {
-        return switch (status) {
-            case NOT_EXPLORED -> 0;
-            case PARTIAL -> 1;
-            case SUFFICIENT -> 2;
-        };
     }
 
     private void markReplyFailed(Long candidateTurnId, ErrorCode errorCode) {
@@ -470,21 +461,6 @@ public class InterviewConversationServiceImpl implements InterviewConversationSe
             return 0;
         }
         return remainingSeconds(session.getDeadlineAt(), now);
-    }
-
-    private String normalizeIdempotencyKey(String rawValue) {
-        if (rawValue == null || rawValue.isBlank()) {
-            throw new DomainException(
-                    ErrorCode.VALIDATION_FAILED,
-                    "Idempotency-Key header is required");
-        }
-        String value = rawValue.strip();
-        if (value.length() > MAX_IDEMPOTENCY_KEY_LENGTH) {
-            throw new DomainException(
-                    ErrorCode.VALIDATION_FAILED,
-                    "Idempotency-Key must not exceed 100 characters");
-        }
-        return value;
     }
 
     private record AnswerClaim(
