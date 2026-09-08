@@ -49,6 +49,7 @@ public class JobDescriptionServiceImpl implements JobDescriptionService {
     private static final String TEXT_CONTENT_TYPE = "text/plain";
     private static final Duration FILE_URL_TTL = Duration.ofMinutes(5);
     private static final int MAX_FILENAME_LENGTH = 255;
+    private static final int MAX_TITLE_LENGTH = 200;
 
     private final JobDescriptionDocumentRepository documents;
     private final JobDescriptionAnalysisResultRepository analysisResults;
@@ -89,14 +90,11 @@ public class JobDescriptionServiceImpl implements JobDescriptionService {
 
     @Override
     public UploadResult createFromText(Long ownerId, CreateJobDescriptionTextRequest request) {
-        if (request == null || request.text() == null || request.text().isBlank()
-                || request.title() == null || request.title().isBlank()) {
+        if (request == null) {
             throw new DomainException(ErrorCode.VALIDATION_FAILED);
         }
-        String text = request.text().strip();
-        if (text.length() > properties.maxTextCharacters()) {
-            throw new DomainException(ErrorCode.JD_TEXT_TOO_LONG);
-        }
+        String title = normalizeTitle(request.title());
+        String text = normalizeText(request.text());
         byte[] bytes = text.getBytes(StandardCharsets.UTF_8);
         String checksum = sha256(bytes);
         UploadResult reused = reuse(ownerId, checksum);
@@ -107,7 +105,7 @@ public class JobDescriptionServiceImpl implements JobDescriptionService {
         JobDescriptionDocument document = documents.save(JobDescriptionDocument.builder()
                 .owner(users.getReferenceById(ownerId))
                 .sourceType(JobDescriptionSourceType.TEXT)
-                .originalFilename(safeFilename(request.title() + ".txt", "job-description.txt"))
+                .originalFilename(safeFilename(title + ".txt", "job-description.txt"))
                 .contentType(TEXT_CONTENT_TYPE)
                 .fileSizeBytes(bytes.length)
                 .checksumSha256(checksum)
@@ -221,6 +219,24 @@ public class JobDescriptionServiceImpl implements JobDescriptionService {
         if (documents.countByOwnerIdAndActiveTrue(ownerId) >= properties.maxPerUser()) {
             throw new DomainException(ErrorCode.JD_LIMIT_REACHED);
         }
+    }
+
+    private String normalizeTitle(String value) {
+        if (value == null || value.isBlank() || value.length() > MAX_TITLE_LENGTH) {
+            throw new DomainException(ErrorCode.VALIDATION_FAILED);
+        }
+        return value.strip();
+    }
+
+    private String normalizeText(String value) {
+        if (value == null || value.isBlank()) {
+            throw new DomainException(ErrorCode.VALIDATION_FAILED);
+        }
+        String normalized = value.strip();
+        if (normalized.length() > properties.maxTextCharacters()) {
+            throw new DomainException(ErrorCode.JD_TEXT_TOO_LONG);
+        }
+        return normalized;
     }
 
     private Map<Long, InterviewTemplate> loadTemplates(List<JobDescriptionDocument> owned) {

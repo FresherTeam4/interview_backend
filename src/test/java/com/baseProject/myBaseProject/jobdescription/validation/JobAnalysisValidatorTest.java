@@ -16,14 +16,13 @@ class JobAnalysisValidatorTest {
 
     @Test
     void acceptsValidJobAnalysis() {
-        assertThat(validator.validate(JobAnalysisTestData.analysis(), JobAnalysisTestData.JD))
+        assertThat(validator.validate(JobAnalysisTestData.analysis()))
                 .isNotNull();
     }
 
     @Test
     void acceptsEditableJobAnalysis() {
-        assertThat(validator.validateEditable(
-                JobAnalysisTestData.analysis(), JobAnalysisTestData.JD)).isNotNull();
+        assertThat(validator.validate(JobAnalysisTestData.analysis())).isNotNull();
     }
 
     @Test
@@ -31,7 +30,7 @@ class JobAnalysisValidatorTest {
         JobAnalysis insufficient = new JobAnalysis(
                 false, "vi", null, null, null,
                 "Không có nội dung công việc", List.of());
-        assertThatThrownBy(() -> validator.validate(insufficient, "Xin chào"))
+        assertThatThrownBy(() -> validator.validate(insufficient))
                 .isInstanceOfSatisfying(DomainException.class,
                         exception -> assertThat(exception.getCode())
                                 .isEqualTo(ErrorCode.TEMPLATE_INSUFFICIENT_JD));
@@ -42,7 +41,7 @@ class JobAnalysisValidatorTest {
         JobAnalysis emptySkills = new JobAnalysis(
                 true, "vi", "Developer", "Junior", "IT",
                 "Summary text", List.of());
-        assertThatThrownBy(() -> validator.validate(emptySkills, JobAnalysisTestData.JD))
+        assertThatThrownBy(() -> validator.validate(emptySkills))
                 .isInstanceOfSatisfying(DomainException.class,
                         exception -> assertThat(exception.getCode())
                                 .isEqualTo(ErrorCode.TEMPLATE_INVALID_ANALYSIS));
@@ -57,7 +56,7 @@ class JobAnalysisValidatorTest {
                         new JobAnalysis.KeySkill("Java", JobAnalysis.SkillLevel.MUST_HAVE, "Core Java"),
                         new JobAnalysis.KeySkill("java", JobAnalysis.SkillLevel.NICE_TO_HAVE, "Java EE")
                 ));
-        assertThatThrownBy(() -> validator.validate(duplicateSkills, JobAnalysisTestData.JD))
+        assertThatThrownBy(() -> validator.validate(duplicateSkills))
                 .isInstanceOfSatisfying(DomainException.class,
                         exception -> assertThat(exception.getCode())
                                 .isEqualTo(ErrorCode.TEMPLATE_INVALID_ANALYSIS));

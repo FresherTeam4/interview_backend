@@ -1,9 +1,7 @@
 package com.baseProject.myBaseProject.service.impl;
 
-import com.baseProject.myBaseProject.dto.template.ConfirmInterviewTemplateRequest;
 import com.baseProject.myBaseProject.dto.template.InterviewTemplateResponse;
 import com.baseProject.myBaseProject.dto.template.InterviewTemplateSummaryResponse;
-import com.baseProject.myBaseProject.dto.template.PublishInterviewTemplateRequest;
 import com.baseProject.myBaseProject.dto.template.TemplatePageResponse;
 import com.baseProject.myBaseProject.dto.template.UpdateInterviewTemplateRequest;
 import com.baseProject.myBaseProject.entity.InterviewTemplate;
@@ -14,7 +12,6 @@ import com.baseProject.myBaseProject.jobdescription.mapper.JobAnalysisJsonMapper
 import com.baseProject.myBaseProject.jobdescription.validation.JobAnalysisValidator;
 import com.baseProject.myBaseProject.mapper.InterviewTemplateMapper;
 import com.baseProject.myBaseProject.repository.InterviewTemplateRepository;
-import com.baseProject.myBaseProject.repository.JobDescriptionAnalysisResultRepository;
 import com.baseProject.myBaseProject.repository.UserAccountRepository;
 import com.baseProject.myBaseProject.service.InterviewTemplateService;
 import lombok.RequiredArgsConstructor;
@@ -32,7 +29,6 @@ import java.time.Instant;
 @Transactional(readOnly = true)
 public class InterviewTemplateServiceImpl implements InterviewTemplateService {
     private final InterviewTemplateRepository templates;
-    private final JobDescriptionAnalysisResultRepository jdAnalysisResultRepo;
     private final UserAccountRepository users;
     private final InterviewTemplateMapper mapper;
     private final JobAnalysisJsonMapper analysisJsonMapper;
@@ -69,17 +65,16 @@ public class InterviewTemplateServiceImpl implements InterviewTemplateService {
     @Transactional
     public InterviewTemplateResponse update(
             Long userId, Long id, UpdateInterviewTemplateRequest request) {
+        if (request == null || request.content() == null) {
+            throw new DomainException(ErrorCode.VALIDATION_FAILED);
+        }
         InterviewTemplate template = ownedForUpdate(userId, id);
 
         requireActive(template);
         requireDraft(template);
-        requireVersion(template, request.expectedVersion());
+        requireVersion(template, requireExpectedVersion(request.expectedVersion()));
         String title = normalizeTitle(request.title());
-        String sourceText = jdAnalysisResultRepo
-                .findByJobDescriptionId(template.getSourceJobDescription().getId())
-                .orElseThrow(() -> new DomainException(ErrorCode.JD_NOT_FOUND))
-                .getExtractedText();
-        var content = validator.validateEditable(request.content(), sourceText);
+        var content = validator.validate(request.content());
 
         template.setTitle(title);
         template.setJobTitle(content.jobTitle());
@@ -94,14 +89,14 @@ public class InterviewTemplateServiceImpl implements InterviewTemplateService {
     @Override
     @Transactional
     public InterviewTemplateResponse confirm(
-            Long userId, Long id, ConfirmInterviewTemplateRequest request) {
+            Long userId, Long id, long expectedVersion) {
         InterviewTemplate template = ownedForUpdate(userId, id);
 
         requireActive(template);
         if (template.isConfirmed()) {
             return mapper.toResponse(template);
         }
-        requireVersion(template, request.expectedVersion());
+        requireVersion(template, expectedVersion);
         Instant now = clock.instant();
 
         template.setConfirmedAt(now);
@@ -114,7 +109,7 @@ public class InterviewTemplateServiceImpl implements InterviewTemplateService {
     @Override
     @Transactional
     public InterviewTemplateResponse publish(
-            Long userId, Long id, PublishInterviewTemplateRequest request) {
+            Long userId, Long id, long expectedVersion) {
         requireAdmin(userId);
         InterviewTemplate template = ownedForUpdate(userId, id);
 
@@ -123,7 +118,7 @@ public class InterviewTemplateServiceImpl implements InterviewTemplateService {
         if (template.isPublished()) {
             return mapper.toResponse(template);
         }
-        requireVersion(template, request.expectedVersion());
+        requireVersion(template, expectedVersion);
         Instant now = clock.instant();
 
         template.setPublishedAt(now);
@@ -203,9 +198,19 @@ public class InterviewTemplateServiceImpl implements InterviewTemplateService {
     }
 
     private void requireVersion(InterviewTemplate template, long expectedVersion) {
+        if (expectedVersion < 0) {
+            throw new DomainException(ErrorCode.VALIDATION_FAILED);
+        }
         if (template.getVersion() != expectedVersion) {
             throw new DomainException(ErrorCode.TEMPLATE_VERSION_CONFLICT);
         }
+    }
+
+    private long requireExpectedVersion(Long expectedVersion) {
+        if (expectedVersion == null) {
+            throw new DomainException(ErrorCode.VALIDATION_FAILED);
+        }
+        return expectedVersion;
     }
 
     private String normalizeTitle(String value) {

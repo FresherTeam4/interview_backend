@@ -1,27 +1,145 @@
-# Interview session API — phases 1 and 2
+# Interview Session API
 
-Phase 1 creates an immutable interview context and asynchronously prepares a flexible interview plan. It does not start the timer or create a fixed question list.
+Tài liệu này bao trọn vòng đời một buổi phỏng vấn: chọn option → chuẩn bị bằng AI → hội thoại → kết thúc → chấm điểm → report.
 
-## Options
+```mermaid
+stateDiagram-v2
+    [*] --> PREPARING: POST /interview-sessions
+    PREPARING --> READY: preparation thành công
+    PREPARING --> PREPARATION_FAILED: preparation lỗi
+    PREPARATION_FAILED --> PREPARING: POST /preparation/retry
+    READY --> IN_PROGRESS: POST /start
+    IN_PROGRESS --> IN_PROGRESS: POST /answers
+    IN_PROGRESS --> SCORING: AI CLOSE / finish / deadline
+    SCORING --> COMPLETED: scoring thành công
+    SCORING --> SCORING_FAILED: scoring lỗi
+    SCORING_FAILED --> SCORING: POST /scoring/retry
+```
+
+`CANCELLED` và `EXPIRED` có trong enum nhưng hiện không có endpoint/transition public tạo ra hai state này. Frontend vẫn nên parse chúng như terminal fallback.
+
+Mọi endpoint yêu cầu Bearer token và chỉ owner của session truy cập được.
+
+## TypeScript contract
+
+```ts
+type InterviewerStyle = "FRIENDLY" | "PROFESSIONAL" | "CHALLENGING";
+type InterviewSessionStatus =
+  | "PREPARING"
+  | "READY"
+  | "PREPARATION_FAILED"
+  | "IN_PROGRESS"
+  | "SCORING"
+  | "COMPLETED"
+  | "SCORING_FAILED"
+  | "CANCELLED"
+  | "EXPIRED";
+type InterviewEndReason =
+  | "AI_COMPLETED"
+  | "TIME_EXPIRED"
+  | "CANDIDATE_FINISHED"
+  | "SYSTEM_TERMINATED";
+type InterviewTurnRole = "INTERVIEWER" | "CANDIDATE";
+type InterviewTurnAction = "OPENING" | "EXPLORE" | "FOLLOW_UP" | "HANDLE_REQUEST" | "CLOSE";
+type CandidateIntent =
+  | "ANSWER" | "REQUEST_REPEAT" | "REQUEST_CLARIFICATION" | "REQUEST_TIME"
+  | "ASK_INTERVIEWER" | "CANNOT_ANSWER" | "DECLINE_OR_SKIP"
+  | "CORRECT_PREVIOUS_ANSWER" | "REQUEST_END" | "SOCIAL_OR_META"
+  | "OFF_TOPIC" | "INAPPROPRIATE" | "OTHER";
+type TurnProcessingStatus = "PROCESSING" | "COMPLETED" | "FAILED";
+
+interface InterviewSessionOptions {
+  languages: Array<{ code: string; name: string }>;
+  durations: number[];
+  interviewerStyles: Array<{ code: InterviewerStyle; name: string }>;
+}
+
+interface InterviewSessionStatusResponse {
+  id: number;
+  status: InterviewSessionStatus;
+  templateTitle: string;
+  profileName: string;
+  languageCode: string;
+  durationMinutes: number;
+  interviewerStyle: InterviewerStyle;
+  preparationErrorCode: string | null;
+  preparationErrorMessage: string | null;
+  scoringErrorCode: string | null;
+  scoringErrorMessage: string | null;
+  preparedAt: string | null;
+  endReason: InterviewEndReason | null;
+  endedAt: string | null;
+  completedAt: string | null;
+}
+
+interface InterviewTurn {
+  id: number;
+  turnIndex: number;
+  role: InterviewTurnRole;
+  content: string;
+  candidateIntent: CandidateIntent | null;
+  action: InterviewTurnAction | null;
+  focusAreaCode: string | null;
+  requestId: string | null;
+  processingStatus: TurnProcessingStatus | null;
+  processingErrorCode: string | null;
+  createdAt: string;
+}
+
+interface InterviewConversation {
+  sessionId: number;
+  status: InterviewSessionStatus;
+  startedAt: string | null;
+  deadlineAt: string | null;
+  endReason: InterviewEndReason | null;
+  endedAt: string | null;
+  remainingSeconds: number;
+  currentTurnIndex: number;
+  turns: InterviewTurn[];
+}
+
+interface InterviewAnswerResponse {
+  sessionId: number;
+  status: InterviewSessionStatus;
+  deadlineAt: string | null;
+  endReason: InterviewEndReason | null;
+  endedAt: string | null;
+  remainingSeconds: number;
+  currentTurnIndex: number;
+  candidateTurn: InterviewTurn | null;
+  interviewerTurn: InterviewTurn | null;
+}
+```
+
+## 1. Lấy option từ server
 
 ```http
 GET /api/interview-session-options
-Authorization: Bearer <access-token>
+Authorization: Bearer <accessToken>
 ```
 
-The response exposes the language codes and durations configured under `app.interview-session`, plus the supported interviewer styles.
+```json
+{
+  "languages": [
+    { "code": "vi", "name": "Tiếng Việt" },
+    { "code": "en", "name": "English" }
+  ],
+  "durations": [15, 30, 45, 60],
+  "interviewerStyles": [
+    { "code": "FRIENDLY", "name": "Thân thiện" },
+    { "code": "PROFESSIONAL", "name": "Chuyên nghiệp" },
+    { "code": "CHALLENGING", "name": "Thử thách" }
+  ]
+}
+```
 
-Interviewer styles change tone and probing behavior while preserving the same evidence standard:
+Giá trị lấy từ config server; không hard-code danh sách để submit. `FRIENDLY` có giọng khuyến khích, `PROFESSIONAL` trung tính/có cấu trúc, `CHALLENGING` hỏi trực diện về claim và trade-off.
 
-- `FRIENDLY`: warm and encouraging, with gentle but evidence-based follow-ups.
-- `PROFESSIONAL`: neutral, concise, and structured.
-- `CHALLENGING`: direct and rigorous about claims and trade-offs while remaining respectful.
-
-## Create a session
+## 2. Tạo session và chuẩn bị plan
 
 ```http
 POST /api/interview-sessions
-Authorization: Bearer <access-token>
+Authorization: Bearer <accessToken>
 Idempotency-Key: 01991f7e-a4d4-7fb9-ae21-57989102fe04
 Content-Type: application/json
 
@@ -34,87 +152,86 @@ Content-Type: application/json
 }
 ```
 
-The endpoint returns `202 Accepted`. The initial state is normally `PREPARING`; preparation can finish before the response is read, so clients must use the returned status rather than assuming it.
+Điều kiện:
 
-The same user and `Idempotency-Key` return the original session when all request options match. Reusing the key with different options returns `409 INTERVIEW_SESSION_IDEMPOTENCY_CONFLICT`.
+- Profile thuộc user, CV còn active và profile đã confirm.
+- Template đã confirm, chưa archive, đồng thời thuộc user hoặc đang published.
+- Language/duration/style thuộc response options.
+- `templateId`, `profileId` là số dương.
+- `Idempotency-Key` bắt buộc, không rỗng, tối đa 100 ký tự.
 
-Eligible inputs:
-
-- The profile belongs to the authenticated user, its CV is active, and the profile is confirmed.
-- The template is confirmed and not archived.
-- The template belongs to the authenticated user or is currently published.
-
-Creation stores both source foreign keys and immutable JSON snapshots. Later profile changes do not change the AI context for this session.
-
-## Poll preparation
-
-```http
-GET /api/interview-sessions/{sessionId}
-Authorization: Bearer <access-token>
-```
-
-Successful preparation changes the status to `READY`. The response only exposes data needed by the client to display and poll the preparation state. AI context and focus areas remain internal to the backend.
-
-Example:
+Response luôn `202 Accepted` với `InterviewSessionStatusResponse`:
 
 ```json
 {
   "id": 501,
-  "status": "READY",
-  "templateTitle": "Backend Java Developer",
-  "profileName": "Minh profile",
+  "status": "PREPARING",
+  "templateTitle": "Java Backend Developer",
+  "profileName": "Backend profile 2026",
   "languageCode": "vi",
   "durationMinutes": 30,
   "interviewerStyle": "PROFESSIONAL",
   "preparationErrorCode": null,
   "preparationErrorMessage": null,
-  "preparedAt": "2026-09-06T08:00:00Z"
+  "scoringErrorCode": null,
+  "scoringErrorMessage": null,
+  "preparedAt": null,
+  "endReason": null,
+  "endedAt": null,
+  "completedAt": null
 }
 ```
 
-The backend loads summaries, the opening message, conversation state, and ordered focus areas directly from persisted session data when invoking the interview AI. Clients never receive or submit this internal context.
+Backend snapshot toàn bộ profile và template ngay khi tạo. Edit/unpublish/xóa nguồn sau đó không thay đổi session này.
 
-## Retry preparation
+Cùng user + cùng idempotency key + cùng năm option trả session cũ và không dispatch preparation lần nữa. Dùng key cũ với payload khác trả `409 INTERVIEW_SESSION_IDEMPOTENCY_CONFLICT`.
+
+Lỗi eligibility: `TEMPLATE_NOT_FOUND`, `TEMPLATE_ARCHIVED`, `TEMPLATE_CONFIRM_REQUIRED`, `PROFILE_NOT_FOUND`, `PROFILE_CONFIRM_REQUIRED`, `INTERVIEW_SESSION_OPTION_INVALID`, `VALIDATION_FAILED`.
+
+## 3. Poll preparation
+
+```http
+GET /api/interview-sessions/{sessionId}
+Authorization: Bearer <accessToken>
+```
+
+| Status | UI/action |
+|---|---|
+| `PREPARING` | Progress, poll tiếp |
+| `READY` | Dừng poll, bật nút Start |
+| `PREPARATION_FAILED` | Dừng, hiện error + Retry |
+| State khác | Điều hướng theo state machine |
+
+Response status cố ý không trả opening message, focus area hoặc AI context. Các dữ liệu đó là nội bộ.
+
+Retry:
 
 ```http
 POST /api/interview-sessions/{sessionId}/preparation/retry
-Authorization: Bearer <access-token>
+Authorization: Bearer <accessToken>
 ```
 
-Only `PREPARATION_FAILED` sessions can be retried. The endpoint returns `202 Accepted` and redispatches the session from `PREPARING`; the asynchronous worker may already have advanced the returned status. The original snapshots and user-selected options are reused.
+Response `202 InterviewSessionStatusResponse`. Chỉ `PREPARATION_FAILED` được retry; state khác trả `409 INTERVIEW_SESSION_PREPARATION_NOT_RETRYABLE`. Backend xóa plan dở dang và dùng lại snapshot/options gốc. Worker có thể hoàn tất trước khi response được đọc.
 
-## State transitions in phase 1
-
-```text
-NULL -> PREPARING
-PREPARING -> READY
-PREPARING -> PREPARATION_FAILED
-PREPARATION_FAILED -> PREPARING
-```
-
-Every transition is appended to `interview_session_transitions`.
-
-## Start the interview
+## 4. Start interview
 
 ```http
 POST /api/interview-sessions/{sessionId}/start
-Authorization: Bearer <access-token>
+Authorization: Bearer <accessToken>
 ```
 
-Only a `READY` session can start. The operation atomically changes it to
-`IN_PROGRESS`, sets `startedAt` and `deadlineAt`, and persists the prepared
-opening message as interviewer turn `0`. Calling start again while the session
-is already `IN_PROGRESS` returns the current conversation without resetting the
-timer.
+Chỉ `READY` được start. Backend atomically đổi sang `IN_PROGRESS`, đặt `startedAt`, `deadlineAt = startedAt + duration`, và lưu opening message thành interviewer turn `0`.
 
-The response contains the server clock state and persisted turns:
+Gọi lại khi đã `IN_PROGRESS` là idempotent và trả conversation hiện tại, không reset timer. State khác trả `409 INTERVIEW_SESSION_NOT_STARTABLE`.
 
 ```json
 {
   "sessionId": 501,
   "status": "IN_PROGRESS",
-  "startedAt": "2026-09-06T08:00:00Z",
-  "deadlineAt": "2026-09-06T08:30:00Z",
+  "startedAt": "2026-09-07T08:10:00Z",
+  "deadlineAt": "2026-09-07T08:40:00Z",
+  "endReason": null,
+  "endedAt": null,
   "remainingSeconds": 1800,
   "currentTurnIndex": 0,
   "turns": [
@@ -122,144 +239,191 @@ The response contains the server clock state and persisted turns:
       "id": 9001,
       "turnIndex": 0,
       "role": "INTERVIEWER",
-      "content": "Xin chào...",
+      "content": "Xin chào, chúng ta bắt đầu nhé...",
       "candidateIntent": null,
       "action": "OPENING",
       "focusAreaCode": null,
       "requestId": null,
       "processingStatus": null,
       "processingErrorCode": null,
-      "createdAt": "2026-09-06T08:00:00Z"
+      "createdAt": "2026-09-07T08:10:00Z"
     }
   ]
 }
 ```
 
-## Submit an answer
+Countdown UI lấy `deadlineAt` làm nguồn sự thật: `max(0, deadlineAt - Date.now())`. `remainingSeconds` là snapshot tại lúc response, không giảm tự động.
+
+## 5. Submit answer
 
 ```http
 POST /api/interview-sessions/{sessionId}/answers
-Authorization: Bearer <access-token>
+Authorization: Bearer <accessToken>
 Idempotency-Key: 01991f7e-a4d4-7fb9-ae21-57989102fe05
 Content-Type: application/json
 
 {
   "expectedTurnIndex": 0,
-  "answer": "Tôi đã xây dựng một REST API bằng Spring Boot..."
+  "answer": "Tôi đã xây dựng REST API bằng Spring Boot..."
 }
 ```
 
-`expectedTurnIndex` is the interviewer turn being answered. It prevents an old
-browser tab from answering the wrong question. The idempotency key belongs to
-this candidate answer and can be reused to retry after an AI timeout. Reusing
-it with different content or a different turn returns a conflict.
+- `expectedTurnIndex` là index của **interviewer turn đang được trả lời**, không phải index candidate sắp tạo.
+- `answer` sau trim phải còn nội dung, tối đa 8.000 ký tự.
+- Mỗi answer mới dùng UUID mới. Retry cùng answer dùng lại key, `expectedTurnIndex` và text y hệt sau trim.
+- Endpoint chờ AI đồng bộ. UI phải disable submit cho đến khi request kết thúc hoặc state được reconcile.
 
-Candidate turns expose `requestId`, `processingStatus`, and a standardized
-`processingErrorCode`. Once processed, they also expose the primary
-`candidateIntent` detected from the complete message. After a reload, the
-frontend can resubmit a `FAILED` candidate turn with its original request ID
-and content. A `PROCESSING` turn means another request is still generating the
-interviewer response; its intent remains `null` until AI processing succeeds.
+Index bình thường: interviewer `0` → candidate `1` → interviewer `2` → candidate `3`...
 
-The backend commits the candidate turn before calling AI. The generated reply
-is committed in a second short transaction, so a slow model call never holds a
-database lock. AI chooses one action:
-
-- `EXPLORE`: introduce or continue a relevant focus area.
-- `FOLLOW_UP`: investigate evidence or reasoning from the latest answer.
-- `HANDLE_REQUEST`: repeat, clarify, answer, acknowledge, or redirect before
-  continuing the interview.
-- `CLOSE`: finish naturally without another question.
-
-There is no fixed question list, difficulty, or follow-up quota. The server
-validates every selected focus area and prevents evidence from moving backward.
-The same AI call classifies the candidate message and creates the interviewer
-response; there is no additional classifier request. Candidate intents cover
-answers, repeat or clarification requests, thinking time, candidate questions,
-inability or refusal to answer, corrections, end requests, social/meta turns,
-off-topic or inappropriate content, and an `OTHER` fallback. Evidence may still
-be extracted from factual job-relevant statements anywhere in the message.
-When the candidate types an end request, AI may provide the natural closing
-turn while the session records `CANDIDATE_FINISHED` as the end reason.
-
-## Resume the conversation
-
-```http
-GET /api/interview-sessions/{sessionId}/conversation
-Authorization: Bearer <access-token>
-```
-
-This returns the timer and the complete persisted turn history. The frontend
-can reconstruct the interview after refresh, reconnect, or opening another tab.
-
-## Finish early
-
-```http
-POST /api/interview-sessions/{sessionId}/finish
-Authorization: Bearer <access-token>
-```
-
-The backend advances the session to `SCORING` without adding an artificial
-interviewer turn. A scheduler applies the same transition when `deadlineAt` is
-reached. The response exposes `endReason` and `endedAt`, so the frontend owns
-the localized completion screen:
+Response thành công:
 
 ```json
 {
-  "status": "SCORING",
-  "endReason": "CANDIDATE_FINISHED",
-  "endedAt": "2026-09-06T08:18:00Z",
-  "remainingSeconds": 0
+  "sessionId": 501,
+  "status": "IN_PROGRESS",
+  "deadlineAt": "2026-09-07T08:40:00Z",
+  "endReason": null,
+  "endedAt": null,
+  "remainingSeconds": 1640,
+  "currentTurnIndex": 2,
+  "candidateTurn": {
+    "id": 9002,
+    "turnIndex": 1,
+    "role": "CANDIDATE",
+    "content": "Tôi đã xây dựng REST API bằng Spring Boot...",
+    "candidateIntent": "ANSWER",
+    "action": null,
+    "focusAreaCode": null,
+    "requestId": "01991f7e-a4d4-7fb9-ae21-57989102fe05",
+    "processingStatus": "COMPLETED",
+    "processingErrorCode": null,
+    "createdAt": "2026-09-07T08:12:30Z"
+  },
+  "interviewerTurn": {
+    "id": 9003,
+    "turnIndex": 2,
+    "role": "INTERVIEWER",
+    "content": "Bạn đã xử lý authentication như thế nào?",
+    "candidateIntent": null,
+    "action": "FOLLOW_UP",
+    "focusAreaCode": "BACKEND",
+    "requestId": null,
+    "processingStatus": null,
+    "processingErrorCode": null,
+    "createdAt": "2026-09-07T08:12:36Z"
+  }
 }
 ```
 
-Possible reasons are `AI_COMPLETED`, `TIME_EXPIRED`, `CANDIDATE_FINISHED`, and
-`SYSTEM_TERMINATED`. Only an actual AI response with action `CLOSE` is stored as
-an interviewer closing turn. After this transaction commits, the scoring worker
-starts automatically.
+Nếu AI trả action `CLOSE`, response có interviewer closing turn và status đã là `SCORING`; không render ô nhập tiếp.
 
-## Read scoring status and report
+### Idempotency và khôi phục answer
+
+Backend lưu candidate turn **trước** khi gọi AI:
+
+- Retry key đã `COMPLETED`: trả candidate/reply đã lưu, không gọi AI lại.
+- Key đang `PROCESSING` dưới 60 giây: `409 INTERVIEW_TURN_PROCESSING` để chặn gọi AI song song.
+- Key `FAILED`, hoặc `PROCESSING` stale từ 60 giây: cùng key + payload được phép gọi AI lại.
+- Cùng key nhưng text/turn khác: `409 INTERVIEW_TURN_IDEMPOTENCY_CONFLICT`.
+- `expectedTurnIndex` không còn đúng: `409 INTERVIEW_TURN_OUT_OF_SEQUENCE`.
+
+Khi request timeout/mất mạng:
+
+1. Không tạo key mới.
+2. Gọi `GET /conversation`.
+3. Nếu candidate turn theo `requestId` đã `COMPLETED`, dùng dữ liệu server.
+4. Nếu `FAILED`, submit lại cùng key/body.
+5. Nếu `PROCESSING`, chờ và fetch lại; retry cùng key sau khi stale nếu cần.
+
+Khi AI request ném lỗi, HTTP answer có thể trả lỗi `AI_TIMEOUT`, `AI_SERVICE_UNAVAILABLE`, `AI_ERROR` hoặc lỗi validation AI; candidate turn vẫn tồn tại với `processingStatus: FAILED` và `processingErrorCode`. Không rollback optimistic message khỏi UI trước khi reconcile conversation.
+
+## 6. Resume conversation
+
+```http
+GET /api/interview-sessions/{sessionId}/conversation
+Authorization: Bearer <accessToken>
+```
+
+Trả toàn bộ turn theo `turnIndex ASC`, timer và state hiện tại. Gọi endpoint này khi mở/reload interview screen, answer request không chắc kết quả, reconnect mạng hoặc cần reconcile optimistic UI.
+
+Candidate turn có `requestId`, `processingStatus`; interviewer turn có `action`, `focusAreaCode`. `candidateIntent` chỉ có sau khi AI xử lý thành công.
+
+Scheduler quét deadline theo chu kỳ config mặc định 30 giây. Có thể có khoảng ngắn `remainingSeconds = 0` nhưng status còn `IN_PROGRESS`; frontend khóa input khi countdown về 0 và fetch lại. Submit sau deadline cũng khiến backend chuyển session sang `SCORING` mà không lưu answer mới.
+
+## 7. Finish sớm
+
+```http
+POST /api/interview-sessions/{sessionId}/finish
+Authorization: Bearer <accessToken>
+```
+
+Khi `IN_PROGRESS`, backend chuyển sang `SCORING`, `endReason=CANDIDATE_FINISHED`, không thêm interviewer turn giả. Gọi lại ở `SCORING` hoặc `COMPLETED` là idempotent; state khác trả `409 INTERVIEW_SESSION_NOT_IN_PROGRESS`.
+
+Response là `InterviewConversation` và luôn có toàn bộ history. End reason:
+
+| Value | Nguồn |
+|---|---|
+| `AI_COMPLETED` | AI chủ động `CLOSE` |
+| `CANDIDATE_FINISHED` | User gọi finish hoặc AI nhận intent `REQUEST_END` rồi `CLOSE` |
+| `TIME_EXPIRED` | Deadline trong answer flow hoặc scheduler |
+| `SYSTEM_TERMINATED` | Dành cho hệ thống; chưa có endpoint public |
+
+## 8. Poll scoring và lấy report
+
+Chỉ gọi report khi status đã là `SCORING`, `SCORING_FAILED` hoặc `COMPLETED`:
 
 ```http
 GET /api/interview-sessions/{sessionId}/report
-Authorization: Bearer <access-token>
+Authorization: Bearer <accessToken>
 ```
 
-While the worker is running, the endpoint returns a status-only response:
+Khi đang scoring:
 
 ```json
 {
   "sessionId": 501,
   "status": "SCORING",
+  "scoringErrorCode": null,
+  "scoringErrorMessage": null,
+  "technicalScore": null,
+  "communicationScore": null,
+  "overallScore": null,
+  "coveragePercentage": null,
+  "confidence": null,
+  "overallSummary": null,
   "strengths": [],
   "improvements": [],
   "actionPlan": [],
-  "focusAreas": []
+  "communicationFeedback": null,
+  "focusAreas": [],
+  "completedAt": null
 }
 ```
 
-After scoring completes, it returns the persisted report:
+Khi thất bại cùng shape, status `SCORING_FAILED`, có `scoringErrorCode` và `scoringErrorMessage`. Dừng poll và hiện Retry.
+
+Khi hoàn tất:
 
 ```json
 {
   "sessionId": 501,
   "status": "COMPLETED",
+  "scoringErrorCode": null,
+  "scoringErrorMessage": null,
   "technicalScore": 75.00,
   "communicationScore": 70.00,
   "overallScore": 74.00,
   "coveragePercentage": 100.00,
   "confidence": "HIGH",
-  "overallSummary": "The candidate demonstrated a solid backend foundation.",
+  "overallSummary": "Ứng viên có nền tảng backend tốt.",
   "strengths": [
-    {
-      "title": "Backend fundamentals",
-      "description": "Explained a concrete REST API implementation.",
-      "evidenceTurnIds": [11]
-    }
+    { "title": "Backend fundamentals", "description": "Giải thích được một REST API cụ thể.", "evidenceTurnIds": [9002] }
   ],
   "improvements": [],
-  "actionPlan": [],
-  "communicationFeedback": "The answers were clear and relevant.",
+  "actionPlan": [
+    { "priority": 1, "action": "Luyện system design", "reason": "Phần trade-off còn ngắn", "suggestion": "Thiết kế một service và ghi rõ bottleneck" }
+  ],
+  "communicationFeedback": "Câu trả lời rõ ràng và liên quan.",
   "focusAreas": [
     {
       "focusAreaId": 21,
@@ -270,40 +434,74 @@ After scoring completes, it returns the persisted report:
       "score": 75.00,
       "confidence": "HIGH",
       "evidenceStatus": "SUFFICIENT",
-      "rationale": "The candidate described a concrete implementation.",
-      "strengths": ["Understands Spring Boot"],
-      "gaps": ["Did not quantify production impact"],
-      "feedback": "Add measurable outcomes to project examples.",
-      "evidenceTurnIds": [11]
+      "rationale": "Ứng viên mô tả implementation cụ thể.",
+      "strengths": ["Hiểu Spring Boot"],
+      "gaps": ["Chưa định lượng production impact"],
+      "feedback": "Bổ sung outcome đo được.",
+      "evidenceTurnIds": [9002]
     }
   ],
-  "completedAt": "2026-09-07T08:00:00Z"
+  "completedAt": "2026-09-07T08:29:00Z"
 }
 ```
 
-When coverage is below the configured threshold, `overallScore` is `null` even
-though focus-area feedback remains available.
+```ts
+type AssessmentConfidence = "LOW" | "MEDIUM" | "HIGH";
+type EvidenceStatus = "NOT_EXPLORED" | "PARTIAL" | "SUFFICIENT";
 
-## Retry failed scoring
+interface InterviewReport {
+  sessionId: number;
+  status: "SCORING" | "SCORING_FAILED" | "COMPLETED";
+  scoringErrorCode: string | null;
+  scoringErrorMessage: string | null;
+  technicalScore: number | null;
+  communicationScore: number | null;
+  overallScore: number | null;
+  coveragePercentage: number | null;
+  confidence: AssessmentConfidence | null;
+  overallSummary: string | null;
+  strengths: Array<{ title: string; description: string; evidenceTurnIds: number[] }>;
+  improvements: Array<{ title: string; description: string; evidenceTurnIds: number[] }>;
+  actionPlan: Array<{ priority: number; action: string; reason: string; suggestion: string }>;
+  communicationFeedback: string | null;
+  focusAreas: Array<{
+    focusAreaId: number; code: string; name: string;
+    priority: "HIGH" | "MEDIUM" | "LOW"; displayOrder: number;
+    score: number | null; confidence: AssessmentConfidence; evidenceStatus: EvidenceStatus;
+    rationale: string; strengths: string[]; gaps: string[]; feedback: string;
+    evidenceTurnIds: number[];
+  }>;
+  completedAt: string | null;
+}
+```
+
+Backend tính aggregate:
+
+- Priority weight: `HIGH=3`, `MEDIUM=2`, `LOW=1`.
+- Coverage factor: `NOT_EXPLORED=0`, `PARTIAL=0.5`, `SUFFICIENT=1`.
+- Technical score là weighted mean các focus area có score.
+- Overall mặc định = `technical * 0.8 + communication * 0.2`.
+- Nếu coverage dưới ngưỡng config (mặc định hiện tại 50%), `overallScore=null` và confidence `LOW`; feedback theo area vẫn có.
+
+UI coi `overallScore: null` là “chưa đủ evidence”, không hiển thị thành 0.
+
+## 9. Retry scoring
 
 ```http
 POST /api/interview-sessions/{sessionId}/scoring/retry
-Authorization: Bearer <access-token>
+Authorization: Bearer <accessToken>
 ```
 
-Only `SCORING_FAILED` sessions can be retried. The response is `202 Accepted`
-with status `SCORING`; the worker is dispatched after the retry transaction
-commits.
+Response `202 InterviewReport` với status `SCORING`. Chỉ `SCORING_FAILED` được retry; state khác trả `409 INTERVIEW_SCORING_NOT_RETRYABLE`. Tiếp tục poll report sau response.
 
-## State transitions added in phase 2
+## Error code theo phase
 
-```text
-READY -> IN_PROGRESS
-IN_PROGRESS -> SCORING
-SCORING -> COMPLETED
-SCORING -> SCORING_FAILED
-SCORING_FAILED -> SCORING
-```
+| Phase | Code chính |
+|---|---|
+| Create | `INTERVIEW_SESSION_OPTION_INVALID`, `INTERVIEW_SESSION_IDEMPOTENCY_CONFLICT`, template/profile errors |
+| Preparation | `INTERVIEW_SESSION_PREPARATION_FAILED`, `INTERVIEW_SESSION_PREPARATION_NOT_RETRYABLE`, `AI_*` trong status |
+| Start | `INTERVIEW_SESSION_NOT_STARTABLE` |
+| Answer | `INTERVIEW_SESSION_NOT_IN_PROGRESS`, `INTERVIEW_TURN_OUT_OF_SEQUENCE`, `INTERVIEW_TURN_IDEMPOTENCY_CONFLICT`, `INTERVIEW_TURN_PROCESSING`, `AI_*` |
+| Report | `INTERVIEW_REPORT_NOT_AVAILABLE`, `INTERVIEW_SCORING_FAILED`, `INTERVIEW_SCORING_NOT_RETRYABLE` |
+| Mọi phase | `INTERVIEW_SESSION_NOT_FOUND`, auth/common errors |
 
-Each transition updates the session activity time and appends an audit record
-in the same transaction.

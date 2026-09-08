@@ -35,6 +35,6 @@ public class JobDescriptionAnalysisServiceImpl implements JobDescriptionAnalysis
         JobAnalysis analysis = aiService.generateStructured(
                 prompt, Map.of("context", context), JobAnalysis.class);
 
-        return validator.validate(analysis, jobDescriptionText);
+        return validator.validate(analysis);
     }
 }

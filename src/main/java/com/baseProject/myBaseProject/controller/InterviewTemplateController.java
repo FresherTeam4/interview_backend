@@ -1,12 +1,10 @@
 package com.baseProject.myBaseProject.controller;
 
 import com.baseProject.myBaseProject.config.OpenApiConfig;
-import com.baseProject.myBaseProject.dto.template.ConfirmInterviewTemplateRequest;
 import com.baseProject.myBaseProject.dto.template.InterviewTemplateResponse;
 import com.baseProject.myBaseProject.dto.template.InterviewTemplateSummaryResponse;
-import com.baseProject.myBaseProject.dto.template.PublishInterviewTemplateRequest;
 import com.baseProject.myBaseProject.dto.template.TemplatePageResponse;
-import com.baseProject.myBaseProject.dto.template.TemplateStateRequest;
+import com.baseProject.myBaseProject.dto.template.TemplateVersionRequest;
 import com.baseProject.myBaseProject.dto.template.UpdateInterviewTemplateRequest;
 import com.baseProject.myBaseProject.security.CustomUserDetails;
 import com.baseProject.myBaseProject.security.authorization.CurrentUser;
@@ -63,30 +61,30 @@ public class InterviewTemplateController {
     @Operation(summary = "Confirm and freeze an interview template")
     public InterviewTemplateResponse confirm(
             @CurrentUser CustomUserDetails user, @PathVariable Long id,
-            @Valid @RequestBody ConfirmInterviewTemplateRequest request) {
-        return service.confirm(user.getId(), id, request);
+            @Valid @RequestBody TemplateVersionRequest request) {
+        return service.confirm(user.getId(), id, request.expectedVersion());
     }
 
     @PostMapping("/{id}/publish")
     @IsAdmin
     public InterviewTemplateResponse publish(
             @CurrentUser CustomUserDetails user, @PathVariable Long id,
-            @Valid @RequestBody PublishInterviewTemplateRequest request) {
-        return service.publish(user.getId(), id, request);
+            @Valid @RequestBody TemplateVersionRequest request) {
+        return service.publish(user.getId(), id, request.expectedVersion());
     }
 
     @PostMapping("/{id}/unpublish")
     @IsAdmin
     public InterviewTemplateResponse unpublish(
             @CurrentUser CustomUserDetails user, @PathVariable Long id,
-            @Valid @RequestBody TemplateStateRequest request) {
+            @Valid @RequestBody TemplateVersionRequest request) {
         return service.unpublish(user.getId(), id, request.expectedVersion());
     }
 
     @PostMapping("/{id}/archive")
     public InterviewTemplateResponse archive(
             @CurrentUser CustomUserDetails user, @PathVariable Long id,
-            @Valid @RequestBody TemplateStateRequest request) {
+            @Valid @RequestBody TemplateVersionRequest request) {
         return service.archive(user.getId(), id, request.expectedVersion());
     }
 }

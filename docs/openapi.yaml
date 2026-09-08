@@ -1,0 +1,1188 @@
+openapi: 3.0.3
+info:
+  title: My Interview API
+  version: 1.0.0
+  description: Frontend contract verified against the current Spring Boot implementation.
+servers:
+  - url: http://localhost:8080
+tags:
+  - name: Auth
+    description: Authentication, token rotation, and current-user endpoints.
+  - name: CV and Profile
+    description: Combined CV upload, parsing, review, editing, and confirmation flow.
+  - name: JD and Template
+    description: Combined job-description analysis and interview-template flow.
+  - name: Interview
+    description: Interview preparation, conversation, scoring, and reporting.
+
+paths:
+  /api/auth/register:
+    post:
+      tags: [Auth]
+      operationId: register
+      summary: Register a user
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/RegisterRequest'}
+      responses:
+        '201':
+          description: Registered; also sets the refresh-token cookie.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AuthResponse'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '409': {$ref: '#/components/responses/Conflict'}
+  /api/auth/login:
+    post:
+      tags: [Auth]
+      operationId: login
+      summary: Log in with email and password
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/LoginRequest'}
+      responses:
+        '200':
+          description: Logged in; also sets the refresh-token cookie.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AuthResponse'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+  /api/auth/google:
+    post:
+      tags: [Auth]
+      operationId: loginWithGoogle
+      summary: Log in with a Google ID token
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/GoogleLoginRequest'}
+      responses:
+        '200':
+          description: Logged in; also sets the refresh-token cookie.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AuthResponse'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '503': {$ref: '#/components/responses/ServiceUnavailable'}
+  /api/auth/me:
+    get:
+      tags: [Auth]
+      operationId: getCurrentUser
+      summary: Get the current user
+      responses:
+        '200':
+          description: Current user.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/CurrentUserResponse'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+  /api/auth/refresh:
+    post:
+      tags: [Auth]
+      operationId: refreshAccessToken
+      summary: Rotate the refresh token
+      security:
+        - refreshCookie: []
+      responses:
+        '200':
+          description: Rotated refresh token and new access token.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AuthResponse'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+  /api/auth/logout:
+    post:
+      tags: [Auth]
+      operationId: logout
+      summary: Log out the current device
+      security: []
+      responses:
+        '204': {description: Logged out and refresh cookie cleared.}
+  /api/auth/logout-all:
+    post:
+      tags: [Auth]
+      operationId: logoutAll
+      summary: Log out all devices
+      responses:
+        '204': {description: All refresh tokens revoked.}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+
+  /api/cvs:
+    post:
+      tags: [CV and Profile]
+      operationId: uploadCv
+      summary: Upload and parse a CV
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file: {type: string, format: binary}
+      responses:
+        '200':
+          description: Reused an existing parsed CV and profile.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/CvDocument'}
+        '202':
+          description: Created and queued a new CV.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/CvDocument'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '413': {$ref: '#/components/responses/ContentTooLarge'}
+        '415': {$ref: '#/components/responses/UnsupportedMediaType'}
+    get:
+      tags: [CV and Profile]
+      operationId: listCvs
+      summary: List active CVs
+      responses:
+        '200':
+          description: Active CVs, newest first.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/CvDocument'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+  /api/cvs/{cvId}:
+    parameters:
+      - {$ref: '#/components/parameters/CvId'}
+    get:
+      tags: [CV and Profile]
+      operationId: getCv
+      summary: Get CV processing status
+      responses:
+        '200':
+          description: CV status.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/CvDocument'}
+        '404': {$ref: '#/components/responses/NotFound'}
+    delete:
+      tags: [CV and Profile]
+      operationId: deleteCv
+      summary: Soft-delete a CV
+      responses:
+        '204': {description: Soft-deleted.}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+  /api/cvs/{cvId}/file:
+    parameters:
+      - {$ref: '#/components/parameters/CvId'}
+    get:
+      tags: [CV and Profile]
+      operationId: getCvFileUrl
+      summary: Get a temporary CV file URL
+      responses:
+        '200':
+          description: Presigned URL valid for five minutes.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/FileUrlResponse'}
+        '404': {$ref: '#/components/responses/NotFound'}
+  /api/cvs/{cvId}/parse:
+    parameters:
+      - {$ref: '#/components/parameters/CvId'}
+    post:
+      tags: [CV and Profile]
+      operationId: retryCvParse
+      summary: Retry failed CV parsing
+      responses:
+        '202':
+          description: Parsing redispatched.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/CvDocument'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+
+  /api/profiles:
+    get:
+      tags: [CV and Profile]
+      operationId: listProfiles
+      summary: List candidate profiles
+      responses:
+        '200':
+          description: Profiles backed by active CVs.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/ProfileSummary'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+  /api/profiles/{profileId}:
+    parameters:
+      - {$ref: '#/components/parameters/ProfileId'}
+    get:
+      tags: [CV and Profile]
+      operationId: getProfile
+      summary: Get a candidate profile
+      responses:
+        '200':
+          description: Candidate profile.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/CandidateProfile'}
+        '404': {$ref: '#/components/responses/NotFound'}
+    put:
+      tags: [CV and Profile]
+      operationId: updateProfile
+      summary: Replace a candidate profile
+      description: Full replacement of scalars and all three child collections.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/ProfileUpdateRequest'}
+      responses:
+        '200':
+          description: Updated profile.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/CandidateProfile'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+  /api/profiles/{profileId}/confirm:
+    parameters:
+      - {$ref: '#/components/parameters/ProfileId'}
+    post:
+      tags: [CV and Profile]
+      operationId: confirmProfile
+      summary: Confirm a candidate profile
+      responses:
+        '200':
+          description: Confirmed profile; the operation is idempotent.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/CandidateProfile'}
+        '404': {$ref: '#/components/responses/NotFound'}
+
+  /api/job-descriptions:
+    post:
+      tags: [JD and Template]
+      operationId: createJobDescription
+      summary: Submit a PDF or text job description
+      description: Select request-body content type to upload a PDF or submit text.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file: {type: string, format: binary}
+          application/json:
+            schema: {$ref: '#/components/schemas/CreateJobDescriptionTextRequest'}
+      responses:
+        '200':
+          description: Reused a ready JD with an editable draft template.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/JobDescription'}
+        '202':
+          description: Created and queued a new JD.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/JobDescription'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '413': {$ref: '#/components/responses/ContentTooLarge'}
+        '415': {$ref: '#/components/responses/UnsupportedMediaType'}
+    get:
+      tags: [JD and Template]
+      operationId: listJobDescriptions
+      summary: List active job descriptions
+      responses:
+        '200':
+          description: Active JDs, newest first.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/JobDescription'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+  /api/job-descriptions/{jobDescriptionId}:
+    parameters:
+      - {$ref: '#/components/parameters/JobDescriptionId'}
+    get:
+      tags: [JD and Template]
+      operationId: getJobDescription
+      summary: Get job-description processing status
+      responses:
+        '200':
+          description: JD pipeline status.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/JobDescription'}
+        '404': {$ref: '#/components/responses/NotFound'}
+    delete:
+      tags: [JD and Template]
+      operationId: deleteJobDescription
+      summary: Soft-delete a job description
+      responses:
+        '204': {description: Soft-deleted; its template is retained.}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+  /api/job-descriptions/{jobDescriptionId}/file:
+    parameters:
+      - {$ref: '#/components/parameters/JobDescriptionId'}
+    get:
+      tags: [JD and Template]
+      operationId: getJobDescriptionFileUrl
+      summary: Get a temporary job-description file URL
+      responses:
+        '200':
+          description: Presigned URL valid for five minutes.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/FileUrlResponse'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+  /api/job-descriptions/{jobDescriptionId}/analysis:
+    parameters:
+      - {$ref: '#/components/parameters/JobDescriptionId'}
+    get:
+      tags: [JD and Template]
+      operationId: getJobDescriptionAnalysis
+      summary: Get immutable job-description analysis
+      responses:
+        '200':
+          description: Immutable extracted text and AI analysis.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/JobDescriptionAnalysisResponse'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+  /api/job-descriptions/{jobDescriptionId}/retry:
+    parameters:
+      - {$ref: '#/components/parameters/JobDescriptionId'}
+    post:
+      tags: [JD and Template]
+      operationId: retryJobDescription
+      summary: Retry failed job-description processing
+      responses:
+        '202':
+          description: Processing redispatched.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/JobDescription'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+
+  /api/interview-templates:
+    get:
+      tags: [JD and Template]
+      operationId: listInterviewTemplates
+      summary: List owned or public templates
+      parameters:
+        - name: scope
+          in: query
+          schema: {type: string, enum: [mine, public], default: mine}
+        - name: page
+          in: query
+          schema: {type: integer, minimum: 0, default: 0}
+        - name: size
+          in: query
+          schema: {type: integer, minimum: 1, maximum: 100, default: 20}
+      responses:
+        '200':
+          description: Template page.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/TemplatePage'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+  /api/interview-templates/{templateId}:
+    parameters:
+      - {$ref: '#/components/parameters/TemplateId'}
+    get:
+      tags: [JD and Template]
+      operationId: getInterviewTemplate
+      summary: Get an interview template
+      responses:
+        '200':
+          description: Owned or public template.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/InterviewTemplate'}
+        '404': {$ref: '#/components/responses/NotFound'}
+    put:
+      tags: [JD and Template]
+      operationId: updateInterviewTemplate
+      summary: Update a draft interview template
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/UpdateInterviewTemplateRequest'}
+      responses:
+        '200':
+          description: Updated draft template.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/InterviewTemplate'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '422': {$ref: '#/components/responses/Unprocessable'}
+  /api/interview-templates/{templateId}/confirm:
+    parameters:
+      - {$ref: '#/components/parameters/TemplateId'}
+    post:
+      tags: [JD and Template]
+      operationId: confirmInterviewTemplate
+      summary: Confirm and freeze a template
+      requestBody: {$ref: '#/components/requestBodies/TemplateVersion'}
+      responses:
+        '200':
+          description: Confirmed and frozen template.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/InterviewTemplate'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+  /api/interview-templates/{templateId}/publish:
+    parameters:
+      - {$ref: '#/components/parameters/TemplateId'}
+    post:
+      tags: [JD and Template]
+      operationId: publishInterviewTemplate
+      summary: Publish a confirmed template
+      description: Requires ADMIN and ownership.
+      requestBody: {$ref: '#/components/requestBodies/TemplateVersion'}
+      responses:
+        '200':
+          description: Published template.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/InterviewTemplate'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+  /api/interview-templates/{templateId}/unpublish:
+    parameters:
+      - {$ref: '#/components/parameters/TemplateId'}
+    post:
+      tags: [JD and Template]
+      operationId: unpublishInterviewTemplate
+      summary: Unpublish a template
+      description: Requires ADMIN and ownership.
+      requestBody: {$ref: '#/components/requestBodies/TemplateVersion'}
+      responses:
+        '200':
+          description: Unpublished template.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/InterviewTemplate'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+  /api/interview-templates/{templateId}/archive:
+    parameters:
+      - {$ref: '#/components/parameters/TemplateId'}
+    post:
+      tags: [JD and Template]
+      operationId: archiveInterviewTemplate
+      summary: Archive a template
+      requestBody: {$ref: '#/components/requestBodies/TemplateVersion'}
+      responses:
+        '200':
+          description: Archived and unpublished template.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/InterviewTemplate'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+
+  /api/interview-session-options:
+    get:
+      tags: [Interview]
+      operationId: getInterviewSessionOptions
+      summary: Get supported interview options
+      responses:
+        '200':
+          description: Server-supported options.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/InterviewSessionOptions'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+  /api/interview-sessions:
+    post:
+      tags: [Interview]
+      operationId: createInterviewSession
+      summary: Create and prepare an interview session
+      parameters:
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/CreateInterviewSessionRequest'}
+      responses:
+        '202':
+          description: Existing or newly created session; preparation is asynchronous.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/InterviewSessionStatus'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+  /api/interview-sessions/{sessionId}:
+    parameters:
+      - {$ref: '#/components/parameters/SessionId'}
+    get:
+      tags: [Interview]
+      operationId: getInterviewSession
+      summary: Get interview session status
+      responses:
+        '200':
+          description: Session state.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/InterviewSessionStatus'}
+        '404': {$ref: '#/components/responses/NotFound'}
+  /api/interview-sessions/{sessionId}/preparation/retry:
+    parameters:
+      - {$ref: '#/components/parameters/SessionId'}
+    post:
+      tags: [Interview]
+      operationId: retryInterviewPreparation
+      summary: Retry failed interview preparation
+      responses:
+        '202':
+          description: Preparation redispatched.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/InterviewSessionStatus'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+  /api/interview-sessions/{sessionId}/start:
+    parameters:
+      - {$ref: '#/components/parameters/SessionId'}
+    post:
+      tags: [Interview]
+      operationId: startInterview
+      summary: Start a prepared interview
+      responses:
+        '200':
+          description: Started or already-running conversation.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/InterviewConversation'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+  /api/interview-sessions/{sessionId}/conversation:
+    parameters:
+      - {$ref: '#/components/parameters/SessionId'}
+    get:
+      tags: [Interview]
+      operationId: getInterviewConversation
+      summary: Get the persisted conversation
+      responses:
+        '200':
+          description: Persisted conversation and timer snapshot.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/InterviewConversation'}
+        '404': {$ref: '#/components/responses/NotFound'}
+  /api/interview-sessions/{sessionId}/answers:
+    parameters:
+      - {$ref: '#/components/parameters/SessionId'}
+    post:
+      tags: [Interview]
+      operationId: submitInterviewAnswer
+      summary: Submit an answer and generate a reply
+      description: Long-running synchronous AI request; reuse the same key and payload on retry.
+      parameters:
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/SubmitInterviewAnswerRequest'}
+      responses:
+        '200':
+          description: Candidate turn plus persisted interviewer reply, if one was produced.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/InterviewAnswerResponse'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '500': {$ref: '#/components/responses/ServerError'}
+        '503': {$ref: '#/components/responses/ServiceUnavailable'}
+        '504': {$ref: '#/components/responses/GatewayTimeout'}
+  /api/interview-sessions/{sessionId}/finish:
+    parameters:
+      - {$ref: '#/components/parameters/SessionId'}
+    post:
+      tags: [Interview]
+      operationId: finishInterview
+      summary: Finish an interview early
+      responses:
+        '200':
+          description: Conversation after moving to scoring.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/InterviewConversation'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+  /api/interview-sessions/{sessionId}/report:
+    parameters:
+      - {$ref: '#/components/parameters/SessionId'}
+    get:
+      tags: [Interview]
+      operationId: getInterviewReport
+      summary: Get scoring status or report
+      responses:
+        '200':
+          description: Scoring status, failure, or completed report.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/InterviewReport'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+  /api/interview-sessions/{sessionId}/scoring/retry:
+    parameters:
+      - {$ref: '#/components/parameters/SessionId'}
+    post:
+      tags: [Interview]
+      operationId: retryInterviewScoring
+      summary: Retry failed scoring
+      responses:
+        '202':
+          description: Scoring redispatched.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/InterviewReport'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    refreshCookie:
+      type: apiKey
+      in: cookie
+      name: refresh_token
+  parameters:
+    CvId:
+      name: cvId
+      in: path
+      required: true
+      schema: {type: integer, format: int64, minimum: 1}
+    ProfileId:
+      name: profileId
+      in: path
+      required: true
+      schema: {type: integer, format: int64, minimum: 1}
+    JobDescriptionId:
+      name: jobDescriptionId
+      in: path
+      required: true
+      schema: {type: integer, format: int64, minimum: 1}
+    TemplateId:
+      name: templateId
+      in: path
+      required: true
+      schema: {type: integer, format: int64, minimum: 1}
+    SessionId:
+      name: sessionId
+      in: path
+      required: true
+      schema: {type: integer, format: int64, minimum: 1}
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema: {type: string, minLength: 1, maxLength: 100}
+  requestBodies:
+    TemplateVersion:
+      required: true
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/TemplateVersionRequest'}
+  responses:
+    BadRequest:
+      description: Invalid input.
+      content: {application/json: {schema: {$ref: '#/components/schemas/ApiError'}}}
+    Unauthorized:
+      description: Missing or invalid authentication.
+      content: {application/json: {schema: {$ref: '#/components/schemas/ApiError'}}}
+    Forbidden:
+      description: Authenticated but not allowed.
+      content: {application/json: {schema: {$ref: '#/components/schemas/ApiError'}}}
+    NotFound:
+      description: Resource not found or inaccessible.
+      content: {application/json: {schema: {$ref: '#/components/schemas/ApiError'}}}
+    Conflict:
+      description: State, idempotency, version, or limit conflict.
+      content: {application/json: {schema: {$ref: '#/components/schemas/ApiError'}}}
+    ContentTooLarge:
+      description: Upload or text is too large.
+      content: {application/json: {schema: {$ref: '#/components/schemas/ApiError'}}}
+    UnsupportedMediaType:
+      description: Only a valid PDF is accepted.
+      content: {application/json: {schema: {$ref: '#/components/schemas/ApiError'}}}
+    Unprocessable:
+      description: Semantically invalid content or failed processing.
+      content: {application/json: {schema: {$ref: '#/components/schemas/ApiError'}}}
+    ServerError:
+      description: Internal or AI-output error.
+      content: {application/json: {schema: {$ref: '#/components/schemas/ApiError'}}}
+    ServiceUnavailable:
+      description: AI, storage, or configuration unavailable.
+      content: {application/json: {schema: {$ref: '#/components/schemas/ApiError'}}}
+    GatewayTimeout:
+      description: AI timed out.
+      content: {application/json: {schema: {$ref: '#/components/schemas/ApiError'}}}
+  schemas:
+    ApiError:
+      type: object
+      required: [timestamp, status, code, message, path]
+      properties:
+        timestamp: {type: string, format: date-time}
+        status: {type: integer}
+        code: {type: string}
+        message: {type: string}
+        path: {type: string}
+        fieldErrors:
+          type: object
+          nullable: true
+          additionalProperties: {type: string}
+    UserRole: {type: string, enum: [ADMIN, USER]}
+    RegisterRequest:
+      type: object
+      required: [fullName, email, password]
+      properties:
+        fullName: {type: string, minLength: 1, maxLength: 150}
+        email: {type: string, format: email, minLength: 1, maxLength: 150}
+        password: {type: string, minLength: 6, maxLength: 100, writeOnly: true}
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email: {type: string, format: email}
+        password: {type: string, minLength: 1, writeOnly: true}
+    GoogleLoginRequest:
+      type: object
+      required: [idToken]
+      properties:
+        idToken: {type: string, minLength: 1, writeOnly: true}
+    AuthResponse:
+      type: object
+      required: [accessToken, userId, email, role]
+      properties:
+        accessToken: {type: string}
+        userId: {type: integer, format: int64}
+        email: {type: string, format: email}
+        role: {$ref: '#/components/schemas/UserRole'}
+    CurrentUserResponse:
+      type: object
+      required: [id, fullName, email, role, createdAt, updatedAt]
+      properties:
+        id: {type: integer, format: int64}
+        fullName: {type: string}
+        email: {type: string, format: email}
+        avatarUrl: {type: string, format: uri, nullable: true}
+        role: {$ref: '#/components/schemas/UserRole'}
+        createdAt: {type: string, format: date-time}
+        updatedAt: {type: string, format: date-time}
+    CvDocument:
+      type: object
+      required: [id, originalFilename, contentType, fileSizeBytes, status, uploadedAt, profileConfirmed]
+      properties:
+        id: {type: integer, format: int64}
+        originalFilename: {type: string}
+        contentType: {type: string}
+        fileSizeBytes: {type: integer, format: int64}
+        status: {type: string, enum: [UPLOADED, PARSING, PARSED, FAILED]}
+        statusMessage: {type: string, nullable: true}
+        uploadedAt: {type: string, format: date-time}
+        parsedAt: {type: string, format: date-time, nullable: true}
+        profileId: {type: integer, format: int64, nullable: true}
+        profileConfirmed: {type: boolean}
+        profileHeadline: {type: string, nullable: true}
+    FileUrlResponse:
+      type: object
+      required: [url, expiresAt]
+      properties:
+        url: {type: string, format: uri}
+        expiresAt: {type: string, format: date-time}
+    ProfileEducation:
+      type: object
+      required: [school]
+      properties:
+        id: {type: integer, format: int64, minimum: 1, nullable: true}
+        school: {type: string, minLength: 1, maxLength: 255}
+        degree: {type: string, maxLength: 150, nullable: true}
+        fieldOfStudy: {type: string, maxLength: 150, nullable: true}
+        startYear: {type: integer, minimum: 1900, maximum: 2100, nullable: true}
+        endYear: {type: integer, minimum: 1900, maximum: 2100, nullable: true}
+        userEdited: {type: boolean, nullable: true, readOnly: true}
+        displayOrder: {type: integer, nullable: true, readOnly: true}
+    ProfileSkill:
+      type: object
+      required: [name]
+      properties:
+        id: {type: integer, format: int64, minimum: 1, nullable: true}
+        name: {type: string, minLength: 1, maxLength: 80}
+        category: {type: string, maxLength: 50, nullable: true}
+        userEdited: {type: boolean, nullable: true, readOnly: true}
+        displayOrder: {type: integer, nullable: true, readOnly: true}
+    ProfileProject:
+      type: object
+      required: [name]
+      properties:
+        id: {type: integer, format: int64, minimum: 1, nullable: true}
+        name: {type: string, minLength: 1, maxLength: 255}
+        description: {type: string, maxLength: 5000, nullable: true}
+        roleInProject: {type: string, maxLength: 150, nullable: true}
+        techStack: {type: string, maxLength: 500, nullable: true}
+        startDate: {type: string, format: date, nullable: true}
+        endDate: {type: string, format: date, nullable: true}
+        userEdited: {type: boolean, nullable: true, readOnly: true}
+        displayOrder: {type: integer, nullable: true, readOnly: true}
+    ProfileSummary:
+      type: object
+      required: [id, version, name, cvDocumentId, cvOriginalFilename, source, educationCount, skillCount, projectCount, createdAt, updatedAt]
+      properties:
+        id: {type: integer, format: int64}
+        version: {type: integer, format: int64}
+        name: {type: string}
+        cvDocumentId: {type: integer, format: int64}
+        cvOriginalFilename: {type: string}
+        headline: {type: string, nullable: true}
+        targetPosition: {type: string, nullable: true}
+        seniorityLevel: {type: string, nullable: true}
+        source: {type: string, enum: [AUTO_PARSED, USER_EDITED]}
+        confirmedAt: {type: string, format: date-time, nullable: true}
+        educationCount: {type: integer}
+        skillCount: {type: integer}
+        projectCount: {type: integer}
+        createdAt: {type: string, format: date-time}
+        updatedAt: {type: string, format: date-time}
+    CandidateProfile:
+      type: object
+      required: [id, version, name, cvDocumentId, cvOriginalFilename, source, createdAt, updatedAt, educations, skills, projects]
+      properties:
+        id: {type: integer, format: int64}
+        version: {type: integer, format: int64}
+        name: {type: string}
+        cvDocumentId: {type: integer, format: int64}
+        cvOriginalFilename: {type: string}
+        headline: {type: string, nullable: true}
+        summary: {type: string, nullable: true}
+        yearsExperience: {type: number, multipleOf: 0.1, minimum: 0, maximum: 99.9, nullable: true}
+        targetPosition: {type: string, nullable: true}
+        seniorityLevel: {type: string, nullable: true}
+        source: {type: string, enum: [AUTO_PARSED, USER_EDITED]}
+        confirmedAt: {type: string, format: date-time, nullable: true}
+        createdAt: {type: string, format: date-time}
+        updatedAt: {type: string, format: date-time}
+        educations: {type: array, items: {$ref: '#/components/schemas/ProfileEducation'}}
+        skills: {type: array, items: {$ref: '#/components/schemas/ProfileSkill'}}
+        projects: {type: array, items: {$ref: '#/components/schemas/ProfileProject'}}
+    ProfileUpdateRequest:
+      type: object
+      required: [version, name, educations, skills, projects]
+      properties:
+        version: {type: integer, format: int64, minimum: 0}
+        name: {type: string, minLength: 1, maxLength: 150}
+        headline: {type: string, maxLength: 255, nullable: true}
+        summary: {type: string, maxLength: 5000, nullable: true}
+        yearsExperience: {type: number, multipleOf: 0.1, minimum: 0, maximum: 99.9, nullable: true}
+        targetPosition: {type: string, maxLength: 150, nullable: true}
+        seniorityLevel: {type: string, maxLength: 30, nullable: true}
+        educations: {type: array, maxItems: 20, items: {$ref: '#/components/schemas/ProfileEducation'}}
+        skills: {type: array, maxItems: 100, items: {$ref: '#/components/schemas/ProfileSkill'}}
+        projects: {type: array, maxItems: 50, items: {$ref: '#/components/schemas/ProfileProject'}}
+    CreateJobDescriptionTextRequest:
+      type: object
+      required: [title, text]
+      properties:
+        title: {type: string, minLength: 1, maxLength: 200}
+        text: {type: string, minLength: 1, maxLength: 30000}
+    JobAnalysis:
+      type: object
+      required: [sufficientJobContext, sourceLanguage, summary, keySkills]
+      properties:
+        sufficientJobContext: {type: boolean}
+        sourceLanguage: {type: string, minLength: 1, maxLength: 20}
+        jobTitle: {type: string, maxLength: 150, nullable: true}
+        targetSeniority: {type: string, maxLength: 100, nullable: true}
+        domain: {type: string, maxLength: 150, nullable: true}
+        summary: {type: string, minLength: 1, maxLength: 3000}
+        keySkills:
+          type: array
+          minItems: 1
+          maxItems: 30
+          items:
+            type: object
+            required: [name, level]
+            properties:
+              name: {type: string, minLength: 1, maxLength: 150}
+              level: {type: string, enum: [MUST_HAVE, NICE_TO_HAVE]}
+              description: {type: string, maxLength: 1000, nullable: true}
+    JobDescription:
+      type: object
+      required: [id, sourceType, originalFilename, contentType, fileSizeBytes, status, uploadedAt, templateConfirmed]
+      properties:
+        id: {type: integer, format: int64}
+        sourceType: {type: string, enum: [FILE, TEXT]}
+        originalFilename: {type: string}
+        contentType: {type: string}
+        fileSizeBytes: {type: integer, format: int64}
+        status: {type: string, enum: [UPLOADED, EXTRACTING, ANALYZING, READY, FAILED]}
+        errorCode: {type: string, nullable: true}
+        failureStage: {type: string, enum: [DISPATCH, EXTRACTION, ANALYSIS], nullable: true}
+        statusMessage: {type: string, nullable: true}
+        uploadedAt: {type: string, format: date-time}
+        processedAt: {type: string, format: date-time, nullable: true}
+        templateId: {type: integer, format: int64, nullable: true}
+        templateConfirmed: {type: boolean}
+        templateTitle: {type: string, nullable: true}
+    JobDescriptionAnalysisResponse:
+      type: object
+      required: [jobDescriptionId, extractedText, analysis, schemaVersion, modelName, durationMs, createdAt]
+      properties:
+        jobDescriptionId: {type: integer, format: int64}
+        extractedText: {type: string}
+        analysis: {$ref: '#/components/schemas/JobAnalysis'}
+        schemaVersion: {type: string}
+        modelName: {type: string}
+        durationMs: {type: integer}
+        tokenCount: {type: integer, nullable: true}
+        createdAt: {type: string, format: date-time}
+    InterviewTemplateSummary:
+      type: object
+      required: [id, sourceJobDescriptionId, title, confirmed, published, updatedAt]
+      properties:
+        id: {type: integer, format: int64}
+        sourceJobDescriptionId: {type: integer, format: int64}
+        title: {type: string}
+        jobTitle: {type: string, nullable: true}
+        targetSeniority: {type: string, nullable: true}
+        confirmed: {type: boolean}
+        published: {type: boolean}
+        archivedAt: {type: string, format: date-time, nullable: true}
+        updatedAt: {type: string, format: date-time}
+    InterviewTemplate:
+      allOf:
+        - {$ref: '#/components/schemas/InterviewTemplateSummary'}
+        - type: object
+          required: [content, version, createdAt]
+          properties:
+            content: {$ref: '#/components/schemas/JobAnalysis'}
+            confirmedAt: {type: string, format: date-time, nullable: true}
+            publishedAt: {type: string, format: date-time, nullable: true}
+            version: {type: integer, format: int64}
+            createdAt: {type: string, format: date-time}
+    TemplatePage:
+      type: object
+      required: [content, page, size, totalElements]
+      properties:
+        content: {type: array, items: {$ref: '#/components/schemas/InterviewTemplateSummary'}}
+        page: {type: integer}
+        size: {type: integer}
+        totalElements: {type: integer, format: int64}
+    UpdateInterviewTemplateRequest:
+      type: object
+      required: [title, content, expectedVersion]
+      properties:
+        title: {type: string, minLength: 1, maxLength: 200}
+        content: {$ref: '#/components/schemas/JobAnalysis'}
+        expectedVersion: {type: integer, format: int64, minimum: 0}
+    TemplateVersionRequest:
+      type: object
+      required: [expectedVersion]
+      properties:
+        expectedVersion: {type: integer, format: int64, minimum: 0}
+    InterviewerStyle: {type: string, enum: [FRIENDLY, PROFESSIONAL, CHALLENGING]}
+    InterviewSessionStatusEnum:
+      type: string
+      enum: [PREPARING, READY, PREPARATION_FAILED, IN_PROGRESS, SCORING, COMPLETED, SCORING_FAILED, CANCELLED, EXPIRED]
+    InterviewEndReason:
+      type: string
+      enum: [AI_COMPLETED, TIME_EXPIRED, CANDIDATE_FINISHED, SYSTEM_TERMINATED]
+      nullable: true
+    InterviewSessionOptions:
+      type: object
+      required: [languages, durations, interviewerStyles]
+      properties:
+        languages: {type: array, items: {$ref: '#/components/schemas/InterviewOption'}}
+        durations: {type: array, items: {type: integer}}
+        interviewerStyles: {type: array, items: {$ref: '#/components/schemas/InterviewOption'}}
+    InterviewOption:
+      type: object
+      required: [code, name]
+      properties:
+        code: {type: string}
+        name: {type: string}
+    CreateInterviewSessionRequest:
+      type: object
+      required: [templateId, profileId, languageCode, durationMinutes, interviewerStyle]
+      properties:
+        templateId: {type: integer, format: int64, minimum: 1}
+        profileId: {type: integer, format: int64, minimum: 1}
+        languageCode: {type: string, minLength: 1, maxLength: 10}
+        durationMinutes: {type: integer, minimum: 1}
+        interviewerStyle: {$ref: '#/components/schemas/InterviewerStyle'}
+    InterviewSessionStatus:
+      type: object
+      required: [id, status, templateTitle, profileName, languageCode, durationMinutes, interviewerStyle]
+      properties:
+        id: {type: integer, format: int64}
+        status: {$ref: '#/components/schemas/InterviewSessionStatusEnum'}
+        templateTitle: {type: string}
+        profileName: {type: string}
+        languageCode: {type: string}
+        durationMinutes: {type: integer}
+        interviewerStyle: {$ref: '#/components/schemas/InterviewerStyle'}
+        preparationErrorCode: {type: string, nullable: true}
+        preparationErrorMessage: {type: string, nullable: true}
+        scoringErrorCode: {type: string, nullable: true}
+        scoringErrorMessage: {type: string, nullable: true}
+        preparedAt: {type: string, format: date-time, nullable: true}
+        endReason: {$ref: '#/components/schemas/InterviewEndReason'}
+        endedAt: {type: string, format: date-time, nullable: true}
+        completedAt: {type: string, format: date-time, nullable: true}
+    CandidateIntent:
+      type: string
+      enum: [ANSWER, REQUEST_REPEAT, REQUEST_CLARIFICATION, REQUEST_TIME, ASK_INTERVIEWER, CANNOT_ANSWER, DECLINE_OR_SKIP, CORRECT_PREVIOUS_ANSWER, REQUEST_END, SOCIAL_OR_META, OFF_TOPIC, INAPPROPRIATE, OTHER]
+      nullable: true
+    InterviewTurnAction:
+      type: string
+      enum: [OPENING, EXPLORE, FOLLOW_UP, HANDLE_REQUEST, CLOSE]
+      nullable: true
+    InterviewTurn:
+      type: object
+      required: [id, turnIndex, role, content, createdAt]
+      properties:
+        id: {type: integer, format: int64}
+        turnIndex: {type: integer}
+        role: {type: string, enum: [INTERVIEWER, CANDIDATE]}
+        content: {type: string}
+        candidateIntent: {$ref: '#/components/schemas/CandidateIntent'}
+        action: {$ref: '#/components/schemas/InterviewTurnAction'}
+        focusAreaCode: {type: string, nullable: true}
+        requestId: {type: string, nullable: true}
+        processingStatus: {type: string, enum: [PROCESSING, COMPLETED, FAILED], nullable: true}
+        processingErrorCode: {type: string, nullable: true}
+        createdAt: {type: string, format: date-time}
+    InterviewConversation:
+      type: object
+      required: [sessionId, status, remainingSeconds, currentTurnIndex, turns]
+      properties:
+        sessionId: {type: integer, format: int64}
+        status: {$ref: '#/components/schemas/InterviewSessionStatusEnum'}
+        startedAt: {type: string, format: date-time, nullable: true}
+        deadlineAt: {type: string, format: date-time, nullable: true}
+        endReason: {$ref: '#/components/schemas/InterviewEndReason'}
+        endedAt: {type: string, format: date-time, nullable: true}
+        remainingSeconds: {type: integer, format: int64, minimum: 0}
+        currentTurnIndex: {type: integer, minimum: 0}
+        turns: {type: array, items: {$ref: '#/components/schemas/InterviewTurn'}}
+    SubmitInterviewAnswerRequest:
+      type: object
+      required: [expectedTurnIndex, answer]
+      properties:
+        expectedTurnIndex: {type: integer, minimum: 0}
+        answer: {type: string, minLength: 1, maxLength: 8000}
+    InterviewAnswerResponse:
+      type: object
+      required: [sessionId, status, remainingSeconds, currentTurnIndex]
+      properties:
+        sessionId: {type: integer, format: int64}
+        status: {$ref: '#/components/schemas/InterviewSessionStatusEnum'}
+        deadlineAt: {type: string, format: date-time, nullable: true}
+        endReason: {$ref: '#/components/schemas/InterviewEndReason'}
+        endedAt: {type: string, format: date-time, nullable: true}
+        remainingSeconds: {type: integer, format: int64, minimum: 0}
+        currentTurnIndex: {type: integer, minimum: 0}
+        candidateTurn:
+          type: object
+          allOf: [{$ref: '#/components/schemas/InterviewTurn'}]
+          nullable: true
+        interviewerTurn:
+          type: object
+          allOf: [{$ref: '#/components/schemas/InterviewTurn'}]
+          nullable: true
+    InterviewReport:
+      type: object
+      required: [sessionId, status, strengths, improvements, actionPlan, focusAreas]
+      properties:
+        sessionId: {type: integer, format: int64}
+        status: {$ref: '#/components/schemas/InterviewSessionStatusEnum'}
+        scoringErrorCode: {type: string, nullable: true}
+        scoringErrorMessage: {type: string, nullable: true}
+        technicalScore: {type: number, nullable: true}
+        communicationScore: {type: number, nullable: true}
+        overallScore: {type: number, nullable: true}
+        coveragePercentage: {type: number, nullable: true}
+        confidence: {type: string, enum: [LOW, MEDIUM, HIGH], nullable: true}
+        overallSummary: {type: string, nullable: true}
+        strengths: {type: array, items: {$ref: '#/components/schemas/ReportItem'}}
+        improvements: {type: array, items: {$ref: '#/components/schemas/ReportItem'}}
+        actionPlan: {type: array, items: {$ref: '#/components/schemas/ActionPlanItem'}}
+        communicationFeedback: {type: string, nullable: true}
+        focusAreas: {type: array, items: {$ref: '#/components/schemas/FocusAreaResult'}}
+        completedAt: {type: string, format: date-time, nullable: true}
+    ReportItem:
+      type: object
+      required: [title, description, evidenceTurnIds]
+      properties:
+        title: {type: string}
+        description: {type: string}
+        evidenceTurnIds: {type: array, items: {type: integer, format: int64}}
+    ActionPlanItem:
+      type: object
+      required: [priority, action, reason, suggestion]
+      properties:
+        priority: {type: integer}
+        action: {type: string}
+        reason: {type: string}
+        suggestion: {type: string}
+    FocusAreaResult:
+      type: object
+      required: [focusAreaId, code, name, priority, displayOrder, confidence, evidenceStatus, rationale, strengths, gaps, feedback, evidenceTurnIds]
+      properties:
+        focusAreaId: {type: integer, format: int64}
+        code: {type: string}
+        name: {type: string}
+        priority: {type: string, enum: [HIGH, MEDIUM, LOW]}
+        displayOrder: {type: integer}
+        score: {type: number, nullable: true}
+        confidence: {type: string, enum: [LOW, MEDIUM, HIGH]}
+        evidenceStatus: {type: string, enum: [NOT_EXPLORED, PARTIAL, SUFFICIENT]}
+        rationale: {type: string}
+        strengths: {type: array, items: {type: string}}
+        gaps: {type: array, items: {type: string}}
+        feedback: {type: string}
+        evidenceTurnIds: {type: array, items: {type: integer, format: int64}}
+
+security:
+  - bearerAuth: []

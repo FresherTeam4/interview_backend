@@ -3,7 +3,6 @@ package com.baseProject.myBaseProject.jobdescription.validation;
 import com.baseProject.myBaseProject.dto.ai.JobAnalysis;
 import com.baseProject.myBaseProject.exception.DomainException;
 import com.baseProject.myBaseProject.exception.ErrorCode;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 import java.util.HashSet;
@@ -11,19 +10,10 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 
-@Slf4j
 @Component
 public class JobAnalysisValidator {
 
-    public JobAnalysis validate(JobAnalysis result, String jd) {
-        return doValidate(result);
-    }
-
-    public JobAnalysis validateEditable(JobAnalysis result, String jd) {
-        return doValidate(result);
-    }
-
-    private JobAnalysis doValidate(JobAnalysis result) {
+    public JobAnalysis validate(JobAnalysis result) {
         if (result == null) {
             throw invalid("analysis is null");
         }
