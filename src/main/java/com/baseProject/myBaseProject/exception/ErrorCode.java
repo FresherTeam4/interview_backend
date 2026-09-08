@@ -54,18 +54,11 @@ public enum ErrorCode {
     JD_ANALYSIS_NOT_READY(HttpStatus.CONFLICT, Message.JD_ANALYSIS_NOT_READY),
 
     // ---- 404 ----
-    AGENT_NOT_FOUND(HttpStatus.NOT_FOUND, "Agent not found"),
     ENDPOINT_NOT_FOUND(HttpStatus.NOT_FOUND, Message.ENDPOINT_NOT_FOUND),
     RESOURCE_NOT_FOUND(HttpStatus.NOT_FOUND, "Resource not found"),
 
     // ---- 409 ----
     DUPLICATE_EMAIL(HttpStatus.CONFLICT, "Email already registered"),
-    DUPLICATE_REGISTRATION(HttpStatus.CONFLICT, "Duplicate registration"),
-    INVALID_EVENT_STATE(HttpStatus.CONFLICT, "Invalid event state"),
-    EVENT_FULL(HttpStatus.CONFLICT, "Event is full"),
-    EVENT_ALREADY_STARTED(HttpStatus.CONFLICT, "Event already started"),
-    REGISTRATION_ALREADY_CANCELLED(HttpStatus.CONFLICT, "Registration already cancelled"),
-    CAPACITY_BELOW_ACTIVE_REGISTRATIONS(HttpStatus.CONFLICT, "Capacity below active registrations"),
     DATA_CONSTRAINT_VIOLATION(HttpStatus.CONFLICT, Message.CONSTRAINT_VIOLATION),
 
     // ---- 400 ----
@@ -84,7 +77,6 @@ public enum ErrorCode {
     // ---- 405 / 500 / 503 ----
     METHOD_NOT_ALLOWED(HttpStatus.METHOD_NOT_ALLOWED, "Method not allowed"),
     INTERNAL_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, Message.INTERNAL_ERROR),
-    STORAGE_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "Storage operation failed"),
     GOOGLE_LOGIN_NOT_CONFIGURED(HttpStatus.SERVICE_UNAVAILABLE, Message.GOOGLE_LOGIN_NOT_CONFIGURED),
 
     // ---- AI / CV ----

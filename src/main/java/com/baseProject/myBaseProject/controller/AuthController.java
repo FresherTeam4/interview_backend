@@ -11,7 +11,6 @@ import com.baseProject.myBaseProject.exception.ApiError;
 import com.baseProject.myBaseProject.exception.DomainException;
 import com.baseProject.myBaseProject.exception.ErrorCode;
 import com.baseProject.myBaseProject.security.RefreshTokenCookieFactory;
-import com.baseProject.myBaseProject.security.SecurityUtils;
 import com.baseProject.myBaseProject.security.CustomUserDetails;
 import com.baseProject.myBaseProject.security.authorization.CurrentUser;
 import com.baseProject.myBaseProject.security.authorization.IsAuthenticated;
@@ -92,8 +91,8 @@ public class AuthController {
     @IsAuthenticated
     @SecurityRequirement(name = OpenApiConfig.BEARER_AUTH)
     @Operation(summary = "Đăng xuất mọi thiết bị")
-    public ResponseEntity<Void> logoutAll() {
-        SecurityUtils.currentUserId().ifPresent(authService::logoutAll);
+    public ResponseEntity<Void> logoutAll(@CurrentUser CustomUserDetails currentUser) {
+        authService.logoutAll(currentUser.getId());
 
         return ResponseEntity.noContent()
                 .header(HttpHeaders.SET_COOKIE, cookieFactory.clear().toString())

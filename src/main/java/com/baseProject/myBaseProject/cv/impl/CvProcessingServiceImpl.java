@@ -2,13 +2,13 @@ package com.baseProject.myBaseProject.cv.impl;
 
 import com.baseProject.myBaseProject.ai.support.AiExecutionMetadata;
 import com.baseProject.myBaseProject.config.AsyncConfig;
-import com.baseProject.myBaseProject.constant.Message;
 import com.baseProject.myBaseProject.cv.CvParsingService;
 import com.baseProject.myBaseProject.cv.CvProcessingService;
 import com.baseProject.myBaseProject.dto.ai.CvExtractionResult;
 import com.baseProject.myBaseProject.entity.CvDocument;
 import com.baseProject.myBaseProject.entity.CvParseResult;
 import com.baseProject.myBaseProject.enums.CvDocumentStatus;
+import com.baseProject.myBaseProject.exception.ErrorCode;
 import com.baseProject.myBaseProject.repository.CvDocumentRepository;
 import com.baseProject.myBaseProject.repository.CvParseResultRepository;
 import com.baseProject.myBaseProject.service.CandidateProfileService;
@@ -79,7 +79,7 @@ public class CvProcessingServiceImpl implements CvProcessingService {
             persistResult(cvDocumentId, extraction, durationMs);
         } catch (RuntimeException e) {
             log.error("Background CV processing failed, cvDocumentId={}", cvDocumentId, e);
-            markFailed(cvDocumentId, Message.CV_PARSE_FAILED);
+            markFailed(cvDocumentId, ErrorCode.CV_PARSE_FAILED.getDefaultMessage());
         }
     }
 
