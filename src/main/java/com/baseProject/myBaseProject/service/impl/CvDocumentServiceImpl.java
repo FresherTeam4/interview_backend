@@ -16,6 +16,8 @@ import com.baseProject.myBaseProject.repository.CvDocumentRepository;
 import com.baseProject.myBaseProject.repository.UserAccountRepository;
 import com.baseProject.myBaseProject.service.CvDocumentService;
 import com.baseProject.myBaseProject.storage.StorageService;
+import com.baseProject.myBaseProject.util.FileStorageSupport;
+import com.baseProject.myBaseProject.util.Sha256;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.task.TaskRejectedException;
@@ -23,13 +25,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.time.Clock;
-import java.time.Duration;
 import java.time.Instant;
 import java.util.HashMap;
-import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -40,12 +38,8 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class CvDocumentServiceImpl implements CvDocumentService {
 
-    private static final String HASH_ALGORITHM = "SHA-256";
     private static final String STORAGE_KEY_FORMAT = "cv/%d/%s.pdf";
-    private static final String PDF_CONTENT_TYPE = "application/pdf";
     private static final String FALLBACK_FILENAME = "cv.pdf";
-    private static final int MAX_FILENAME_LENGTH = 255;
-    private static final Duration FILE_URL_TTL = Duration.ofMinutes(5);
 
     private final CvDocumentRepository cvDocumentRepository;
     private final CandidateProfileRepository candidateProfileRepository;
@@ -60,7 +54,7 @@ public class CvDocumentServiceImpl implements CvDocumentService {
     @Override
     public CvUploadResult upload(Long userId, MultipartFile file) {
         byte[] content = cvFileValidator.validateAndRead(file);
-        String checksum = sha256Hex(content);
+        String checksum = Sha256.hex(content);
 
         Optional<CvDocument> reusableDocument = cvDocumentRepository
                 .findFirstByUserIdAndChecksumSha256AndStatusOrderByUploadedAtDesc(
@@ -111,8 +105,9 @@ public class CvDocumentServiceImpl implements CvDocumentService {
         CvDocument document = cvDocumentRepository.findByIdAndUserId(cvId, userId)
                 .orElseThrow(() -> new DomainException(ErrorCode.CV_NOT_FOUND));
 
-        String url = storageService.generatePresignedUrl(document.getStorageKey(), FILE_URL_TTL);
-        Instant expiresAt = clock.instant().plus(FILE_URL_TTL);
+        String url = storageService.generatePresignedUrl(
+                document.getStorageKey(), FileStorageSupport.PRESIGNED_URL_TTL);
+        Instant expiresAt = clock.instant().plus(FileStorageSupport.PRESIGNED_URL_TTL);
         return new CvFileUrlResponse(url, expiresAt);
     }
 
@@ -181,13 +176,14 @@ public class CvDocumentServiceImpl implements CvDocumentService {
                              byte[] content,
                              String checksum) {
         String storageKey = STORAGE_KEY_FORMAT.formatted(userId, UUID.randomUUID());
-        storageService.upload(storageKey, content, PDF_CONTENT_TYPE);
+        storageService.upload(storageKey, content, FileStorageSupport.PDF_CONTENT_TYPE);
 
         return cvDocumentRepository.save(CvDocument.builder()
                 .user(userAccountRepository.getReferenceById(userId))
                 .storageKey(storageKey)
-                .originalFilename(safeFilename(originalFilename))
-                .contentType(PDF_CONTENT_TYPE)
+                .originalFilename(FileStorageSupport.sanitizeFilename(
+                        originalFilename, FALLBACK_FILENAME))
+                .contentType(FileStorageSupport.PDF_CONTENT_TYPE)
                 .fileSizeBytes((long) content.length)
                 .checksumSha256(checksum)
                 .status(CvDocumentStatus.UPLOADED)
@@ -218,33 +214,5 @@ public class CvDocumentServiceImpl implements CvDocumentService {
                 .forEach(profile -> profilesByDocumentId.put(
                         profile.getCvDocument().getId(), profile));
         return profilesByDocumentId;
-    }
-
-    private String sha256Hex(byte[] content) {
-        try {
-            MessageDigest digest = MessageDigest.getInstance(HASH_ALGORITHM);
-            return HexFormat.of().formatHex(digest.digest(content));
-        } catch (NoSuchAlgorithmException e) {
-            throw new IllegalStateException(HASH_ALGORITHM + " is unavailable", e);
-        }
-    }
-
-    private String safeFilename(String rawFilename) {
-        if (rawFilename == null) {
-            return FALLBACK_FILENAME;
-        }
-
-        String filename = rawFilename.trim();
-        int lastSeparator = Math.max(filename.lastIndexOf('/'), filename.lastIndexOf('\\'));
-        if (lastSeparator >= 0) {
-            filename = filename.substring(lastSeparator + 1).trim();
-        }
-
-        if (filename.isEmpty()) {
-            return FALLBACK_FILENAME;
-        }
-        return filename.length() <= MAX_FILENAME_LENGTH
-                ? filename
-                : filename.substring(0, MAX_FILENAME_LENGTH);
     }
 }

@@ -21,6 +21,8 @@ import com.baseProject.myBaseProject.repository.JobDescriptionDocumentRepository
 import com.baseProject.myBaseProject.repository.UserAccountRepository;
 import com.baseProject.myBaseProject.service.JobDescriptionService;
 import com.baseProject.myBaseProject.storage.StorageService;
+import com.baseProject.myBaseProject.util.FileStorageSupport;
+import com.baseProject.myBaseProject.util.Sha256;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.task.TaskRejectedException;
@@ -30,12 +32,8 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.time.Clock;
-import java.time.Duration;
 import java.util.HashMap;
-import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -44,11 +42,7 @@ import java.util.UUID;
 @Slf4j
 @RequiredArgsConstructor
 public class JobDescriptionServiceImpl implements JobDescriptionService {
-    private static final String HASH_ALGORITHM = "SHA-256";
-    private static final String PDF_CONTENT_TYPE = "application/pdf";
     private static final String TEXT_CONTENT_TYPE = "text/plain";
-    private static final Duration FILE_URL_TTL = Duration.ofMinutes(5);
-    private static final int MAX_FILENAME_LENGTH = 255;
     private static final int MAX_TITLE_LENGTH = 200;
 
     private final JobDescriptionDocumentRepository documents;
@@ -66,20 +60,21 @@ public class JobDescriptionServiceImpl implements JobDescriptionService {
     @Override
     public UploadResult upload(Long ownerId, MultipartFile file) {
         byte[] content = fileValidator.validateAndRead(file);
-        String checksum = sha256(content);
+        String checksum = Sha256.hex(content);
         UploadResult reused = reuse(ownerId, checksum);
         if (reused != null) {
             return reused;
         }
         ensureCapacity(ownerId);
         String storageKey = "jd/%d/%s.pdf".formatted(ownerId, UUID.randomUUID());
-        storage.upload(storageKey, content, PDF_CONTENT_TYPE);
+        storage.upload(storageKey, content, FileStorageSupport.PDF_CONTENT_TYPE);
         JobDescriptionDocument document = documents.save(JobDescriptionDocument.builder()
                 .owner(users.getReferenceById(ownerId))
                 .sourceType(JobDescriptionSourceType.FILE)
                 .storageKey(storageKey)
-                .originalFilename(safeFilename(file.getOriginalFilename(), "job-description.pdf"))
-                .contentType(PDF_CONTENT_TYPE)
+                .originalFilename(FileStorageSupport.sanitizeFilename(
+                        file.getOriginalFilename(), "job-description.pdf"))
+                .contentType(FileStorageSupport.PDF_CONTENT_TYPE)
                 .fileSizeBytes(content.length)
                 .checksumSha256(checksum)
                 .uploadedAt(clock.instant())
@@ -96,7 +91,7 @@ public class JobDescriptionServiceImpl implements JobDescriptionService {
         String title = normalizeTitle(request.title());
         String text = normalizeText(request.text());
         byte[] bytes = text.getBytes(StandardCharsets.UTF_8);
-        String checksum = sha256(bytes);
+        String checksum = Sha256.hex(bytes);
         UploadResult reused = reuse(ownerId, checksum);
         if (reused != null) {
             return reused;
@@ -105,7 +100,8 @@ public class JobDescriptionServiceImpl implements JobDescriptionService {
         JobDescriptionDocument document = documents.save(JobDescriptionDocument.builder()
                 .owner(users.getReferenceById(ownerId))
                 .sourceType(JobDescriptionSourceType.TEXT)
-                .originalFilename(safeFilename(title + ".txt", "job-description.txt"))
+                .originalFilename(FileStorageSupport.sanitizeFilename(
+                        title + ".txt", "job-description.txt"))
                 .contentType(TEXT_CONTENT_TYPE)
                 .fileSizeBytes(bytes.length)
                 .checksumSha256(checksum)
@@ -155,8 +151,10 @@ public class JobDescriptionServiceImpl implements JobDescriptionService {
         if (document.getSourceType() != JobDescriptionSourceType.FILE) {
             throw new DomainException(ErrorCode.JD_FILE_NOT_AVAILABLE);
         }
-        String url = storage.generatePresignedUrl(document.getStorageKey(), FILE_URL_TTL);
-        return new JobDescriptionFileUrlResponse(url, clock.instant().plus(FILE_URL_TTL));
+        String url = storage.generatePresignedUrl(
+                document.getStorageKey(), FileStorageSupport.PRESIGNED_URL_TTL);
+        return new JobDescriptionFileUrlResponse(
+                url, clock.instant().plus(FileStorageSupport.PRESIGNED_URL_TTL));
     }
 
     @Override
@@ -249,30 +247,5 @@ public class JobDescriptionServiceImpl implements JobDescriptionService {
                 .forEach(template -> byDocument.put(
                         template.getSourceJobDescription().getId(), template));
         return byDocument;
-    }
-
-    private String safeFilename(String raw, String fallback) {
-        if (raw == null) {
-            return fallback;
-        }
-        String filename = raw.strip();
-        int separator = Math.max(filename.lastIndexOf('/'), filename.lastIndexOf('\\'));
-        if (separator >= 0) {
-            filename = filename.substring(separator + 1).strip();
-        }
-        if (filename.isBlank()) {
-            return fallback;
-        }
-        return filename.length() <= MAX_FILENAME_LENGTH
-                ? filename : filename.substring(0, MAX_FILENAME_LENGTH);
-    }
-
-    private String sha256(byte[] content) {
-        try {
-            return HexFormat.of().formatHex(
-                    MessageDigest.getInstance(HASH_ALGORITHM).digest(content));
-        } catch (NoSuchAlgorithmException exception) {
-            throw new IllegalStateException(HASH_ALGORITHM + " is unavailable", exception);
-        }
     }
 }

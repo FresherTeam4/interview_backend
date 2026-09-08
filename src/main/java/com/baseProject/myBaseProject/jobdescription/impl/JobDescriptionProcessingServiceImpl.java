@@ -1,5 +1,6 @@
 package com.baseProject.myBaseProject.jobdescription.impl;
 
+import com.baseProject.myBaseProject.ai.support.AiExecutionMetadata;
 import com.baseProject.myBaseProject.config.AsyncConfig;
 import com.baseProject.myBaseProject.config.properites.JobDescriptionProperties;
 import com.baseProject.myBaseProject.dto.ai.JobAnalysis;
@@ -85,7 +86,8 @@ public class JobDescriptionProcessingServiceImpl implements JobDescriptionProces
             }
             long startedAt = System.currentTimeMillis();
             JobAnalysis analysis = analysisService.analyze(item.displayName(), extractedText);
-            int durationMs = toInteger(System.currentTimeMillis() - startedAt);
+            int durationMs = AiExecutionMetadata.toNonNegativeInt(
+                    System.currentTimeMillis() - startedAt);
             persist(jobDescriptionId, extractedText, analysis, durationMs);
         } catch (DomainException exception) {
             markFailed(jobDescriptionId, exception.getCode(), exception.getMessage());
@@ -171,7 +173,7 @@ public class JobDescriptionProcessingServiceImpl implements JobDescriptionProces
                     .extractedText(extractedText)
                     .analysisJson(json)
                     .schemaVersion(JobAnalysisJsonMapper.SCHEMA_VERSION)
-                    .modelName(modelName())
+                    .modelName(AiExecutionMetadata.resolveModelName(chatModel))
                     .durationMs(durationMs)
                     .createdAt(now)
                     .build());
@@ -218,17 +220,6 @@ public class JobDescriptionProcessingServiceImpl implements JobDescriptionProces
         }
 
         return value.length() <= 200 ? value : value.substring(0, 200);
-    }
-
-    private String modelName() {
-        String value = chatModel.getOptions() == null
-                ? null : chatModel.getOptions().getModel();
-
-                return value == null || value.isBlank() ? "unknown" : value.strip();
-    }
-
-    private int toInteger(long value) {
-        return (int) Math.min(Math.max(value, 0L), Integer.MAX_VALUE);
     }
 
     private record WorkItem(JobDescriptionSourceType sourceType, String storageKey,

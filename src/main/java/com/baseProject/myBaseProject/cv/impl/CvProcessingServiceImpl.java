@@ -1,15 +1,16 @@
 package com.baseProject.myBaseProject.cv.impl;
 
+import com.baseProject.myBaseProject.ai.support.AiExecutionMetadata;
 import com.baseProject.myBaseProject.config.AsyncConfig;
 import com.baseProject.myBaseProject.constant.Message;
 import com.baseProject.myBaseProject.cv.CvParsingService;
+import com.baseProject.myBaseProject.cv.CvProcessingService;
 import com.baseProject.myBaseProject.dto.ai.CvExtractionResult;
 import com.baseProject.myBaseProject.entity.CvDocument;
 import com.baseProject.myBaseProject.entity.CvParseResult;
 import com.baseProject.myBaseProject.enums.CvDocumentStatus;
 import com.baseProject.myBaseProject.repository.CvDocumentRepository;
 import com.baseProject.myBaseProject.repository.CvParseResultRepository;
-import com.baseProject.myBaseProject.cv.CvProcessingService;
 import com.baseProject.myBaseProject.service.CandidateProfileService;
 import com.baseProject.myBaseProject.storage.StorageService;
 import lombok.extern.slf4j.Slf4j;
@@ -72,7 +73,8 @@ public class CvProcessingServiceImpl implements CvProcessingService {
             byte[] content = storageService.download(workItem.storageKey());
             long startedAt = System.currentTimeMillis();
             CvExtractionResult extraction = cvParsingService.parseCvFromPdf(content);
-            int durationMs = toInteger(System.currentTimeMillis() - startedAt);
+            int durationMs = AiExecutionMetadata.toNonNegativeInt(
+                    System.currentTimeMillis() - startedAt);
 
             persistResult(cvDocumentId, extraction, durationMs);
         } catch (RuntimeException e) {
@@ -119,13 +121,14 @@ public class CvProcessingServiceImpl implements CvProcessingService {
                     .cvDocument(document)
                     .rawJson(toJson(extraction))
                     .schemaVersion(SCHEMA_VERSION)
-                    .modelName(modelName(extraction))
+                    .modelName(AiExecutionMetadata.resolveModelName(
+                            extraction.modelName(), chatModel))
                     .durationMs(extraction.durationMs() == null
                             ? measuredDurationMs
-                            : toInteger(extraction.durationMs()))
+                            : AiExecutionMetadata.toNonNegativeInt(extraction.durationMs()))
                     .tokenCost(extraction.totalTokens() == null
                             ? null
-                            : toInteger(extraction.totalTokens()))
+                            : AiExecutionMetadata.toNonNegativeInt(extraction.totalTokens()))
                     .createdAt(now)
                     .build();
             cvParseResultRepository.save(parseResult);
@@ -156,17 +159,6 @@ public class CvProcessingServiceImpl implements CvProcessingService {
         } catch (JacksonException e) {
             throw new IllegalStateException("Cannot serialize parsed CV result", e);
         }
-    }
-
-    private String modelName(CvExtractionResult extraction) {
-        String modelName = extraction.modelName();
-        return modelName == null || modelName.isBlank()
-                ? chatModel.getOptions().getModel()
-                : modelName.trim();
-    }
-
-    private int toInteger(long value) {
-        return (int) Math.min(Math.max(value, 0L), Integer.MAX_VALUE);
     }
 
     private record WorkItem(String storageKey) {

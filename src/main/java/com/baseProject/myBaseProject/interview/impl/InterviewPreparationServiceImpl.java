@@ -1,7 +1,8 @@
 package com.baseProject.myBaseProject.interview.impl;
 
+import com.baseProject.myBaseProject.ai.support.AiExecutionMetadata;
+import com.baseProject.myBaseProject.ai.support.AiFailureMessageResolver;
 import com.baseProject.myBaseProject.config.AsyncConfig;
-import com.baseProject.myBaseProject.constant.Message;
 import com.baseProject.myBaseProject.dto.ai.interview.InterviewPlanResult;
 import com.baseProject.myBaseProject.entity.InterviewFocusArea;
 import com.baseProject.myBaseProject.entity.InterviewSession;
@@ -134,7 +135,8 @@ public class InterviewPreparationServiceImpl implements InterviewPreparationServ
             focusAreas.saveAll(plannedAreas);
             session.markReady(
                     plan.jobContextSummary(), plan.candidateContextSummary(),
-                    plan.openingMessage(), PLAN_SCHEMA_VERSION, modelName(),
+                    plan.openingMessage(), PLAN_SCHEMA_VERSION,
+                    AiExecutionMetadata.resolveModelName(chatModel),
                     PLAN_PROMPT_VERSION, now);
             transitionRecorder.record(
                     session, InterviewSessionStatus.PREPARING, InterviewSessionStatus.READY,
@@ -151,7 +153,11 @@ public class InterviewPreparationServiceImpl implements InterviewPreparationServ
                     return;
                 }
                 session.markPreparationFailed(
-                        errorCode.name(), safeMessage(errorCode), now);
+                        errorCode.name(),
+                        AiFailureMessageResolver.resolve(
+                                errorCode,
+                                ErrorCode.INTERVIEW_SESSION_PREPARATION_FAILED),
+                        now);
                 transitionRecorder.record(
                         session, InterviewSessionStatus.PREPARING,
                         InterviewSessionStatus.PREPARATION_FAILED,
@@ -163,20 +169,6 @@ public class InterviewPreparationServiceImpl implements InterviewPreparationServ
             log.error("Cannot persist preparation failure, sessionId={}",
                     sessionId, persistenceError);
         }
-    }
-
-    private String safeMessage(ErrorCode errorCode) {
-        // Chỉ công khai lỗi hạ tầng đã chuẩn hóa, còn lỗi nội bộ dùng thông báo chung.
-        return switch (errorCode) {
-            case AI_TIMEOUT, AI_SERVICE_UNAVAILABLE -> errorCode.getDefaultMessage();
-            default -> Message.INTERVIEW_SESSION_PREPARATION_FAILED;
-        };
-    }
-
-    private String modelName() {
-        String value = chatModel.getOptions() == null
-                ? null : chatModel.getOptions().getModel();
-        return value == null || value.isBlank() ? "unknown" : value.strip();
     }
 
     private record WorkItem(

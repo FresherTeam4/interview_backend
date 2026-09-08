@@ -1,7 +1,8 @@
 package com.baseProject.myBaseProject.interview.impl;
 
+import com.baseProject.myBaseProject.ai.support.AiExecutionMetadata;
+import com.baseProject.myBaseProject.ai.support.AiFailureMessageResolver;
 import com.baseProject.myBaseProject.config.AsyncConfig;
-import com.baseProject.myBaseProject.constant.Message;
 import com.baseProject.myBaseProject.dto.ai.interview.InterviewAssessmentResult;
 import com.baseProject.myBaseProject.entity.InterviewAssessment;
 import com.baseProject.myBaseProject.entity.InterviewFocusArea;
@@ -158,7 +159,7 @@ public class InterviewScoringServiceImpl implements InterviewScoringService {
                     .actionPlanJson(objectMapper.writeValueAsString(result.actionPlan()))
                     .communicationFeedback(result.communicationFeedback())
                     .schemaVersion(InterviewScoringEngineImpl.ASSESSMENT_SCHEMA_VERSION)
-                    .modelName(modelName())
+                    .modelName(AiExecutionMetadata.resolveModelName(chatModel))
                     .promptVersion(InterviewScoringEngineImpl.ASSESSMENT_PROMPT_VERSION)
                     .createdAt(now)
                     .build());
@@ -206,7 +207,11 @@ public class InterviewScoringServiceImpl implements InterviewScoringService {
                 if (session == null || session.getStatus() != InterviewSessionStatus.SCORING) {
                     return;
                 }
-                session.markScoringFailed(errorCode.name(), safeMessage(errorCode), now);
+                session.markScoringFailed(
+                        errorCode.name(),
+                        AiFailureMessageResolver.resolve(
+                                errorCode, ErrorCode.INTERVIEW_SCORING_FAILED),
+                        now);
                 transitionRecorder.record(
                         session,
                         InterviewSessionStatus.SCORING,
@@ -219,19 +224,5 @@ public class InterviewScoringServiceImpl implements InterviewScoringService {
             log.error("Cannot persist scoring failure, sessionId={}",
                     sessionId, persistenceError);
         }
-    }
-
-    private String safeMessage(ErrorCode errorCode) {
-        return switch (errorCode) {
-            case AI_TIMEOUT, AI_SERVICE_UNAVAILABLE -> errorCode.getDefaultMessage();
-            default -> Message.INTERVIEW_SCORING_FAILED;
-        };
-    }
-
-    private String modelName() {
-        String value = chatModel.getOptions() == null
-                ? null : chatModel.getOptions().getModel();
-
-        return value == null || value.isBlank() ? "unknown" : value.strip();
     }
 }

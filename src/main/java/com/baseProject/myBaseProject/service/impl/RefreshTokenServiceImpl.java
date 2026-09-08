@@ -7,18 +7,16 @@ import com.baseProject.myBaseProject.exception.DomainException;
 import com.baseProject.myBaseProject.exception.ErrorCode;
 import com.baseProject.myBaseProject.repository.RefreshTokenRepository;
 import com.baseProject.myBaseProject.service.RefreshTokenService;
+import com.baseProject.myBaseProject.util.Sha256;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.Base64;
-import java.util.HexFormat;
 import java.util.UUID;
 
 @Service
@@ -26,7 +24,6 @@ import java.util.UUID;
 public class RefreshTokenServiceImpl implements RefreshTokenService {
 
     private static final int TOKEN_BYTES = 32;
-    private static final String HASH_ALGORITHM = "SHA-256";
 
     private final RefreshTokenRepository refreshTokenRepository;
     private final RefreshTokenProperties properties;
@@ -107,11 +104,6 @@ public class RefreshTokenServiceImpl implements RefreshTokenService {
     }
 
     private String hash(String rawToken) {
-        try {
-            MessageDigest digest = MessageDigest.getInstance(HASH_ALGORITHM);
-            return HexFormat.of().formatHex(digest.digest(rawToken.getBytes(StandardCharsets.UTF_8)));
-        } catch (NoSuchAlgorithmException e) {
-            throw new IllegalStateException(HASH_ALGORITHM + " is required but not available", e);
-        }
+        return Sha256.hex(rawToken.getBytes(StandardCharsets.UTF_8));
     }
 }
