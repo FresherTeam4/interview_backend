@@ -2,8 +2,7 @@ package com.baseProject.myBaseProject.config;
 
 import com.baseProject.myBaseProject.config.properites.CorsProperties;
 import com.baseProject.myBaseProject.security.JwtAuthenticationFilter;
-import com.baseProject.myBaseProject.security.RestAccessDeniedHandler;
-import com.baseProject.myBaseProject.security.RestAuthenticationEntryPoint;
+import com.baseProject.myBaseProject.security.RestSecurityExceptionHandler;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -46,8 +45,7 @@ public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
     private final UserDetailsService userDetailsService;
-    private final RestAuthenticationEntryPoint authenticationEntryPoint;
-    private final RestAccessDeniedHandler accessDeniedHandler;
+    private final RestSecurityExceptionHandler securityExceptionHandler;
     private final CorsProperties corsProperties;
 
     @Bean
@@ -65,8 +63,8 @@ public class SecurityConfig {
                         .anyRequest().authenticated()
                 )
                 .exceptionHandling(ex -> ex
-                        .authenticationEntryPoint(authenticationEntryPoint)
-                        .accessDeniedHandler(accessDeniedHandler)
+                        .authenticationEntryPoint(securityExceptionHandler)
+                        .accessDeniedHandler(securityExceptionHandler)
                 )
                 .authenticationProvider(authenticationProvider())
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
