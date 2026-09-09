@@ -1,4 +1,4 @@
-package com.baseProject.myBaseProject.interview.support;
+package com.baseProject.myBaseProject.scheduler;
 
 import com.baseProject.myBaseProject.interview.InterviewDeadlineService;
 import lombok.RequiredArgsConstructor;
@@ -9,7 +9,7 @@ import org.springframework.stereotype.Component;
 @Slf4j
 @Component
 @RequiredArgsConstructor
-public class InterviewDeadlineListener {
+public class InterviewDeadlineJob {
     private final InterviewDeadlineService deadlineService;
 
     @Scheduled(fixedDelayString = "${app.interview-session.deadline-sweep-ms:30000}")
