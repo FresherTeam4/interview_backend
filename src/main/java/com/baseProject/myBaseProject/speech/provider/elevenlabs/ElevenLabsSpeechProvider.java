@@ -14,15 +14,12 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.core.io.ByteArrayResource;
-import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.client.MultipartBodyBuilder;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientResponseException;
-import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.ObjectMapper;
 
 import java.net.SocketTimeoutException;
 import java.net.http.HttpTimeoutException;
@@ -39,15 +36,12 @@ public class ElevenLabsSpeechProvider
 
     private final RestClient restClient;
     private final SpeechProperties.ElevenLabs properties;
-    private final ObjectMapper objectMapper;
 
     public ElevenLabsSpeechProvider(
             @Qualifier("elevenLabsRestClient") RestClient restClient,
-            SpeechProperties speechProperties,
-            ObjectMapper objectMapper) {
+            SpeechProperties speechProperties) {
         this.restClient = restClient;
         this.properties = speechProperties.providers().elevenlabs();
-        this.objectMapper = objectMapper;
     }
 
     @Override
@@ -85,9 +79,7 @@ public class ElevenLabsSpeechProvider
             }
             return new SpeechTranscriptionResult(
                     response.text(), response.languageCode());
-        } catch (RestClientResponseException exception) {
-            throw translate(exception);
-        } catch (ResourceAccessException exception) {
+        } catch (RestClientResponseException | ResourceAccessException exception) {
             throw translate(exception);
         }
     }
@@ -133,9 +125,7 @@ public class ElevenLabsSpeechProvider
                     .body(byte[].class);
 
             return new SpeechSynthesisResult(audio, OUTPUT_CONTENT_TYPE);
-        } catch (RestClientResponseException exception) {
-            throw translate(exception);
-        } catch (ResourceAccessException exception) {
+        } catch (RestClientResponseException | ResourceAccessException exception) {
             throw translate(exception);
         }
     }
@@ -169,97 +159,42 @@ public class ElevenLabsSpeechProvider
         return voiceId.strip();
     }
 
-    private DomainException translate(RestClientResponseException exception) {
-        int status = exception.getStatusCode().value();
-        logProviderError(exception, status);
+    private DomainException translate(RuntimeException exception) {
+        if (exception instanceof ResourceAccessException resourceAccessException) {
+            ErrorCode code = hasCause(resourceAccessException, SocketTimeoutException.class)
+                    || hasCause(resourceAccessException, HttpTimeoutException.class)
+                    ? ErrorCode.SPEECH_PROVIDER_TIMEOUT
+                    : ErrorCode.SPEECH_PROVIDER_UNAVAILABLE;
+
+            return new DomainException(code, resourceAccessException);
+        }
+
+        RestClientResponseException responseException =
+                (RestClientResponseException) exception;
+        int status = responseException.getStatusCode().value();
+        log.warn(
+                "ElevenLabs request failed: httpStatus={}, responseBody={}",
+                status,
+                responseException.getResponseBodyAsString());
 
         if (status == 401 || status == 403) {
             return new DomainException(
                     ErrorCode.SPEECH_CONFIG_ERROR,
                     "ElevenLabs rejected the configured credentials",
-                    exception);
+                    responseException);
         }
         if (status == 408 || status == 504) {
-            return new DomainException(ErrorCode.SPEECH_PROVIDER_TIMEOUT, exception);
+            return new DomainException(
+                    ErrorCode.SPEECH_PROVIDER_TIMEOUT, responseException);
         }
         if (status == 429 || status >= 500) {
-            return new DomainException(ErrorCode.SPEECH_PROVIDER_UNAVAILABLE, exception);
+            return new DomainException(
+                    ErrorCode.SPEECH_PROVIDER_UNAVAILABLE, responseException);
         }
         return new DomainException(
                 ErrorCode.SPEECH_PROVIDER_ERROR,
                 "ElevenLabs rejected the speech request",
-                exception);
-    }
-
-    private void logProviderError(
-            RestClientResponseException exception, int status) {
-        ElevenLabsError error = readProviderError(exception);
-        log.warn(
-                "ElevenLabs request failed: httpStatus={}, errorType={}, errorCode={}, requestId={}, message={}",
-                status,
-                safeLogValue(error.type()),
-                safeLogValue(error.code()),
-                safeLogValue(requestId(exception.getResponseHeaders())),
-                safeLogValue(error.message()));
-    }
-
-    private ElevenLabsError readProviderError(
-        RestClientResponseException exception) {
-        try {
-            JsonNode body = objectMapper.readTree(exception.getResponseBodyAsString());
-            JsonNode detail = body == null ? null : body.get("detail");
-            if (detail == null || detail.isNull()) {
-                return ElevenLabsError.EMPTY;
-            }
-            if (detail.isTextual()) {
-                return new ElevenLabsError(null, null, detail.asText());
-            }
-
-            String code = textValue(detail, "code");
-            if (code == null) {
-                code = textValue(detail, "status");
-            }
-            return new ElevenLabsError(
-                    textValue(detail, "type"),
-                    code,
-                    textValue(detail, "message"));
-        } catch (RuntimeException parseException) {
-            log.debug("Could not parse ElevenLabs error response, status={}",
-                    exception.getStatusCode().value());
-            return ElevenLabsError.EMPTY;
-        }
-    }
-
-    private String requestId(HttpHeaders headers) {
-        if (headers == null) {
-            return null;
-        }
-        String requestId = headers.getFirst("request-id");
-        return requestId != null ? requestId : headers.getFirst("x-trace-id");
-    }
-
-    private String textValue(JsonNode node, String field) {
-        JsonNode value = node.get(field);
-        return value == null || value.isNull() ? null : value.asText();
-    }
-
-    private String safeLogValue(String value) {
-        if (value == null || value.isBlank()) {
-            return "-";
-        }
-        String sanitized = value.replaceAll("\\p{Cntrl}", " ").strip();
-        return sanitized.length() <= 500
-                ? sanitized
-                : sanitized.substring(0, 500) + "...";
-    }
-
-    private DomainException translate(ResourceAccessException exception) {
-        ErrorCode code = hasCause(exception, SocketTimeoutException.class)
-                || hasCause(exception, HttpTimeoutException.class)
-                ? ErrorCode.SPEECH_PROVIDER_TIMEOUT
-                : ErrorCode.SPEECH_PROVIDER_UNAVAILABLE;
-
-        return new DomainException(code, exception);
+                responseException);
     }
 
     private boolean hasCause(Throwable exception, Class<? extends Throwable> type) {
@@ -303,8 +238,4 @@ public class ElevenLabsSpeechProvider
             @JsonProperty("language_code") String languageCode) {
     }
 
-    private record ElevenLabsError(String type, String code, String message) {
-        private static final ElevenLabsError EMPTY =
-                new ElevenLabsError(null, null, null);
-    }
 }

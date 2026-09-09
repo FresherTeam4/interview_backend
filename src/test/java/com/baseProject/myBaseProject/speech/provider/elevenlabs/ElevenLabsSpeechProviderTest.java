@@ -17,7 +17,6 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestClient;
-import tools.jackson.databind.ObjectMapper;
 
 import java.net.URI;
 import java.time.Duration;
@@ -44,8 +43,7 @@ class ElevenLabsSpeechProviderTest {
                 .baseUrl("https://api.elevenlabs.io")
                 .defaultHeader("xi-api-key", "test-key");
         server = MockRestServiceServer.bindTo(builder).build();
-        provider = new ElevenLabsSpeechProvider(
-                builder.build(), properties(), new ObjectMapper());
+        provider = new ElevenLabsSpeechProvider(builder.build(), properties());
     }
 
     @Test
@@ -97,7 +95,7 @@ class ElevenLabsSpeechProviderTest {
     }
 
     @Test
-    void logsStructuredProviderError(CapturedOutput output) {
+    void logsProviderErrorResponse(CapturedOutput output) {
         server.expect(once(), requestTo(
                         "https://api.elevenlabs.io/v1/text-to-speech/voice-vi"
                                 + "?output_format=mp3_44100_128"))
@@ -121,10 +119,9 @@ class ElevenLabsSpeechProviderTest {
                                 .isEqualTo(ErrorCode.SPEECH_PROVIDER_ERROR));
         assertThat(output)
                 .contains("httpStatus=404")
-                .contains("errorType=not_found")
-                .contains("errorCode=voice_not_found")
-                .contains("requestId=request-123")
-                .contains("message=The specified voice does not exist");
+                .contains("responseBody=")
+                .contains("voice_not_found")
+                .contains("The specified voice does not exist");
         server.verify();
     }
 
