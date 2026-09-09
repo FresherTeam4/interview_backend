@@ -88,6 +88,7 @@ public class InterviewSessionServiceImpl implements InterviewSessionService {
         List<InterviewOptionResponse> styles = Arrays.stream(InterviewerStyle.values())
                 .map(style -> new InterviewOptionResponse(style.name(), styleName(style)))
                 .toList();
+
         return new InterviewSessionOptionsResponse(
                 languages, properties.supportedDurations(), styles);
     }
@@ -291,6 +292,7 @@ public class InterviewSessionServiceImpl implements InterviewSessionService {
         return switch (code.toLowerCase(Locale.ROOT)) {
             case "vi" -> "Tiếng Việt";
             case "en" -> "English";
+            case "ja" -> "日本語";
             default -> code;
         };
     }

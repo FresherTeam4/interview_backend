@@ -14,6 +14,8 @@ tags:
     description: Combined job-description analysis and interview-template flow.
   - name: Interview
     description: Interview preparation, conversation, scoring, and reporting.
+  - name: Interview Speech
+    description: Provider-independent transcription and interviewer speech synthesis.
 
 paths:
   /api/auth/register:
@@ -632,6 +634,53 @@ paths:
         '500': {$ref: '#/components/responses/ServerError'}
         '503': {$ref: '#/components/responses/ServiceUnavailable'}
         '504': {$ref: '#/components/responses/GatewayTimeout'}
+  /api/interview-sessions/{sessionId}/speech/transcriptions:
+    parameters:
+      - {$ref: '#/components/parameters/SessionId'}
+    post:
+      tags: [Interview Speech]
+      operationId: transcribeInterviewAnswer
+      summary: Transcribe a candidate answer in the session language
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [audio]
+              properties:
+                audio: {type: string, format: binary}
+      responses:
+        '200':
+          description: Transcript ready to submit through the existing answer API.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/SpeechTranscription'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '413': {$ref: '#/components/responses/ContentTooLarge'}
+        '502': {$ref: '#/components/responses/BadGateway'}
+        '503': {$ref: '#/components/responses/ServiceUnavailable'}
+        '504': {$ref: '#/components/responses/GatewayTimeout'}
+  /api/interview-sessions/{sessionId}/speech/turns/{turnId}/audio:
+    parameters:
+      - {$ref: '#/components/parameters/SessionId'}
+      - {$ref: '#/components/parameters/TurnId'}
+    post:
+      tags: [Interview Speech]
+      operationId: createInterviewerTurnAudio
+      summary: Generate or retrieve audio for an interviewer turn
+      responses:
+        '200':
+          description: MP3 speech generated from the persisted interviewer turn.
+          content:
+            audio/mpeg:
+              schema: {type: string, format: binary}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '502': {$ref: '#/components/responses/BadGateway'}
+        '503': {$ref: '#/components/responses/ServiceUnavailable'}
+        '504': {$ref: '#/components/responses/GatewayTimeout'}
   /api/interview-sessions/{sessionId}/finish:
     parameters:
       - {$ref: '#/components/parameters/SessionId'}
@@ -714,6 +763,11 @@ components:
       in: path
       required: true
       schema: {type: integer, format: int64, minimum: 1}
+    TurnId:
+      name: turnId
+      in: path
+      required: true
+      schema: {type: integer, format: int64, minimum: 1}
     IdempotencyKey:
       name: Idempotency-Key
       in: header
@@ -757,7 +811,10 @@ components:
       description: AI, storage, or configuration unavailable.
       content: {application/json: {schema: {$ref: '#/components/schemas/ApiError'}}}
     GatewayTimeout:
-      description: AI timed out.
+      description: AI or speech provider timed out.
+      content: {application/json: {schema: {$ref: '#/components/schemas/ApiError'}}}
+    BadGateway:
+      description: An upstream provider returned an invalid response or rejected the request.
       content: {application/json: {schema: {$ref: '#/components/schemas/ApiError'}}}
   schemas:
     ApiError:
@@ -1112,6 +1169,12 @@ components:
       properties:
         expectedTurnIndex: {type: integer, minimum: 0}
         answer: {type: string, minLength: 1, maxLength: 8000}
+    SpeechTranscription:
+      type: object
+      required: [text, languageCode]
+      properties:
+        text: {type: string, minLength: 1}
+        languageCode: {type: string, enum: [en, ja, vi]}
     InterviewAnswerResponse:
       type: object
       required: [sessionId, status, remainingSeconds, currentTurnIndex]

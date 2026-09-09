@@ -4,6 +4,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.access.AccessDeniedException;
@@ -163,7 +164,9 @@ public class GlobalExceptionHandler {
             String message,
             Map<String, String> fieldErrors,
             HttpServletRequest req) {
+        // Ép lỗi về JSON ngay cả khi endpoint thành công trả nội dung nhị phân như audio.
         return ResponseEntity.status(code.getStatus())
+                .contentType(MediaType.APPLICATION_JSON)
                 .body(new ApiError(
                         clock.instant(),
                         code.getStatus().value(),

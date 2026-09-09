@@ -11,6 +11,7 @@ Thư mục này là contract tích hợp frontend của backend `my-interview`. 
 | [cv-profile-api.md](./cv-profile-api.md) | **Một luồng CV + Candidate Profile**: upload, poll parse, review/edit, confirm |
 | [jd-template-api.md](./jd-template-api.md) | **Một luồng JD + Interview Template**: nhập JD, poll AI analysis, edit, confirm, publish |
 | [interview-session-api.md](./interview-session-api.md) | Tạo session, chuẩn bị, phỏng vấn, retry answer, kết thúc, chấm điểm và report |
+| [speech-api.md](./speech-api.md) | Push-to-talk STT, audio interviewer, cấu hình ElevenLabs và cách đổi speech provider |
 | [frontend-implementation-guide.md](./frontend-implementation-guide.md) | Kiến trúc client, route/screen, state machine, query invalidation và checklist hoàn thiện |
 | [openapi.yaml](./openapi.yaml) | OpenAPI 3.0 để sinh type/client hoặc nạp vào công cụ API |
 
@@ -92,6 +93,8 @@ Thứ tự API tối thiểu cho happy path:
 | POST | `/api/interview-sessions/{id}/start` | Bearer, owner | Bắt đầu và trả conversation |
 | GET | `/api/interview-sessions/{id}/conversation` | Bearer, owner | Khôi phục toàn bộ hội thoại |
 | POST | `/api/interview-sessions/{id}/answers` | Bearer, owner | Lưu answer và đợi AI reply |
+| POST | `/api/interview-sessions/{id}/speech/transcriptions` | Bearer, owner | Chuyển audio ứng viên thành text |
+| POST | `/api/interview-sessions/{id}/speech/turns/{turnId}/audio` | Bearer, owner | Tạo hoặc lấy MP3 cho interviewer turn |
 | POST | `/api/interview-sessions/{id}/finish` | Bearer, owner | Kết thúc sớm và chuyển scoring |
 | GET | `/api/interview-sessions/{id}/report` | Bearer, owner | Trạng thái scoring hoặc report |
 | POST | `/api/interview-sessions/{id}/scoring/retry` | Bearer, owner | `202`, retry scoring |

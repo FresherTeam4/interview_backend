@@ -13,6 +13,8 @@ public interface InterviewTurnRepository extends JpaRepository<InterviewTurn, Lo
 
     Optional<InterviewTurn> findBySessionIdAndTurnIndex(Long sessionId, int turnIndex);
 
+    Optional<InterviewTurn> findByIdAndSessionId(Long id, Long sessionId);
+
     Optional<InterviewTurn> findBySessionIdAndIdempotencyKey(Long sessionId, String idempotencyKey);
 
     Optional<InterviewTurn> findByReplyToTurnId(Long replyToTurnId);

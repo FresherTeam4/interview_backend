@@ -26,7 +26,7 @@ spring:
         timeout: ${AI_TIMEOUT:25s}
         max-retries: ${AI_MAX_RETRIES:0}
         options:
-          model: ${AI_MODEL:minimax/minimax-m3:free}
+          model: ${AI_MODEL:inclusionai/ling-3.0-flash-sante:free}
           temperature: ${AI_TEMPERATURE:0.1}
 
 springdoc:
@@ -84,7 +84,7 @@ app:
     max-text-characters: ${JD_MAX_TEXT_CHARACTERS:30000}
 
   interview-session:
-    supported-languages: ${INTERVIEW_SUPPORTED_LANGUAGES:vi,en}
+    supported-languages: ${INTERVIEW_SUPPORTED_LANGUAGES:vi,en,ja}
     supported-durations: ${INTERVIEW_SUPPORTED_DURATIONS:15,30,45,60}
     deadline-sweep-ms: ${INTERVIEW_DEADLINE_SWEEP_MS:30000}
 
@@ -92,3 +92,23 @@ app:
     minimum-coverage-percentage: ${INTERVIEW_MINIMUM_SCORING_COVERAGE:50}
     technical-weight: ${INTERVIEW_TECHNICAL_SCORE_WEIGHT:0.8}
     communication-weight: ${INTERVIEW_COMMUNICATION_SCORE_WEIGHT:0.2}
+
+  speech:
+    enabled: ${SPEECH_ENABLED:true}
+    stt-provider: ${SPEECH_STT_PROVIDER:elevenlabs}
+    tts-provider: ${SPEECH_TTS_PROVIDER:elevenlabs}
+    max-audio-size-bytes: ${SPEECH_MAX_AUDIO_SIZE_BYTES:10485760}
+    connect-timeout: ${SPEECH_CONNECT_TIMEOUT:5s}
+    read-timeout: ${SPEECH_READ_TIMEOUT:45s}
+
+    providers:
+      elevenlabs:
+        api-key: ${ELEVENLABS_API_KEY:}
+        base-url: ${ELEVENLABS_BASE_URL:https://api.elevenlabs.io}
+        stt-model: ${ELEVENLABS_STT_MODEL:scribe_v2}
+        tts-model: ${ELEVENLABS_TTS_MODEL:eleven_flash_v2_5}
+        output-format: ${ELEVENLABS_OUTPUT_FORMAT:mp3_44100_128}
+        voices:
+          en: ${ELEVENLABS_VOICE_EN:sDLPLA42F3JDFlBx0oRp}
+          ja: ${ELEVENLABS_VOICE_JA:sDLPLA42F3JDFlBx0oRp}
+          vi: ${ELEVENLABS_VOICE_VI:sDLPLA42F3JDFlBx0oRp}

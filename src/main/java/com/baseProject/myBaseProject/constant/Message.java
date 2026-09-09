@@ -30,6 +30,18 @@ public final class Message {
     public static final String INTERVIEW_TURN_PROCESSING = "The interviewer is already processing this answer";
     public static final String PROFILE_CONFIRM_REQUIRED = "Confirm the candidate profile before creating an interview session";
 
+    // Speech
+    public static final String SPEECH_NOT_ENABLED = "Interview speech is not enabled";
+    public static final String SPEECH_CONFIG_ERROR = "Speech service is not configured properly";
+    public static final String SPEECH_INVALID_AUDIO = "Audio file is missing or unsupported";
+    public static final String SPEECH_AUDIO_TOO_LARGE = "Audio file exceeds the allowed size";
+    public static final String SPEECH_PROVIDER_UNAVAILABLE = "Speech service is temporarily unavailable";
+    public static final String SPEECH_PROVIDER_TIMEOUT = "Speech service request timed out";
+    public static final String SPEECH_PROVIDER_ERROR = "Speech service rejected the request";
+    public static final String SPEECH_TRANSCRIPTION_FAILED = "Speech service returned an empty transcription";
+    public static final String SPEECH_SYNTHESIS_FAILED = "Speech service returned empty audio";
+    public static final String SPEECH_TURN_NOT_SYNTHESIZABLE = "Interview turn cannot be converted to speech";
+
     // Job description processing
     public static final String JD_FILE_REQUIRED = "Job description file is required";
     public static final String JD_INVALID_FILE_TYPE = "Job description must be a valid PDF file";
