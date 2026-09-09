@@ -30,7 +30,7 @@ import java.time.Duration;
 @IsAuthenticated
 @RequiredArgsConstructor
 @SecurityRequirement(name = OpenApiConfig.BEARER_AUTH)
-@Tag(name = "Âm thanh phỏng vấn", description = "Chuyển đổi giọng nói và văn bản trong phiên phỏng vấn")
+@Tag(name = "Âm thanh phỏng vấn")
 public class SpeechController {
     private final SpeechService service;
 

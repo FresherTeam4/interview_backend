@@ -31,7 +31,7 @@ import java.util.List;
 @RequiredArgsConstructor
 @IsUser
 @SecurityRequirement(name = OpenApiConfig.BEARER_AUTH)
-@Tag(name = "CV", description = "Tải lên, xử lý và quản lý CV của ứng viên")
+@Tag(name = "CV")
 public class CvController {
 
     private final CvDocumentService cvDocumentService;

@@ -28,7 +28,7 @@ import java.util.List;
 @RequiredArgsConstructor
 @IsUser
 @SecurityRequirement(name = OpenApiConfig.BEARER_AUTH)
-@Tag(name = "Hồ sơ ứng viên", description = "Xem, chỉnh sửa và xác nhận hồ sơ được trích xuất từ CV")
+@Tag(name = "Hồ sơ ứng viên")
 public class CandidateProfileController {
 
     private final CandidateProfileService candidateProfileService;

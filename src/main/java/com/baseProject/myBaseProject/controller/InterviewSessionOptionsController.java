@@ -17,7 +17,7 @@ import org.springframework.web.bind.annotation.RestController;
 @IsAuthenticated
 @RequiredArgsConstructor
 @SecurityRequirement(name = OpenApiConfig.BEARER_AUTH)
-@Tag(name = "Phiên phỏng vấn", description = "Tạo và chuẩn bị các phiên phỏng vấn")
+@Tag(name = "Phiên phỏng vấn")
 public class InterviewSessionOptionsController {
     private final InterviewSessionService service;
 

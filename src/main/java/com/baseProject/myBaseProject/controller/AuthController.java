@@ -36,7 +36,7 @@ import java.time.Clock;
 @RestController
 @RequestMapping("/api/auth")
 @RequiredArgsConstructor
-@Tag(name = "Xác thực", description = "Đăng ký, đăng nhập, làm mới token và đăng xuất")
+@Tag(name = "Xác thực")
 public class AuthController {
     private final AuthService authService;
     private final RefreshTokenCookieFactory cookieFactory;

@@ -35,7 +35,7 @@ import java.util.List;
 @IsAuthenticated
 @RequiredArgsConstructor
 @SecurityRequirement(name = OpenApiConfig.BEARER_AUTH)
-@Tag(name = "Mô tả công việc", description = "Tạo, phân tích và quản lý mô tả công việc")
+@Tag(name = "Mô tả công việc")
 public class JobDescriptionController {
     private final JobDescriptionService service;
 
