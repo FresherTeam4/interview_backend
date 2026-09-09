@@ -26,12 +26,14 @@ import org.springframework.web.bind.annotation.RestController;
 @IsAuthenticated
 @RequiredArgsConstructor
 @SecurityRequirement(name = OpenApiConfig.BEARER_AUTH)
-@Tag(name = "Interview Sessions", description = "Create and prepare interview sessions")
+@Tag(name = "Phiên phỏng vấn", description = "Tạo và chuẩn bị các phiên phỏng vấn")
 public class InterviewSessionController {
     private final InterviewSessionService service;
 
     @PostMapping
-    @Operation(summary = "Create a session and prepare its adaptive interview plan")
+    @Operation(
+            summary = "Tạo phiên phỏng vấn",
+            description = "Tạo phiên từ mẫu và hồ sơ đã chọn, sau đó chuẩn bị kế hoạch phỏng vấn ở chế độ nền.")
     public ResponseEntity<InterviewSessionStatusResponse> create(
             @CurrentUser CustomUserDetails user,
             @RequestHeader(name = "Idempotency-Key", required = false) String idempotencyKey,
@@ -41,14 +43,18 @@ public class InterviewSessionController {
     }
 
     @GetMapping("/{id}")
-    @Operation(summary = "Get interview session preparation status")
+    @Operation(
+            summary = "Lấy trạng thái phiên phỏng vấn",
+            description = "Trả về thông tin và trạng thái chuẩn bị hiện tại của một phiên phỏng vấn.")
     public InterviewSessionStatusResponse get(
             @CurrentUser CustomUserDetails user, @PathVariable Long id) {
         return service.get(user.getId(), id);
     }
 
     @PostMapping("/{id}/preparation/retry")
-    @Operation(summary = "Retry a failed interview preparation")
+    @Operation(
+            summary = "Thử lại chuẩn bị phỏng vấn",
+            description = "Khởi động lại bước chuẩn bị kế hoạch cho phiên phỏng vấn đã chuẩn bị thất bại.")
     public ResponseEntity<InterviewSessionStatusResponse> retryPreparation(
             @CurrentUser CustomUserDetails user, @PathVariable Long id) {
         return ResponseEntity.accepted()

@@ -30,14 +30,16 @@ import java.time.Duration;
 @IsAuthenticated
 @RequiredArgsConstructor
 @SecurityRequirement(name = OpenApiConfig.BEARER_AUTH)
-@Tag(name = "Interview Speech", description = "Provider-independent interview speech APIs")
+@Tag(name = "Âm thanh phỏng vấn", description = "Chuyển đổi giọng nói và văn bản trong phiên phỏng vấn")
 public class SpeechController {
     private final SpeechService service;
 
     @PostMapping(
             value = "/transcriptions",
             consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    @Operation(summary = "Transcribe a candidate answer in the session language")
+    @Operation(
+            summary = "Chuyển giọng nói thành văn bản",
+            description = "Nhận tệp ghi âm câu trả lời và chuyển thành văn bản theo ngôn ngữ của phiên phỏng vấn.")
     public SpeechTranscriptionResponse transcribe(
             @CurrentUser CustomUserDetails user,
             @PathVariable Long sessionId,
@@ -52,11 +54,13 @@ public class SpeechController {
     @PostMapping(
             value = "/turns/{turnId}/audio",
             produces = "audio/mpeg")
-    @Operation(summary = "Generate or retrieve speech for an interviewer turn")
+    @Operation(
+            summary = "Lấy âm thanh câu hỏi phỏng vấn",
+            description = "Tạo hoặc lấy lại tệp MP3 đọc nội dung của một lượt hỏi từ người phỏng vấn.")
     public ResponseEntity<byte[]> interviewerAudio(
             @CurrentUser CustomUserDetails user,
             @PathVariable Long sessionId,
-            @Parameter(description = "Database id of an INTERVIEWER turn, not its turnIndex")
+            @Parameter(description = "ID cơ sở dữ liệu của lượt INTERVIEWER, không phải turnIndex")
             @PathVariable Long turnId) {
         SpeechSynthesisResult result = service.synthesizeInterviewerTurn(
                 user.getId(), sessionId, turnId);

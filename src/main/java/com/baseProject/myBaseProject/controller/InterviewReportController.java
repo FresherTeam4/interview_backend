@@ -22,19 +22,23 @@ import org.springframework.web.bind.annotation.RestController;
 @IsAuthenticated
 @RequiredArgsConstructor
 @SecurityRequirement(name = OpenApiConfig.BEARER_AUTH)
-@Tag(name = "Interview Reports", description = "Read and retry interview scoring")
+@Tag(name = "Báo cáo phỏng vấn", description = "Xem báo cáo và xử lý lại việc chấm điểm phỏng vấn")
 public class InterviewReportController {
     private final InterviewReportService service;
 
     @GetMapping("/{id}/report")
-    @Operation(summary = "Get interview scoring status or completed report")
+    @Operation(
+            summary = "Lấy báo cáo phỏng vấn",
+            description = "Trả về trạng thái chấm điểm hoặc báo cáo đánh giá hoàn chỉnh của phiên phỏng vấn.")
     public InterviewReportResponse get(
             @CurrentUser CustomUserDetails user, @PathVariable Long id) {
         return service.get(user.getId(), id);
     }
 
     @PostMapping("/{id}/scoring/retry")
-    @Operation(summary = "Retry failed interview scoring")
+    @Operation(
+            summary = "Thử lại chấm điểm phỏng vấn",
+            description = "Khởi động lại quá trình chấm điểm cho phiên phỏng vấn đã chấm thất bại.")
     public ResponseEntity<InterviewReportResponse> retryScoring(
             @CurrentUser CustomUserDetails user, @PathVariable Long id) {
         return ResponseEntity.accepted().body(service.retryScoring(user.getId(), id));

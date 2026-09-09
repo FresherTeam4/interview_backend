@@ -26,26 +26,32 @@ import org.springframework.web.bind.annotation.RestController;
 @IsAuthenticated
 @RequiredArgsConstructor
 @SecurityRequirement(name = OpenApiConfig.BEARER_AUTH)
-@Tag(name = "Interview Conversations", description = "Run adaptive text interviews")
+@Tag(name = "Hội thoại phỏng vấn", description = "Thực hiện cuộc phỏng vấn thích ứng theo từng câu trả lời")
 public class InterviewConversationController {
     private final InterviewConversationService service;
 
     @PostMapping("/{id}/start")
-    @Operation(summary = "Start a prepared interview and its server-side timer")
+    @Operation(
+            summary = "Bắt đầu phỏng vấn",
+            description = "Bắt đầu phiên đã chuẩn bị, khởi chạy bộ đếm thời gian và trả về câu hỏi đầu tiên.")
     public InterviewConversationResponse start(
             @CurrentUser CustomUserDetails user, @PathVariable Long id) {
         return service.start(user.getId(), id);
     }
 
     @GetMapping("/{id}/conversation")
-    @Operation(summary = "Resume an interview from its persisted conversation")
+    @Operation(
+            summary = "Lấy hội thoại phỏng vấn",
+            description = "Trả về hội thoại đã lưu và trạng thái hiện tại để người dùng tiếp tục phiên phỏng vấn.")
     public InterviewConversationResponse get(
             @CurrentUser CustomUserDetails user, @PathVariable Long id) {
         return service.get(user.getId(), id);
     }
 
     @PostMapping("/{id}/answers")
-    @Operation(summary = "Save a candidate answer and generate the next interviewer turn")
+    @Operation(
+            summary = "Gửi câu trả lời phỏng vấn",
+            description = "Lưu câu trả lời của ứng viên và tạo lượt hỏi tiếp theo; hỗ trợ Idempotency-Key để tránh gửi trùng.")
     public InterviewAnswerResponse answer(
             @CurrentUser CustomUserDetails user,
             @PathVariable Long id,
@@ -55,7 +61,9 @@ public class InterviewConversationController {
     }
 
     @PostMapping("/{id}/finish")
-    @Operation(summary = "End an interview early and continue to scoring")
+    @Operation(
+            summary = "Kết thúc phỏng vấn",
+            description = "Kết thúc phiên trước thời hạn và chuyển cuộc phỏng vấn sang bước chấm điểm.")
     public InterviewConversationResponse finish(
             @CurrentUser CustomUserDetails user, @PathVariable Long id) {
         return service.finish(user.getId(), id);

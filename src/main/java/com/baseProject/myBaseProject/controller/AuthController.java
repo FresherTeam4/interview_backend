@@ -36,26 +36,32 @@ import java.time.Clock;
 @RestController
 @RequestMapping("/api/auth")
 @RequiredArgsConstructor
-@Tag(name = "Auth", description = "Đăng ký, đăng nhập, làm mới token và đăng xuất")
+@Tag(name = "Xác thực", description = "Đăng ký, đăng nhập, làm mới token và đăng xuất")
 public class AuthController {
     private final AuthService authService;
     private final RefreshTokenCookieFactory cookieFactory;
     private final Clock clock;
 
     @PostMapping("/register")
-    @Operation(summary = "Đăng ký tài khoản mới")
+    @Operation(
+            summary = "Đăng ký tài khoản",
+            description = "Tạo tài khoản mới, trả về access token và lưu refresh token trong cookie.")
     public ResponseEntity<AuthResponse> register(@Valid @RequestBody RegisterRequest request) {
         return withRefreshCookie(HttpStatus.CREATED, authService.register(request));
     }
 
     @PostMapping("/login")
-    @Operation(summary = "Đăng nhập")
+    @Operation(
+            summary = "Đăng nhập",
+            description = "Xác thực bằng email và mật khẩu, trả về access token và lưu refresh token trong cookie.")
     public ResponseEntity<AuthResponse> login(@Valid @RequestBody LoginRequest request) {
         return withRefreshCookie(HttpStatus.OK, authService.login(request));
     }
 
     @PostMapping("/google")
-    @Operation(summary = "Đăng nhập bằng Google")
+    @Operation(
+            summary = "Đăng nhập bằng Google",
+            description = "Xác thực Google ID token, tạo tài khoản nếu chưa tồn tại và trả về thông tin đăng nhập.")
     public ResponseEntity<AuthResponse> loginWithGoogle(@Valid @RequestBody GoogleLoginRequest request) {
         return withRefreshCookie(HttpStatus.OK, authService.loginWithGoogle(request));
     }
@@ -63,13 +69,17 @@ public class AuthController {
     @GetMapping("/me")
     @IsAuthenticated
     @SecurityRequirement(name = OpenApiConfig.BEARER_AUTH)
-    @Operation(summary = "Lấy thông tin người dùng hiện tại")
+    @Operation(
+            summary = "Lấy người dùng hiện tại",
+            description = "Trả về thông tin tài khoản đang đăng nhập từ access token.")
     public CurrentUserResponse currentUser(@CurrentUser CustomUserDetails currentUser) {
         return authService.currentUser(currentUser.getId());
     }
 
     @PostMapping("/refresh")
-    @Operation(summary = "Làm mới access token")
+    @Operation(
+            summary = "Làm mới access token",
+            description = "Dùng refresh token trong cookie để cấp access token mới và xoay vòng refresh token.")
     public ResponseEntity<AuthResponse> refresh(HttpServletRequest request) {
         String refreshToken = cookieFactory.read(request)
                 .orElseThrow(() -> new DomainException(ErrorCode.MISSING_REFRESH_TOKEN));
@@ -78,7 +88,9 @@ public class AuthController {
     }
 
     @PostMapping("/logout")
-    @Operation(summary = "Đăng xuất thiết bị hiện tại")
+    @Operation(
+            summary = "Đăng xuất thiết bị hiện tại",
+            description = "Thu hồi refresh token của phiên hiện tại và xóa cookie đăng nhập.")
     public ResponseEntity<Void> logout(HttpServletRequest request) {
         cookieFactory.read(request).ifPresent(authService::logout);
 
@@ -90,7 +102,9 @@ public class AuthController {
     @PostMapping("/logout-all")
     @IsAuthenticated
     @SecurityRequirement(name = OpenApiConfig.BEARER_AUTH)
-    @Operation(summary = "Đăng xuất mọi thiết bị")
+    @Operation(
+            summary = "Đăng xuất mọi thiết bị",
+            description = "Thu hồi toàn bộ refresh token của người dùng và xóa cookie đăng nhập hiện tại.")
     public ResponseEntity<Void> logoutAll(@CurrentUser CustomUserDetails currentUser) {
         authService.logoutAll(currentUser.getId());
 

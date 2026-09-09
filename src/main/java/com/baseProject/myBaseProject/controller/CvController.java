@@ -31,13 +31,15 @@ import java.util.List;
 @RequiredArgsConstructor
 @IsUser
 @SecurityRequirement(name = OpenApiConfig.BEARER_AUTH)
-@Tag(name = "CV", description = "Upload and process candidate CVs")
+@Tag(name = "CV", description = "Tải lên, xử lý và quản lý CV của ứng viên")
 public class CvController {
 
     private final CvDocumentService cvDocumentService;
 
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    @Operation(summary = "Upload a CV and start background parsing")
+    @Operation(
+            summary = "Tải lên CV",
+            description = "Tải lên tệp CV và bắt đầu trích xuất hồ sơ ở chế độ nền; trả lại bản ghi cũ nếu tệp đã tồn tại.")
     public ResponseEntity<CvDocumentResponse> upload(
             @CurrentUser CustomUserDetails currentUser,
             @RequestPart(name = "file", required = false) MultipartFile file) {
@@ -50,20 +52,26 @@ public class CvController {
     }
 
     @GetMapping
-    @Operation(summary = "Get current user's CVs")
+    @Operation(
+            summary = "Lấy danh sách CV",
+            description = "Trả về các CV của người dùng hiện tại cùng trạng thái xử lý.")
     public List<CvDocumentResponse> list(@CurrentUser CustomUserDetails currentUser) {
         return cvDocumentService.list(currentUser.getId());
     }
 
     @GetMapping("/{cvId}")
-    @Operation(summary = "Get a CV and its parsing status")
+    @Operation(
+            summary = "Lấy chi tiết CV",
+            description = "Trả về thông tin một CV và trạng thái trích xuất hồ sơ.")
     public CvDocumentResponse get(@CurrentUser CustomUserDetails currentUser,
                                   @PathVariable Long cvId) {
         return cvDocumentService.get(currentUser.getId(), cvId);
     }
 
     @GetMapping("/{cvId}/file")
-    @Operation(summary = "Get a temporary URL for the original CV file")
+    @Operation(
+            summary = "Lấy đường dẫn tệp CV",
+            description = "Tạo URL tạm thời để tải hoặc xem tệp CV gốc.")
     public CvFileUrlResponse fileUrl(@CurrentUser CustomUserDetails currentUser,
                                      @PathVariable Long cvId) {
         return cvDocumentService.fileUrl(currentUser.getId(), cvId);
@@ -71,7 +79,9 @@ public class CvController {
 
     @PostMapping("/{cvId}/parse")
     @ResponseStatus(HttpStatus.ACCEPTED)
-    @Operation(summary = "Retry parsing a failed CV")
+    @Operation(
+            summary = "Thử lại xử lý CV",
+            description = "Khởi động lại quá trình trích xuất hồ sơ cho CV đã xử lý thất bại.")
     public CvDocumentResponse retryParse(@CurrentUser CustomUserDetails currentUser,
                                          @PathVariable Long cvId) {
         return cvDocumentService.retryParse(currentUser.getId(), cvId);
@@ -79,7 +89,9 @@ public class CvController {
 
     @DeleteMapping("/{cvId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    @Operation(summary = "Soft-delete a CV from the current user's list")
+    @Operation(
+            summary = "Xóa CV",
+            description = "Xóa mềm CV khỏi danh sách của người dùng hiện tại.")
     public void delete(@CurrentUser CustomUserDetails currentUser,
                        @PathVariable Long cvId) {
         cvDocumentService.delete(currentUser.getId(), cvId);

@@ -30,11 +30,14 @@ import org.springframework.web.bind.annotation.RestController;
 @IsAuthenticated
 @RequiredArgsConstructor
 @SecurityRequirement(name = OpenApiConfig.BEARER_AUTH)
-@Tag(name = "Interview Templates", description = "Edit and confirm AI-generated interview templates")
+@Tag(name = "Mẫu phỏng vấn", description = "Xem và quản lý các mẫu phỏng vấn do AI tạo")
 public class InterviewTemplateController {
     private final InterviewTemplateService service;
 
     @GetMapping
+    @Operation(
+            summary = "Lấy danh sách mẫu phỏng vấn",
+            description = "Trả về danh sách phân trang theo phạm vi: mine là mẫu của người dùng, public là mẫu đã công khai.")
     public TemplatePageResponse<InterviewTemplateSummaryResponse> list(
             @CurrentUser CustomUserDetails user,
             @RequestParam(defaultValue = "mine") String scope,
@@ -44,13 +47,18 @@ public class InterviewTemplateController {
     }
 
     @GetMapping("/{id}")
+    @Operation(
+            summary = "Lấy chi tiết mẫu phỏng vấn",
+            description = "Trả về nội dung và trạng thái của một mẫu phỏng vấn mà người dùng có quyền truy cập.")
     public InterviewTemplateResponse get(@CurrentUser CustomUserDetails user,
                                          @PathVariable Long id) {
         return service.get(user.getId(), id);
     }
 
     @PutMapping("/{id}")
-    @Operation(summary = "Edit an unconfirmed interview template")
+    @Operation(
+            summary = "Cập nhật mẫu phỏng vấn",
+            description = "Chỉnh sửa nội dung của mẫu phỏng vấn chưa được xác nhận.")
     public InterviewTemplateResponse update(
             @CurrentUser CustomUserDetails user, @PathVariable Long id,
             @Valid @RequestBody UpdateInterviewTemplateRequest request) {
@@ -58,7 +66,9 @@ public class InterviewTemplateController {
     }
 
     @PostMapping("/{id}/confirm")
-    @Operation(summary = "Confirm and freeze an interview template")
+    @Operation(
+            summary = "Xác nhận mẫu phỏng vấn",
+            description = "Xác nhận và khóa nội dung mẫu; expectedVersion dùng để ngăn cập nhật đè lên phiên bản mới hơn.")
     public InterviewTemplateResponse confirm(
             @CurrentUser CustomUserDetails user, @PathVariable Long id,
             @Valid @RequestBody TemplateVersionRequest request) {
@@ -67,6 +77,9 @@ public class InterviewTemplateController {
 
     @PostMapping("/{id}/publish")
     @IsAdmin
+    @Operation(
+            summary = "Công khai mẫu phỏng vấn",
+            description = "Công khai mẫu đã xác nhận để người dùng khác có thể xem và sử dụng; chỉ quản trị viên được thực hiện.")
     public InterviewTemplateResponse publish(
             @CurrentUser CustomUserDetails user, @PathVariable Long id,
             @Valid @RequestBody TemplateVersionRequest request) {
@@ -75,6 +88,9 @@ public class InterviewTemplateController {
 
     @PostMapping("/{id}/unpublish")
     @IsAdmin
+    @Operation(
+            summary = "Hủy công khai mẫu phỏng vấn",
+            description = "Gỡ mẫu khỏi danh sách công khai; chỉ quản trị viên được thực hiện.")
     public InterviewTemplateResponse unpublish(
             @CurrentUser CustomUserDetails user, @PathVariable Long id,
             @Valid @RequestBody TemplateVersionRequest request) {
@@ -82,6 +98,9 @@ public class InterviewTemplateController {
     }
 
     @PostMapping("/{id}/archive")
+    @Operation(
+            summary = "Lưu trữ mẫu phỏng vấn",
+            description = "Đưa mẫu phỏng vấn vào trạng thái lưu trữ và ngừng sử dụng mẫu cho phiên mới.")
     public InterviewTemplateResponse archive(
             @CurrentUser CustomUserDetails user, @PathVariable Long id,
             @Valid @RequestBody TemplateVersionRequest request) {
