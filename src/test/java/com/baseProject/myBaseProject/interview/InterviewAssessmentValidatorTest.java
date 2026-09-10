@@ -104,11 +104,49 @@ class InterviewAssessmentValidatorTest {
         assertThat(result.focusAreaAssessments().get(1).score()).isNull();
     }
 
+    @Test
+    void identifiesMissingFocusFeedback() {
+        InterviewAssessmentResult invalid = replaceFirstFocus(
+                focusWithFeedback(null));
+
+        assertInvalidFocusFeedback(invalid, "MISSING", "null");
+    }
+
+    @Test
+    void identifiesBlankFocusFeedback() {
+        InterviewAssessmentResult invalid = replaceFirstFocus(
+                focusWithFeedback("   "));
+
+        assertInvalidFocusFeedback(invalid, "BLANK", "0");
+    }
+
+    @Test
+    void identifiesOversizedFocusFeedback() {
+        InterviewAssessmentResult invalid = replaceFirstFocus(
+                focusWithFeedback("a".repeat(4001)));
+
+        assertInvalidFocusFeedback(invalid, "OVERSIZED", "4001");
+    }
+
     private void assertInvalid(InterviewAssessmentResult result) {
         assertThatThrownBy(() -> validator.validate(result, context()))
                 .isInstanceOfSatisfying(DomainException.class, exception ->
                         assertThat(exception.getCode()).isEqualTo(
                                 ErrorCode.INTERVIEW_ASSESSMENT_INVALID));
+    }
+
+    private void assertInvalidFocusFeedback(
+            InterviewAssessmentResult result, String reason, String normalizedLength) {
+        assertThatThrownBy(() -> validator.validate(result, context()))
+                .isInstanceOfSatisfying(DomainException.class, exception -> {
+                    assertThat(exception.getCode())
+                            .isEqualTo(ErrorCode.INTERVIEW_ASSESSMENT_INVALID);
+                    assertThat(exception.getMessage())
+                            .contains("focusAreaCode=BACKEND")
+                            .contains("reason=" + reason)
+                            .contains("normalizedLength=" + normalizedLength)
+                            .contains("maxLength=4000");
+                });
     }
 
     private InterviewAssessmentResult replaceFirstFocus(
@@ -171,6 +209,20 @@ class InterviewAssessmentValidatorTest {
                 List.of("Thiếu ví dụ sâu"),
                 "Nên bổ sung ví dụ thực tế.",
                 evidenceTurnIds);
+    }
+
+    private InterviewAssessmentResult.FocusAreaAssessment focusWithFeedback(
+            String feedback) {
+        return new InterviewAssessmentResult.FocusAreaAssessment(
+                "BACKEND",
+                70,
+                InterviewAssessmentConfidence.HIGH,
+                InterviewEvidenceStatus.SUFFICIENT,
+                "Có bằng chứng phù hợp.",
+                List.of("Hiểu khái niệm"),
+                List.of("Thiếu ví dụ sâu"),
+                feedback,
+                List.of(11L));
     }
 
     private InterviewScoringContext context() {

@@ -4,6 +4,7 @@ import com.baseProject.myBaseProject.dto.ai.interview.InterviewAssessmentResult;
 import com.baseProject.myBaseProject.enums.InterviewAssessmentConfidence;
 import com.baseProject.myBaseProject.enums.InterviewEvidenceStatus;
 import com.baseProject.myBaseProject.enums.InterviewTurnRole;
+import com.baseProject.myBaseProject.exception.DomainException;
 import com.baseProject.myBaseProject.exception.ErrorCode;
 import com.baseProject.myBaseProject.interview.model.InterviewScoringContext;
 import org.springframework.stereotype.Component;
@@ -127,9 +128,34 @@ public class InterviewAssessmentValidator {
                         assessment.rationale(), MAX_FEEDBACK_LENGTH, "focus rationale"),
                 validateTextList(assessment.strengths(), "focus strength"),
                 validateTextList(assessment.gaps(), "focus gap"),
-                OUTPUT.required(
-                        assessment.feedback(), MAX_FEEDBACK_LENGTH, "focus feedback"),
+                validateFocusFeedback(assessment.feedback(), code),
                 evidenceIds);
+    }
+
+    private String validateFocusFeedback(String value, String focusAreaCode) {
+        if (value == null) {
+            throw invalidFocusFeedback(focusAreaCode, "MISSING", null);
+        }
+        String normalized = value.strip();
+        if (normalized.isEmpty()) {
+            throw invalidFocusFeedback(focusAreaCode, "BLANK", 0);
+        }
+        if (normalized.length() > MAX_FEEDBACK_LENGTH) {
+            throw invalidFocusFeedback(
+                    focusAreaCode, "OVERSIZED", normalized.length());
+        }
+        return normalized;
+    }
+
+    private DomainException invalidFocusFeedback(
+            String focusAreaCode, String reason, Integer normalizedLength) {
+        String detail = ("Invalid focus feedback: focusAreaCode=%s, reason=%s, "
+                + "normalizedLength=%s, maxLength=%d").formatted(
+                        focusAreaCode,
+                        reason,
+                        normalizedLength == null ? "null" : normalizedLength,
+                        MAX_FEEDBACK_LENGTH);
+        return OUTPUT.invalid(detail);
     }
 
     private List<InterviewAssessmentResult.ReportItem> validateReportItems(
