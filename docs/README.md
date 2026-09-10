@@ -14,6 +14,7 @@ Thư mục này là contract tích hợp frontend của backend `my-interview`. 
 | [speech-api.md](./speech-api.md) | Push-to-talk STT, audio interviewer, cấu hình ElevenLabs và cách đổi speech provider |
 | [frontend-implementation-guide.md](./frontend-implementation-guide.md) | Kiến trúc client, route/screen, state machine, query invalidation và checklist hoàn thiện |
 | [openapi.yaml](./openapi.yaml) | OpenAPI 3.0 để sinh type/client hoặc nạp vào công cụ API |
+| [database-migrations.md](./database-migrations.md) | Cách Liquibase quản lý schema, tiếp quản database cũ và thêm migration mới |
 
 ## Luồng sản phẩm đầy đủ
 

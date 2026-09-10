@@ -1,0 +1,97 @@
+databaseChangeLog:
+  # MARK_RAN cho phép Liquibase tiếp quản database cũ đã được Hibernate tạo.
+  # Database mới vẫn chạy đầy đủ schema theo đúng thứ tự phụ thuộc.
+  - changeSet:
+      id: 000-core-schema
+      author: my-interview-team
+      preConditions:
+        - onFail: MARK_RAN
+        - not:
+            - tableExists:
+                tableName: user_accounts
+      changes:
+        - sqlFile:
+            path: db/changelog/000-core-schema.sql
+            splitStatements: true
+            stripComments: true
+
+  - changeSet:
+      id: 001-interview-templates
+      author: my-interview-team
+      preConditions:
+        - onFail: MARK_RAN
+        - not:
+            - tableExists:
+                tableName: job_description_documents
+      changes:
+        - sqlFile:
+            path: db/changelog/sql/001-interview-templates.sql
+            splitStatements: true
+            stripComments: true
+
+  - changeSet:
+      id: 002-interview-sessions
+      author: my-interview-team
+      preConditions:
+        - onFail: MARK_RAN
+        - not:
+            - tableExists:
+                tableName: interview_sessions
+      changes:
+        - sqlFile:
+            path: db/changelog/sql/002-interview-sessions.sql
+            splitStatements: true
+            stripComments: true
+
+  - changeSet:
+      id: 003-interview-conversation
+      author: my-interview-team
+      preConditions:
+        - onFail: MARK_RAN
+        - not:
+            - columnExists:
+                tableName: interview_sessions
+                columnName: end_reason
+      changes:
+        - sqlFile:
+            path: db/changelog/sql/003-interview-conversation.sql
+            splitStatements: true
+            stripComments: true
+
+  - changeSet:
+      id: 004-interview-candidate-intent
+      author: my-interview-team
+      changes:
+        - sqlFile:
+            path: db/changelog/sql/004-interview-candidate-intent.sql
+            splitStatements: true
+            stripComments: true
+
+  - changeSet:
+      id: 005-interview-scoring
+      author: my-interview-team
+      preConditions:
+        - onFail: MARK_RAN
+        - not:
+            - tableExists:
+                tableName: interview_assessments
+      changes:
+        - sqlFile:
+            path: db/changelog/sql/005-interview-scoring.sql
+            splitStatements: true
+            stripComments: true
+
+  - changeSet:
+      id: 006-simplify-interview-report
+      author: my-interview-team
+      preConditions:
+        - onFail: MARK_RAN
+        - not:
+            - columnExists:
+                tableName: interview_assessments
+                columnName: recommendations_json
+      changes:
+        - sqlFile:
+            path: db/changelog/sql/006-simplify-interview-report.sql
+            splitStatements: true
+            stripComments: true
