@@ -2,7 +2,6 @@ package com.baseProject.myBaseProject.interview;
 
 import com.baseProject.myBaseProject.dto.ai.interview.InterviewAssessmentResult;
 import com.baseProject.myBaseProject.enums.CandidateIntent;
-import com.baseProject.myBaseProject.enums.InterviewAssessmentConfidence;
 import com.baseProject.myBaseProject.enums.InterviewEndReason;
 import com.baseProject.myBaseProject.enums.InterviewEvidenceStatus;
 import com.baseProject.myBaseProject.enums.InterviewFocusPriority;
@@ -25,34 +24,26 @@ class InterviewAssessmentValidatorTest {
             new InterviewAssessmentValidator();
 
     @Test
-    void normalizesValidAssessmentAndKeepsCandidateEvidence() {
+    void normalizesCompactAssessmentAndKeepsCandidateEvidence() {
         InterviewAssessmentResult result = validator.validate(
                 validAssessment(), context());
 
         assertThat(result.overallSummary()).isEqualTo("Ứng viên có nền tảng backend.");
+        assertThat(result.technicalFeedback()).isEqualTo(
+                "Nắm kiến thức chính nhưng cần giải thích trade-off.");
         assertThat(result.focusAreaAssessments()).extracting(
                         InterviewAssessmentResult.FocusAreaAssessment::focusAreaCode)
                 .containsExactly("BACKEND", "DATABASE");
         assertThat(result.focusAreaAssessments().get(0).evidenceTurnIds())
                 .containsExactly(11L);
-        assertThat(result.strengths()).singleElement().satisfies(item ->
-                assertThat(item.evidenceTurnIds()).containsExactly(11L));
+        assertThat(result.recommendations())
+                .containsExactly("Luyện giải thích trade-off bằng ví dụ thực tế.");
     }
 
     @Test
     void rejectsUnknownFocusArea() {
-        InterviewAssessmentResult invalid = new InterviewAssessmentResult(
-                "Summary",
-                List.of(
-                        focus("BACKEND", 70, InterviewEvidenceStatus.SUFFICIENT,
-                                InterviewAssessmentConfidence.HIGH, List.of(11L)),
-                        focus("UNKNOWN", 60, InterviewEvidenceStatus.PARTIAL,
-                                InterviewAssessmentConfidence.MEDIUM, List.of(13L))),
-                70,
-                "Communication feedback",
-                List.of(),
-                List.of(),
-                List.of());
+        InterviewAssessmentResult invalid = replaceSecondFocus(
+                focus("UNKNOWN", 60, InterviewEvidenceStatus.PARTIAL, List.of(13L)));
 
         assertInvalid(invalid);
     }
@@ -60,8 +51,7 @@ class InterviewAssessmentValidatorTest {
     @Test
     void rejectsInterviewerTurnAsEvidence() {
         InterviewAssessmentResult invalid = replaceFirstFocus(
-                focus("BACKEND", 70, InterviewEvidenceStatus.SUFFICIENT,
-                        InterviewAssessmentConfidence.HIGH, List.of(10L)));
+                focus("BACKEND", 70, InterviewEvidenceStatus.SUFFICIENT, List.of(10L)));
 
         assertInvalid(invalid);
     }
@@ -69,8 +59,7 @@ class InterviewAssessmentValidatorTest {
     @Test
     void rejectsScoreForUnexploredFocusArea() {
         InterviewAssessmentResult invalid = replaceFirstFocus(
-                focus("BACKEND", 20, InterviewEvidenceStatus.NOT_EXPLORED,
-                        InterviewAssessmentConfidence.LOW, List.of()));
+                focus("BACKEND", 20, InterviewEvidenceStatus.NOT_EXPLORED, List.of()));
 
         assertInvalid(invalid);
     }
@@ -78,17 +67,7 @@ class InterviewAssessmentValidatorTest {
     @Test
     void rejectsScoredFocusAreaWithoutCandidateEvidence() {
         InterviewAssessmentResult invalid = replaceFirstFocus(
-                focus("BACKEND", 70, InterviewEvidenceStatus.PARTIAL,
-                        InterviewAssessmentConfidence.MEDIUM, List.of()));
-
-        assertInvalid(invalid);
-    }
-
-    @Test
-    void rejectsHighConfidenceWhenEvidenceIsOnlyPartial() {
-        InterviewAssessmentResult invalid = replaceFirstFocus(
-                focus("BACKEND", 70, InterviewEvidenceStatus.PARTIAL,
-                        InterviewAssessmentConfidence.HIGH, List.of(11L)));
+                focus("BACKEND", 70, InterviewEvidenceStatus.PARTIAL, List.of()));
 
         assertInvalid(invalid);
     }
@@ -96,8 +75,7 @@ class InterviewAssessmentValidatorTest {
     @Test
     void acceptsUnexploredFocusAreaWithoutScoreOrEvidence() {
         InterviewAssessmentResult valid = replaceSecondFocus(
-                focus("DATABASE", null, InterviewEvidenceStatus.NOT_EXPLORED,
-                        InterviewAssessmentConfidence.LOW, List.of()));
+                focus("DATABASE", null, InterviewEvidenceStatus.NOT_EXPLORED, List.of()));
 
         InterviewAssessmentResult result = validator.validate(valid, context());
 
@@ -105,27 +83,17 @@ class InterviewAssessmentValidatorTest {
     }
 
     @Test
-    void identifiesMissingFocusFeedback() {
-        InterviewAssessmentResult invalid = replaceFirstFocus(
-                focusWithFeedback(null));
+    void rejectsMoreThanThreeRecommendations() {
+        InterviewAssessmentResult valid = validAssessment();
+        InterviewAssessmentResult invalid = new InterviewAssessmentResult(
+                valid.overallSummary(),
+                valid.technicalFeedback(),
+                valid.focusAreaAssessments(),
+                valid.communicationScore(),
+                valid.communicationFeedback(),
+                List.of("Một", "Hai", "Ba", "Bốn"));
 
-        assertInvalidFocusFeedback(invalid, "MISSING", "null");
-    }
-
-    @Test
-    void identifiesBlankFocusFeedback() {
-        InterviewAssessmentResult invalid = replaceFirstFocus(
-                focusWithFeedback("   "));
-
-        assertInvalidFocusFeedback(invalid, "BLANK", "0");
-    }
-
-    @Test
-    void identifiesOversizedFocusFeedback() {
-        InterviewAssessmentResult invalid = replaceFirstFocus(
-                focusWithFeedback("a".repeat(4001)));
-
-        assertInvalidFocusFeedback(invalid, "OVERSIZED", "4001");
+        assertInvalid(invalid);
     }
 
     private void assertInvalid(InterviewAssessmentResult result) {
@@ -135,31 +103,16 @@ class InterviewAssessmentValidatorTest {
                                 ErrorCode.INTERVIEW_ASSESSMENT_INVALID));
     }
 
-    private void assertInvalidFocusFeedback(
-            InterviewAssessmentResult result, String reason, String normalizedLength) {
-        assertThatThrownBy(() -> validator.validate(result, context()))
-                .isInstanceOfSatisfying(DomainException.class, exception -> {
-                    assertThat(exception.getCode())
-                            .isEqualTo(ErrorCode.INTERVIEW_ASSESSMENT_INVALID);
-                    assertThat(exception.getMessage())
-                            .contains("focusAreaCode=BACKEND")
-                            .contains("reason=" + reason)
-                            .contains("normalizedLength=" + normalizedLength)
-                            .contains("maxLength=4000");
-                });
-    }
-
     private InterviewAssessmentResult replaceFirstFocus(
             InterviewAssessmentResult.FocusAreaAssessment replacement) {
         InterviewAssessmentResult valid = validAssessment();
         return new InterviewAssessmentResult(
                 valid.overallSummary(),
+                valid.technicalFeedback(),
                 List.of(replacement, valid.focusAreaAssessments().get(1)),
                 valid.communicationScore(),
                 valid.communicationFeedback(),
-                valid.strengths(),
-                valid.improvements(),
-                valid.actionPlan());
+                valid.recommendations());
     }
 
     private InterviewAssessmentResult replaceSecondFocus(
@@ -167,62 +120,34 @@ class InterviewAssessmentValidatorTest {
         InterviewAssessmentResult valid = validAssessment();
         return new InterviewAssessmentResult(
                 valid.overallSummary(),
+                valid.technicalFeedback(),
                 List.of(valid.focusAreaAssessments().get(0), replacement),
                 valid.communicationScore(),
                 valid.communicationFeedback(),
-                valid.strengths(),
-                valid.improvements(),
-                valid.actionPlan());
+                valid.recommendations());
     }
 
     private InterviewAssessmentResult validAssessment() {
         return new InterviewAssessmentResult(
                 "  Ứng viên có nền tảng backend.  ",
+                "  Nắm kiến thức chính nhưng cần giải thích trade-off.  ",
                 List.of(
                         focus(" backend ", 78, InterviewEvidenceStatus.SUFFICIENT,
-                                InterviewAssessmentConfidence.HIGH, List.of(11L)),
+                                List.of(11L)),
                         focus("database", 60, InterviewEvidenceStatus.PARTIAL,
-                                InterviewAssessmentConfidence.MEDIUM, List.of(13L))),
+                                List.of(13L))),
                 72,
                 "Trình bày rõ nhưng cần cấu trúc hơn.",
-                List.of(new InterviewAssessmentResult.ReportItem(
-                        "  Giải thích rõ  ", "Có ví dụ REST API.", List.of(11L))),
-                List.of(new InterviewAssessmentResult.ReportItem(
-                        "Thiếu số liệu", "Chưa nêu kết quả định lượng.", List.of(13L))),
-                List.of(new InterviewAssessmentResult.ActionPlanItem(
-                        1, "Ôn transaction", "Kiến thức còn thiếu", "Luyện ví dụ thực tế")));
+                List.of("  Luyện giải thích trade-off bằng ví dụ thực tế.  "));
     }
 
     private InterviewAssessmentResult.FocusAreaAssessment focus(
             String code,
             Integer score,
             InterviewEvidenceStatus evidenceStatus,
-            InterviewAssessmentConfidence confidence,
             List<Long> evidenceTurnIds) {
         return new InterviewAssessmentResult.FocusAreaAssessment(
-                code,
-                score,
-                confidence,
-                evidenceStatus,
-                "Có bằng chứng phù hợp.",
-                List.of("Hiểu khái niệm"),
-                List.of("Thiếu ví dụ sâu"),
-                "Nên bổ sung ví dụ thực tế.",
-                evidenceTurnIds);
-    }
-
-    private InterviewAssessmentResult.FocusAreaAssessment focusWithFeedback(
-            String feedback) {
-        return new InterviewAssessmentResult.FocusAreaAssessment(
-                "BACKEND",
-                70,
-                InterviewAssessmentConfidence.HIGH,
-                InterviewEvidenceStatus.SUFFICIENT,
-                "Có bằng chứng phù hợp.",
-                List.of("Hiểu khái niệm"),
-                List.of("Thiếu ví dụ sâu"),
-                feedback,
-                List.of(11L));
+                code, score, evidenceStatus, evidenceTurnIds);
     }
 
     private InterviewScoringContext context() {

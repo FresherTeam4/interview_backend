@@ -1,8 +1,5 @@
 package com.baseProject.myBaseProject.dto.session;
 
-import com.baseProject.myBaseProject.enums.InterviewAssessmentConfidence;
-import com.baseProject.myBaseProject.enums.InterviewEvidenceStatus;
-import com.baseProject.myBaseProject.enums.InterviewFocusPriority;
 import com.baseProject.myBaseProject.enums.InterviewSessionStatus;
 
 import java.math.BigDecimal;
@@ -14,40 +11,38 @@ public record InterviewReportResponse(
         InterviewSessionStatus status,
         String scoringErrorCode,
         String scoringErrorMessage,
-        BigDecimal technicalScore,
-        BigDecimal communicationScore,
-        BigDecimal overallScore,
-        BigDecimal coveragePercentage,
-        InterviewAssessmentConfidence confidence,
-        String overallSummary,
-        List<ImprovementItem> improvements,
-        String communicationFeedback,
-        List<FocusAreaResult> focusAreas,
+        Report report,
         Instant completedAt) {
-
-    public InterviewReportResponse {
-        improvements = safe(improvements);
-        focusAreas = safe(focusAreas);
-    }
 
     private static <T> List<T> safe(List<T> values) {
         return values == null ? List.of() : List.copyOf(values);
     }
 
-    public record ImprovementItem(
-            String title,
-            String summary) {
+    public record Report(
+            BigDecimal score,
+            String summary,
+            ScoreBreakdown scores,
+            List<FocusAreaScore> focusAreas,
+            List<String> recommendations) {
+
+        public Report {
+            focusAreas = safe(focusAreas);
+            recommendations = safe(recommendations);
+        }
     }
 
-    public record FocusAreaResult(
-            Long focusAreaId,
-            String code,
-            String name,
-            InterviewFocusPriority priority,
-            short displayOrder,
+    public record ScoreBreakdown(
+            ScoreFeedback technical,
+            ScoreFeedback communication) {
+    }
+
+    public record ScoreFeedback(
             BigDecimal score,
-            InterviewAssessmentConfidence confidence,
-            InterviewEvidenceStatus evidenceStatus,
-            String summary) {
+            String feedback) {
+    }
+
+    public record FocusAreaScore(
+            String name,
+            BigDecimal score) {
     }
 }

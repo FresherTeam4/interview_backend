@@ -1196,44 +1196,48 @@ components:
           nullable: true
     InterviewReport:
       type: object
-      required: [sessionId, status, improvements, focusAreas]
+      required: [sessionId, status, report]
       properties:
         sessionId: {type: integer, format: int64}
         status: {$ref: '#/components/schemas/InterviewSessionStatusEnum'}
         scoringErrorCode: {type: string, nullable: true}
         scoringErrorMessage: {type: string, nullable: true}
-        technicalScore: {type: number, nullable: true}
-        communicationScore: {type: number, nullable: true}
-        overallScore: {type: number, nullable: true}
-        coveragePercentage: {type: number, nullable: true}
-        confidence: {type: string, enum: [LOW, MEDIUM, HIGH], nullable: true}
-        overallSummary: {type: string, nullable: true}
-        improvements:
+        report:
+          allOf: [{$ref: '#/components/schemas/InterviewReportContent'}]
+          nullable: true
+        completedAt: {type: string, format: date-time, nullable: true}
+    InterviewReportContent:
+      type: object
+      required: [summary, scores, focusAreas, recommendations]
+      properties:
+        score: {type: number, nullable: true}
+        summary: {type: string, maxLength: 400}
+        scores: {$ref: '#/components/schemas/InterviewScoreBreakdown'}
+        focusAreas:
+          type: array
+          items: {$ref: '#/components/schemas/InterviewFocusAreaScore'}
+        recommendations:
           type: array
           maxItems: 3
-          items: {$ref: '#/components/schemas/ImprovementItem'}
-        communicationFeedback: {type: string, nullable: true}
-        focusAreas: {type: array, items: {$ref: '#/components/schemas/FocusAreaResult'}}
-        completedAt: {type: string, format: date-time, nullable: true}
-    ImprovementItem:
+          items: {type: string, maxLength: 200}
+    InterviewScoreBreakdown:
       type: object
-      required: [title, summary]
+      required: [technical, communication]
       properties:
-        title: {type: string}
-        summary: {type: string}
-    FocusAreaResult:
+        technical: {$ref: '#/components/schemas/InterviewScoreFeedback'}
+        communication: {$ref: '#/components/schemas/InterviewScoreFeedback'}
+    InterviewScoreFeedback:
       type: object
-      required: [focusAreaId, code, name, priority, displayOrder, confidence, evidenceStatus, summary]
+      required: [feedback]
       properties:
-        focusAreaId: {type: integer, format: int64}
-        code: {type: string}
-        name: {type: string}
-        priority: {type: string, enum: [HIGH, MEDIUM, LOW]}
-        displayOrder: {type: integer}
         score: {type: number, nullable: true}
-        confidence: {type: string, enum: [LOW, MEDIUM, HIGH]}
-        evidenceStatus: {type: string, enum: [NOT_EXPLORED, PARTIAL, SUFFICIENT]}
-        summary: {type: string}
+        feedback: {type: string, maxLength: 300}
+    InterviewFocusAreaScore:
+      type: object
+      required: [name]
+      properties:
+        name: {type: string}
+        score: {type: number, nullable: true}
 
 security:
   - bearerAuth: []

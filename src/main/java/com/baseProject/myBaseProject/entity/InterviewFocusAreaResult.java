@@ -1,6 +1,5 @@
 package com.baseProject.myBaseProject.entity;
 
-import com.baseProject.myBaseProject.enums.InterviewAssessmentConfidence;
 import com.baseProject.myBaseProject.enums.InterviewEvidenceStatus;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -54,25 +53,8 @@ public class InterviewFocusAreaResult {
 
     @Enumerated(EnumType.STRING)
     @JdbcTypeCode(SqlTypes.VARCHAR)
-    @Column(nullable = false, length = 10)
-    private InterviewAssessmentConfidence confidence;
-
-    @Enumerated(EnumType.STRING)
-    @JdbcTypeCode(SqlTypes.VARCHAR)
     @Column(name = "evidence_status", nullable = false, length = 20)
     private InterviewEvidenceStatus evidenceStatus;
-
-    @Column(nullable = false, columnDefinition = "TEXT")
-    private String rationale;
-
-    @Column(name = "strengths_json", nullable = false, columnDefinition = "JSON")
-    private String strengthsJson;
-
-    @Column(name = "gaps_json", nullable = false, columnDefinition = "JSON")
-    private String gapsJson;
-
-    @Column(nullable = false, columnDefinition = "TEXT")
-    private String feedback;
 
     @Column(name = "evidence_turn_ids_json", nullable = false, columnDefinition = "JSON")
     private String evidenceTurnIdsJson;

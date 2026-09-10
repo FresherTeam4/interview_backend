@@ -1,6 +1,5 @@
 package com.baseProject.myBaseProject.service.impl;
 
-import com.baseProject.myBaseProject.dto.ai.interview.InterviewAssessmentResult;
 import com.baseProject.myBaseProject.dto.session.InterviewReportResponse;
 import com.baseProject.myBaseProject.entity.InterviewAssessment;
 import com.baseProject.myBaseProject.entity.InterviewFocusAreaResult;
@@ -24,13 +23,10 @@ import tools.jackson.databind.ObjectMapper;
 
 import java.time.Clock;
 import java.time.Instant;
-import java.util.Arrays;
 import java.util.List;
 
 @Service
 public class InterviewReportServiceImpl implements InterviewReportService {
-    private static final int MAX_IMPROVEMENTS = 3;
-
     private final InterviewSessionRepository sessions;
     private final InterviewAssessmentRepository assessments;
     private final InterviewFocusAreaResultRepository focusAreaResults;
@@ -74,26 +70,31 @@ public class InterviewReportServiceImpl implements InterviewReportService {
         InterviewAssessment assessment = assessments.findBySessionId(sessionId)
                 .orElseThrow(() -> new DomainException(
                         ErrorCode.INTERVIEW_REPORT_NOT_AVAILABLE));
-        List<InterviewReportResponse.FocusAreaResult> results = focusAreaResults
+        List<InterviewReportResponse.FocusAreaScore> results = focusAreaResults
                 .findByAssessmentIdOrderByFocusAreaDisplayOrderAsc(assessment.getId())
                 .stream()
-                .map(this::toFocusAreaResult)
+                .map(this::toFocusAreaScore)
                 .toList();
+
+        InterviewReportResponse.Report report = new InterviewReportResponse.Report(
+                assessment.getOverallScore(),
+                assessment.getOverallSummary(),
+                new InterviewReportResponse.ScoreBreakdown(
+                        new InterviewReportResponse.ScoreFeedback(
+                                assessment.getTechnicalScore(),
+                                assessment.getTechnicalFeedback()),
+                        new InterviewReportResponse.ScoreFeedback(
+                                assessment.getCommunicationScore(),
+                                assessment.getCommunicationFeedback())),
+                results,
+                recommendations(assessment.getRecommendationsJson()));
 
         return new InterviewReportResponse(
                 session.getId(),
                 session.getStatus(),
                 null,
                 null,
-                assessment.getTechnicalScore(),
-                assessment.getCommunicationScore(),
-                assessment.getOverallScore(),
-                assessment.getCoveragePercentage(),
-                assessment.getConfidence(),
-                assessment.getOverallSummary(),
-                improvements(assessment.getImprovementsJson()),
-                assessment.getCommunicationFeedback(),
-                results,
+                report,
                 session.getCompletedAt());
     }
 
@@ -135,31 +136,18 @@ public class InterviewReportServiceImpl implements InterviewReportService {
                 session.getStatus(),
                 session.getScoringErrorCode(),
                 session.getScoringErrorMessage(),
-                null, null, null, null, null, null,
-                List.of(), null, List.of(),
+                null,
                 session.getCompletedAt());
     }
 
-    private InterviewReportResponse.FocusAreaResult toFocusAreaResult(
+    private InterviewReportResponse.FocusAreaScore toFocusAreaScore(
             InterviewFocusAreaResult result) {
-        return new InterviewReportResponse.FocusAreaResult(
-                result.getFocusArea().getId(),
-                result.getFocusArea().getCode(),
+        return new InterviewReportResponse.FocusAreaScore(
                 result.getFocusArea().getName(),
-                result.getFocusArea().getPriority(),
-                result.getFocusArea().getDisplayOrder(),
-                result.getScore(),
-                result.getConfidence(),
-                result.getEvidenceStatus(),
-                result.getRationale());
+                result.getScore());
     }
 
-    private List<InterviewReportResponse.ImprovementItem> improvements(String json) {
-        return Arrays.stream(objectMapper.readValue(
-                        json, InterviewAssessmentResult.ReportItem[].class))
-                .limit(MAX_IMPROVEMENTS)
-                .map(item -> new InterviewReportResponse.ImprovementItem(
-                        item.title(), item.description()))
-                .toList();
+    private List<String> recommendations(String json) {
+        return List.of(objectMapper.readValue(json, String[].class));
     }
 }

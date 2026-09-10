@@ -13,7 +13,7 @@ Frontend hoàn chỉnh cần hỗ trợ:
 5. Review/edit/confirm template; list template của mình và public; admin publish/unpublish; archive.
 6. Chọn profile + template + option, tạo session idempotent, poll preparation và retry.
 7. Start/resume interview, countdown theo server deadline, submit/retry answer idempotent, finish sớm.
-8. Poll scoring, retry scoring và render report rút gọn gồm score, coverage, improvements, feedback và focus areas.
+8. Poll scoring, retry scoring và render report gọn gồm score, technical/communication feedback, focus areas và tối đa ba recommendations.
 
 ## Các route/screen đề xuất
 
@@ -217,13 +217,12 @@ Khi về 0: khóa composer ngay, clear pending draft submit chưa gửi, refetch
 
 ## Report UI
 
-- Chỉ render score khi khác `null`.
-- `overallScore=null` nghĩa là coverage chưa đủ, không phải 0 điểm.
-- Hiện `coveragePercentage` cạnh confidence.
-- Sort focus area theo `displayOrder`.
-- `improvements` có tối đa 3 mục ngắn và không chứa dẫn chứng.
-- Mỗi focus area chỉ hiển thị `summary` ngắn; report response không công khai dẫn chứng nội bộ.
-- `improvements` và `focusAreas` an toàn để map trực tiếp vì backend trả `[]` khi rỗng.
+- Chỉ render nội dung khi `report` khác `null`.
+- `report.score=null` nghĩa là chưa đủ evidence cho điểm tổng, không phải 0 điểm.
+- Hiển thị feedback technical và communication ngay cạnh điểm tương ứng.
+- Focus areas đã được backend trả đúng thứ tự và chỉ gồm `name`, `score`.
+- `recommendations` có tối đa 3 hành động ngắn.
+- `recommendations` và `focusAreas` luôn là array, an toàn để map trực tiếp.
 
 ## Route guards và bootstrap
 
@@ -252,6 +251,6 @@ Giải pháp frontend trong local dev là proxy `/api` qua cùng origin. Product
 - Create session và answer giữ idempotency key qua retry/mất mạng.
 - Interview resume dùng server turns; countdown dùng `deadlineAt`.
 - Không render composer ngoài `IN_PROGRESS` hoặc khi timer đã 0.
-- Report xử lý đúng `overallScore=null`, empty arrays và scoring retry.
+- Report xử lý đúng `report=null`, `report.score=null`, empty arrays và scoring retry.
 - `ApiError.code` quyết định UX; `message` chỉ là fallback.
 - Role `USER`/`ADMIN`, owner/public và archived state đều có guard UI tương ứng.

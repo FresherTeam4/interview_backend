@@ -1,11 +1,9 @@
 package com.baseProject.myBaseProject.service.impl;
 
-import com.baseProject.myBaseProject.dto.ai.interview.InterviewAssessmentResult;
 import com.baseProject.myBaseProject.entity.InterviewAssessment;
 import com.baseProject.myBaseProject.entity.InterviewFocusArea;
 import com.baseProject.myBaseProject.entity.InterviewFocusAreaResult;
 import com.baseProject.myBaseProject.entity.InterviewSession;
-import com.baseProject.myBaseProject.enums.InterviewAssessmentConfidence;
 import com.baseProject.myBaseProject.enums.InterviewEvidenceStatus;
 import com.baseProject.myBaseProject.enums.InterviewFocusPriority;
 import com.baseProject.myBaseProject.enums.InterviewSessionStatus;
@@ -58,16 +56,21 @@ class InterviewReportServiceImplTest {
         var response = fixture.service.get(USER_ID, SESSION_ID);
 
         assertThat(response.status()).isEqualTo(InterviewSessionStatus.COMPLETED);
-        assertThat(response.overallScore()).isEqualByComparingTo("74.00");
-        assertThat(response.improvements()).hasSize(3);
-        assertThat(response.improvements().get(0)).satisfies(item -> {
-            assertThat(item.title()).isEqualTo("Bổ sung metrics");
-            assertThat(item.summary()).isEqualTo("Thiếu kết quả định lượng");
+        assertThat(response.report().score()).isEqualByComparingTo("74.00");
+        assertThat(response.report().scores().technical()).satisfies(score -> {
+            assertThat(score.score()).isEqualByComparingTo("75.00");
+            assertThat(score.feedback()).isEqualTo(
+                    "Nắm kiến thức chính nhưng cần giải thích trade-off.");
         });
-        assertThat(response.focusAreas()).singleElement().satisfies(area -> {
-            assertThat(area.code()).isEqualTo("BACKEND");
+        assertThat(response.report().scores().communication()).satisfies(score -> {
+            assertThat(score.score()).isEqualByComparingTo("70.00");
+            assertThat(score.feedback()).isEqualTo("Trình bày rõ ràng.");
+        });
+        assertThat(response.report().recommendations())
+                .containsExactly("Bổ sung kết quả định lượng.");
+        assertThat(response.report().focusAreas()).singleElement().satisfies(area -> {
+            assertThat(area.name()).isEqualTo("Backend");
             assertThat(area.score()).isEqualByComparingTo("75.00");
-            assertThat(area.summary()).isEqualTo("Có ví dụ REST API.");
         });
     }
 
@@ -79,8 +82,7 @@ class InterviewReportServiceImplTest {
         var response = fixture.service.get(USER_ID, SESSION_ID);
 
         assertThat(response.status()).isEqualTo(InterviewSessionStatus.SCORING);
-        assertThat(response.overallScore()).isNull();
-        assertThat(response.focusAreas()).isEmpty();
+        assertThat(response.report()).isNull();
     }
 
     @Test
@@ -196,32 +198,15 @@ class InterviewReportServiceImplTest {
                     .communicationScore(new BigDecimal("70.00"))
                     .overallScore(new BigDecimal("74.00"))
                     .coveragePercentage(new BigDecimal("100.00"))
-                    .confidence(InterviewAssessmentConfidence.HIGH)
                     .overallSummary("Ứng viên có kiến thức backend.")
-                    .strengthsJson(objectMapper.writeValueAsString(List.of(
-                            new InterviewAssessmentResult.ReportItem(
-                                    "Nắm backend", "Có ví dụ thực tế", List.of(11L)))))
-                    .improvementsJson(objectMapper.writeValueAsString(List.of(
-                            new InterviewAssessmentResult.ReportItem(
-                                    "Bổ sung metrics", "Thiếu kết quả định lượng",
-                                    List.of(11L)),
-                            new InterviewAssessmentResult.ReportItem(
-                                    "Phân tích trade-off", "Cần so sánh các phương án",
-                                    List.of(12L)),
-                            new InterviewAssessmentResult.ReportItem(
-                                    "System design", "Cần làm rõ bottleneck",
-                                    List.of()),
-                            new InterviewAssessmentResult.ReportItem(
-                                    "Mục thứ tư", "Không được trả về frontend",
-                                    List.of()))))
-                    .actionPlanJson(objectMapper.writeValueAsString(List.of(
-                            new InterviewAssessmentResult.ActionPlanItem(
-                                    1, "Luyện metrics", "Thiếu số liệu",
-                                    "Thêm kết quả định lượng"))))
+                    .technicalFeedback(
+                            "Nắm kiến thức chính nhưng cần giải thích trade-off.")
+                    .recommendationsJson(objectMapper.writeValueAsString(
+                            List.of("Bổ sung kết quả định lượng.")))
                     .communicationFeedback("Trình bày rõ ràng.")
-                    .schemaVersion("v1")
+                    .schemaVersion("v2")
                     .modelName("test-model")
-                    .promptVersion("v1")
+                    .promptVersion("v3")
                     .createdAt(NOW)
                     .build();
         }
@@ -240,12 +225,7 @@ class InterviewReportServiceImplTest {
                     .assessment(assessment)
                     .focusArea(area)
                     .score(new BigDecimal("75.00"))
-                    .confidence(InterviewAssessmentConfidence.HIGH)
                     .evidenceStatus(InterviewEvidenceStatus.SUFFICIENT)
-                    .rationale("Có ví dụ REST API.")
-                    .strengthsJson("[\"Hiểu Spring\"]")
-                    .gapsJson("[\"Thiếu metrics\"]")
-                    .feedback("Nên bổ sung kết quả.")
                     .evidenceTurnIdsJson("[11]")
                     .build();
         }

@@ -152,11 +152,10 @@ public class InterviewScoringServiceImpl implements InterviewScoringService {
                     .communicationScore(calculation.communicationScore())
                     .overallScore(calculation.overallScore())
                     .coveragePercentage(calculation.coveragePercentage())
-                    .confidence(calculation.confidence())
                     .overallSummary(result.overallSummary())
-                    .strengthsJson(objectMapper.writeValueAsString(result.strengths()))
-                    .improvementsJson(objectMapper.writeValueAsString(result.improvements()))
-                    .actionPlanJson(objectMapper.writeValueAsString(result.actionPlan()))
+                    .technicalFeedback(result.technicalFeedback())
+                    .recommendationsJson(objectMapper.writeValueAsString(
+                            result.recommendations()))
                     .communicationFeedback(result.communicationFeedback())
                     .schemaVersion(InterviewScoringEngineImpl.ASSESSMENT_SCHEMA_VERSION)
                     .modelName(AiExecutionMetadata.resolveModelName(chatModel))
@@ -177,12 +176,7 @@ public class InterviewScoringServiceImpl implements InterviewScoringService {
                         .focusArea(areasByCode.get(areaResult.focusAreaCode()))
                         .score(areaResult.score() == null
                                 ? null : BigDecimal.valueOf(areaResult.score()))
-                        .confidence(areaResult.confidence())
                         .evidenceStatus(areaResult.evidenceStatus())
-                        .rationale(areaResult.rationale())
-                        .strengthsJson(objectMapper.writeValueAsString(areaResult.strengths()))
-                        .gapsJson(objectMapper.writeValueAsString(areaResult.gaps()))
-                        .feedback(areaResult.feedback())
                         .evidenceTurnIdsJson(objectMapper.writeValueAsString(
                                 areaResult.evidenceTurnIds()))
                         .build());

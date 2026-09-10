@@ -3,7 +3,6 @@ package com.baseProject.myBaseProject.interview;
 import com.baseProject.myBaseProject.ai.AiService;
 import com.baseProject.myBaseProject.dto.ai.interview.InterviewAssessmentResult;
 import com.baseProject.myBaseProject.enums.CandidateIntent;
-import com.baseProject.myBaseProject.enums.InterviewAssessmentConfidence;
 import com.baseProject.myBaseProject.enums.InterviewEndReason;
 import com.baseProject.myBaseProject.enums.InterviewEvidenceStatus;
 import com.baseProject.myBaseProject.enums.InterviewFocusPriority;
@@ -62,22 +61,15 @@ class InterviewScoringEngineTest {
     private InterviewAssessmentResult validAssessment() {
         return new InterviewAssessmentResult(
                 "Ứng viên thể hiện kiến thức backend.",
+                "Nắm kiến thức chính nhưng cần giải thích trade-off.",
                 List.of(new InterviewAssessmentResult.FocusAreaAssessment(
                         "BACKEND",
                         75,
-                        InterviewAssessmentConfidence.HIGH,
                         InterviewEvidenceStatus.SUFFICIENT,
-                        "Có ví dụ triển khai REST API.",
-                        List.of("Hiểu Spring Boot"),
-                        List.of("Thiếu số liệu tải"),
-                        "Nên bổ sung kết quả định lượng.",
                         List.of(11L))),
                 70,
                 "Câu trả lời rõ ràng.",
-                List.of(new InterviewAssessmentResult.ReportItem(
-                        "Nắm backend", "Có ví dụ thực tế.", List.of(11L))),
-                List.of(),
-                List.of());
+                List.of("Bổ sung kết quả định lượng khi trình bày ví dụ."));
     }
 
     private InterviewScoringContext context() {

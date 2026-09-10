@@ -1,5 +1,5 @@
 // Interview session v2 — creation, AI preparation, and text conversation
-// Authoritative migrations: 002-interview-sessions.sql through 005-interview-scoring.sql
+// Authoritative migrations: 002-interview-sessions.sql through 006-simplify-interview-report.sql
 
 Enum interview_session_status {
   PREPARING
@@ -77,12 +77,6 @@ Enum interview_end_reason {
   TIME_EXPIRED
   CANDIDATE_FINISHED
   SYSTEM_TERMINATED
-}
-
-Enum interview_assessment_confidence {
-  LOW
-  MEDIUM
-  HIGH
 }
 
 Table interview_sessions {
@@ -204,11 +198,9 @@ Table interview_assessments {
   communication_score    decimal(5,2)
   overall_score          decimal(5,2)
   coverage_percentage    decimal(5,2)                    [not null]
-  confidence             interview_assessment_confidence [not null]
   overall_summary        text                            [not null]
-  strengths_json         json                            [not null]
-  improvements_json      json                            [not null]
-  action_plan_json       json                            [not null]
+  technical_feedback     text                            [not null]
+  recommendations_json   json                            [not null]
   communication_feedback text                            [not null]
   schema_version         varchar(20)                     [not null]
   model_name             varchar(100)                    [not null]
@@ -221,12 +213,7 @@ Table interview_focus_area_results {
   assessment_id            bigint                          [not null]
   focus_area_id            bigint                          [not null]
   score                    decimal(5,2)
-  confidence               interview_assessment_confidence [not null]
   evidence_status          interview_evidence_status       [not null]
-  rationale                text                            [not null]
-  strengths_json           json                            [not null]
-  gaps_json                json                            [not null]
-  feedback                 text                            [not null]
   evidence_turn_ids_json   json                            [not null]
 
   indexes {

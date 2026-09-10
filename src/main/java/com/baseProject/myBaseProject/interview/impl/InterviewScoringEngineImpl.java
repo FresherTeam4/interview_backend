@@ -15,8 +15,8 @@ import java.util.Map;
 
 @Service
 public class InterviewScoringEngineImpl implements InterviewScoringEngine {
-    public static final String ASSESSMENT_SCHEMA_VERSION = "v1";
-    public static final String ASSESSMENT_PROMPT_VERSION = "v2";
+    public static final String ASSESSMENT_SCHEMA_VERSION = "v2";
+    public static final String ASSESSMENT_PROMPT_VERSION = "v3";
 
     private final AiService aiService;
     private final ObjectMapper objectMapper;

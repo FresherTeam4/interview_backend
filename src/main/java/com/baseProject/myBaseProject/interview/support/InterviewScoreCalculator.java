@@ -2,7 +2,6 @@ package com.baseProject.myBaseProject.interview.support;
 
 import com.baseProject.myBaseProject.config.properites.InterviewScoringProperties;
 import com.baseProject.myBaseProject.dto.ai.interview.InterviewAssessmentResult;
-import com.baseProject.myBaseProject.enums.InterviewAssessmentConfidence;
 import com.baseProject.myBaseProject.enums.InterviewEvidenceStatus;
 import com.baseProject.myBaseProject.enums.InterviewFocusPriority;
 import com.baseProject.myBaseProject.interview.model.InterviewScoreCalculation;
@@ -70,8 +69,7 @@ public class InterviewScoreCalculator {
                 technical,
                 communication,
                 overall,
-                coverage,
-                confidenceFor(coverage));
+                coverage);
     }
 
     private BigDecimal priorityWeight(InterviewFocusPriority priority) {
@@ -97,15 +95,6 @@ public class InterviewScoreCalculator {
         }
         return scaled(value.multiply(ONE_HUNDRED)
                 .divide(total, SCORE_SCALE + 2, RoundingMode.HALF_UP));
-    }
-
-    private InterviewAssessmentConfidence confidenceFor(BigDecimal coverage) {
-        if (coverage.compareTo(properties.minimumCoveragePercentage()) < 0) {
-            return InterviewAssessmentConfidence.LOW;
-        }
-        return coverage.compareTo(BigDecimal.valueOf(80)) >= 0
-                ? InterviewAssessmentConfidence.HIGH
-                : InterviewAssessmentConfidence.MEDIUM;
     }
 
     private BigDecimal scaled(BigDecimal value) {

@@ -2,7 +2,6 @@ package com.baseProject.myBaseProject.interview;
 
 import com.baseProject.myBaseProject.config.properites.InterviewScoringProperties;
 import com.baseProject.myBaseProject.dto.ai.interview.InterviewAssessmentResult;
-import com.baseProject.myBaseProject.enums.InterviewAssessmentConfidence;
 import com.baseProject.myBaseProject.enums.InterviewEvidenceStatus;
 import com.baseProject.myBaseProject.enums.InterviewFocusPriority;
 import com.baseProject.myBaseProject.interview.model.InterviewScoreCalculation;
@@ -23,7 +22,7 @@ class InterviewScoreCalculatorTest {
                     new BigDecimal("0.2")));
 
     @Test
-    void calculatesWeightedScoresCoverageAndMediumConfidence() {
+    void calculatesWeightedScoresAndCoverage() {
         InterviewScoreCalculation calculation = calculator.calculate(
                 context(), assessment(
                         scored("BACKEND", 80, InterviewEvidenceStatus.SUFFICIENT),
@@ -35,8 +34,6 @@ class InterviewScoreCalculatorTest {
         assertThat(calculation.communicationScore()).isEqualByComparingTo("70.00");
         assertThat(calculation.coveragePercentage()).isEqualByComparingTo("66.67");
         assertThat(calculation.overallScore()).isEqualByComparingTo("68.40");
-        assertThat(calculation.confidence())
-                .isEqualTo(InterviewAssessmentConfidence.MEDIUM);
     }
 
     @Test
@@ -51,8 +48,6 @@ class InterviewScoreCalculatorTest {
         assertThat(calculation.technicalScore()).isEqualByComparingTo("80.00");
         assertThat(calculation.coveragePercentage()).isEqualByComparingTo("25.00");
         assertThat(calculation.overallScore()).isNull();
-        assertThat(calculation.confidence())
-                .isEqualTo(InterviewAssessmentConfidence.LOW);
     }
 
     @Test
@@ -67,8 +62,6 @@ class InterviewScoreCalculatorTest {
         assertThat(calculation.coveragePercentage()).isEqualByComparingTo("100.00");
         assertThat(calculation.communicationScore()).isNull();
         assertThat(calculation.overallScore()).isNull();
-        assertThat(calculation.confidence())
-                .isEqualTo(InterviewAssessmentConfidence.HIGH);
     }
 
     private InterviewAssessmentResult assessment(
@@ -78,11 +71,10 @@ class InterviewScoreCalculatorTest {
             Integer communicationScore) {
         return new InterviewAssessmentResult(
                 "Summary",
+                "Technical feedback",
                 List.of(backend, database, cloud),
                 communicationScore,
                 "Communication feedback",
-                List.of(),
-                List.of(),
                 List.of());
     }
 
@@ -91,12 +83,7 @@ class InterviewScoreCalculatorTest {
         return new InterviewAssessmentResult.FocusAreaAssessment(
                 code,
                 score,
-                InterviewAssessmentConfidence.MEDIUM,
                 status,
-                "Rationale",
-                List.of(),
-                List.of(),
-                "Feedback",
                 List.of(11L));
     }
 
@@ -104,12 +91,7 @@ class InterviewScoreCalculatorTest {
         return new InterviewAssessmentResult.FocusAreaAssessment(
                 code,
                 null,
-                InterviewAssessmentConfidence.LOW,
                 InterviewEvidenceStatus.NOT_EXPLORED,
-                "No evidence",
-                List.of(),
-                List.of(),
-                "Not assessed",
                 List.of());
     }
 

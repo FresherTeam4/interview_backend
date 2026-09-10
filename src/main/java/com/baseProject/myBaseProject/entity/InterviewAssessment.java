@@ -1,10 +1,7 @@
 package com.baseProject.myBaseProject.entity;
 
-import com.baseProject.myBaseProject.enums.InterviewAssessmentConfidence;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
-import jakarta.persistence.EnumType;
-import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -17,9 +14,6 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
-import org.hibernate.annotations.JdbcTypeCode;
-import org.hibernate.type.SqlTypes;
-
 import java.math.BigDecimal;
 import java.time.Instant;
 
@@ -53,22 +47,14 @@ public class InterviewAssessment {
     @Column(name = "coverage_percentage", nullable = false, precision = 5, scale = 2)
     private BigDecimal coveragePercentage;
 
-    @Enumerated(EnumType.STRING)
-    @JdbcTypeCode(SqlTypes.VARCHAR)
-    @Column(nullable = false, length = 10)
-    private InterviewAssessmentConfidence confidence;
-
     @Column(name = "overall_summary", nullable = false, columnDefinition = "TEXT")
     private String overallSummary;
 
-    @Column(name = "strengths_json", nullable = false, columnDefinition = "JSON")
-    private String strengthsJson;
+    @Column(name = "technical_feedback", nullable = false, columnDefinition = "TEXT")
+    private String technicalFeedback;
 
-    @Column(name = "improvements_json", nullable = false, columnDefinition = "JSON")
-    private String improvementsJson;
-
-    @Column(name = "action_plan_json", nullable = false, columnDefinition = "JSON")
-    private String actionPlanJson;
+    @Column(name = "recommendations_json", nullable = false, columnDefinition = "JSON")
+    private String recommendationsJson;
 
     @Column(name = "communication_feedback", nullable = false, columnDefinition = "TEXT")
     private String communicationFeedback;

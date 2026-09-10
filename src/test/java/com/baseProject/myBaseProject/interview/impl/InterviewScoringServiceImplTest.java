@@ -5,7 +5,6 @@ import com.baseProject.myBaseProject.entity.InterviewAssessment;
 import com.baseProject.myBaseProject.entity.InterviewFocusArea;
 import com.baseProject.myBaseProject.entity.InterviewSession;
 import com.baseProject.myBaseProject.enums.CandidateIntent;
-import com.baseProject.myBaseProject.enums.InterviewAssessmentConfidence;
 import com.baseProject.myBaseProject.enums.InterviewEndReason;
 import com.baseProject.myBaseProject.enums.InterviewEvidenceStatus;
 import com.baseProject.myBaseProject.enums.InterviewFocusPriority;
@@ -146,19 +145,14 @@ class InterviewScoringServiceImplTest {
     private static InterviewAssessmentResult assessmentResult() {
         return new InterviewAssessmentResult(
                 "Ứng viên có kiến thức backend.",
+                "Nắm kiến thức chính nhưng cần giải thích trade-off.",
                 List.of(new InterviewAssessmentResult.FocusAreaAssessment(
-                        "BACKEND", 75, InterviewAssessmentConfidence.HIGH,
+                        "BACKEND", 75,
                         InterviewEvidenceStatus.SUFFICIENT,
-                        "Có ví dụ REST.", List.of("Hiểu Spring"),
-                        List.of("Thiếu số liệu"), "Nên bổ sung kết quả.",
                         List.of(11L))),
                 70,
                 "Trình bày rõ ràng.",
-                List.of(new InterviewAssessmentResult.ReportItem(
-                        "Nắm backend", "Có ví dụ thực tế", List.of(11L))),
-                List.of(),
-                List.of(new InterviewAssessmentResult.ActionPlanItem(
-                        1, "Luyện metrics", "Thiếu số liệu", "Thêm kết quả định lượng")));
+                List.of("Bổ sung kết quả định lượng."));
     }
 
     private static InterviewScoreCalculation calculation() {
@@ -166,8 +160,7 @@ class InterviewScoringServiceImplTest {
                 new BigDecimal("75.00"),
                 new BigDecimal("70.00"),
                 new BigDecimal("74.00"),
-                new BigDecimal("100.00"),
-                InterviewAssessmentConfidence.HIGH);
+                new BigDecimal("100.00"));
     }
 
     private static PlatformTransactionManager transactionManager() {

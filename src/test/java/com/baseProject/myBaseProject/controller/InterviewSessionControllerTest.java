@@ -9,10 +9,7 @@ import com.baseProject.myBaseProject.dto.session.InterviewSessionStatusResponse;
 import com.baseProject.myBaseProject.dto.session.InterviewTurnResponse;
 import com.baseProject.myBaseProject.entity.UserAccount;
 import com.baseProject.myBaseProject.enums.CandidateIntent;
-import com.baseProject.myBaseProject.enums.InterviewAssessmentConfidence;
 import com.baseProject.myBaseProject.enums.InterviewEndReason;
-import com.baseProject.myBaseProject.enums.InterviewEvidenceStatus;
-import com.baseProject.myBaseProject.enums.InterviewFocusPriority;
 import com.baseProject.myBaseProject.enums.InterviewSessionStatus;
 import com.baseProject.myBaseProject.enums.InterviewTurnAction;
 import com.baseProject.myBaseProject.enums.InterviewTurnRole;
@@ -252,30 +249,23 @@ class InterviewSessionControllerTest {
                         .with(user(userDetails())))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("COMPLETED"))
-                .andExpect(jsonPath("$.overallScore").value(74.0))
-                .andExpect(jsonPath("$.focusAreas[0].code").value("BACKEND"))
-                .andExpect(jsonPath("$.focusAreas[0].summary")
-                        .value("Có ví dụ REST API."))
-                .andExpect(jsonPath("$.strengths").doesNotExist())
-                .andExpect(jsonPath("$.improvements[0].title")
-                        .value("Phân tích trade-off"))
-                .andExpect(jsonPath("$.improvements[0].summary")
-                        .value("Cần so sánh rõ ưu và nhược điểm của các giải pháp."))
-                .andExpect(jsonPath("$.improvements[0].evidenceTurnIds").doesNotExist())
-                .andExpect(jsonPath("$.actionPlan").doesNotExist())
-                .andExpect(jsonPath("$.focusAreas[0].rationale").doesNotExist())
-                .andExpect(jsonPath("$.focusAreas[0].strengths").doesNotExist())
-                .andExpect(jsonPath("$.focusAreas[0].gaps").doesNotExist())
-                .andExpect(jsonPath("$.focusAreas[0].evidenceTurnIds").doesNotExist())
-                .andExpect(jsonPath("$.focusAreas[0].feedback").doesNotExist());
+                .andExpect(jsonPath("$.report.score").value(74.0))
+                .andExpect(jsonPath("$.report.scores.technical.score").value(75.0))
+                .andExpect(jsonPath("$.report.scores.technical.feedback")
+                        .value("Kiến thức nền tốt, cần giải thích trade-off rõ hơn."))
+                .andExpect(jsonPath("$.report.scores.communication.score").value(70.0))
+                .andExpect(jsonPath("$.report.scores.communication.feedback")
+                        .value("Câu trả lời rõ ràng nhưng đôi lúc thiếu cấu trúc."))
+                .andExpect(jsonPath("$.report.focusAreas[0].name").value("Backend"))
+                .andExpect(jsonPath("$.report.recommendations[0]")
+                        .value("Luyện phân tích trade-off bằng ví dụ thực tế."));
     }
 
     @Test
     void retryScoringReturnsAcceptedStatus() throws Exception {
         InterviewReportResponse response = new InterviewReportResponse(
                 501L, InterviewSessionStatus.SCORING,
-                null, null, null, null, null, null, null, null,
-                List.of(), null, List.of(), null);
+                null, null, null, null);
         when(reportService.retryScoring(7L, 501L)).thenReturn(response);
 
         mockMvc.perform(post("/api/interview-sessions/501/scoring/retry")
@@ -322,26 +312,19 @@ class InterviewSessionControllerTest {
                 InterviewSessionStatus.COMPLETED,
                 null,
                 null,
-                new BigDecimal("75.00"),
-                new BigDecimal("70.00"),
-                new BigDecimal("74.00"),
-                new BigDecimal("100.00"),
-                InterviewAssessmentConfidence.HIGH,
-                "Ứng viên có nền tảng backend.",
-                List.of(new InterviewReportResponse.ImprovementItem(
-                        "Phân tích trade-off",
-                        "Cần so sánh rõ ưu và nhược điểm của các giải pháp.")),
-                "Trình bày rõ ràng.",
-                List.of(new InterviewReportResponse.FocusAreaResult(
-                        21L,
-                        "BACKEND",
-                        "Backend",
-                        InterviewFocusPriority.HIGH,
-                        (short) 0,
-                        new BigDecimal("75.00"),
-                        InterviewAssessmentConfidence.HIGH,
-                        InterviewEvidenceStatus.SUFFICIENT,
-                        "Có ví dụ REST API.")),
+                new InterviewReportResponse.Report(
+                        new BigDecimal("74.00"),
+                        "Ứng viên có nền tảng backend.",
+                        new InterviewReportResponse.ScoreBreakdown(
+                                new InterviewReportResponse.ScoreFeedback(
+                                        new BigDecimal("75.00"),
+                                        "Kiến thức nền tốt, cần giải thích trade-off rõ hơn."),
+                                new InterviewReportResponse.ScoreFeedback(
+                                        new BigDecimal("70.00"),
+                                        "Câu trả lời rõ ràng nhưng đôi lúc thiếu cấu trúc.")),
+                        List.of(new InterviewReportResponse.FocusAreaScore(
+                                "Backend", new BigDecimal("75.00"))),
+                        List.of("Luyện phân tích trade-off bằng ví dụ thực tế.")),
                 NOW);
     }
 

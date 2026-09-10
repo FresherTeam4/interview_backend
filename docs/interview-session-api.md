@@ -385,15 +385,7 @@ Khi đang scoring:
   "status": "SCORING",
   "scoringErrorCode": null,
   "scoringErrorMessage": null,
-  "technicalScore": null,
-  "communicationScore": null,
-  "overallScore": null,
-  "coveragePercentage": null,
-  "confidence": null,
-  "overallSummary": null,
-  "improvements": [],
-  "communicationFeedback": null,
-  "focusAreas": [],
+  "report": null,
   "completedAt": null
 }
 ```
@@ -408,64 +400,53 @@ Khi hoàn tất:
   "status": "COMPLETED",
   "scoringErrorCode": null,
   "scoringErrorMessage": null,
-  "technicalScore": 75.00,
-  "communicationScore": 70.00,
-  "overallScore": 74.00,
-  "coveragePercentage": 100.00,
-  "confidence": "HIGH",
-  "overallSummary": "Ứng viên có nền tảng backend tốt.",
-  "improvements": [
-    {
-      "title": "Phân tích trade-off",
-      "summary": "Cần so sánh rõ ưu và nhược điểm của các giải pháp."
-    }
-  ],
-  "communicationFeedback": "Câu trả lời rõ ràng và liên quan.",
-  "focusAreas": [
-    {
-      "focusAreaId": 21,
-      "code": "BACKEND",
-      "name": "Backend",
-      "priority": "HIGH",
-      "displayOrder": 0,
-      "score": 75.00,
-      "confidence": "HIGH",
-      "evidenceStatus": "SUFFICIENT",
-      "summary": "Ứng viên mô tả implementation cụ thể."
-    }
-  ],
+  "report": {
+    "score": 74.00,
+    "summary": "Ứng viên có nền tảng backend tốt nhưng cần giải thích trade-off sâu hơn.",
+    "scores": {
+      "technical": {
+        "score": 75.00,
+        "feedback": "Kiến thức nền tốt, cần giải thích rõ hơn lý do chọn giải pháp."
+      },
+      "communication": {
+        "score": 70.00,
+        "feedback": "Câu trả lời rõ ràng nhưng đôi lúc thiếu cấu trúc và kết luận."
+      }
+    },
+    "focusAreas": [
+      { "name": "Backend", "score": 75.00 },
+      { "name": "System Design", "score": 68.00 }
+    ],
+    "recommendations": [
+      "Nêu ít nhất hai phương án và giải thích trade-off khi chọn giải pháp.",
+      "Luyện trả lời theo cấu trúc bối cảnh, hành động và kết quả."
+    ]
+  },
   "completedAt": "2026-09-07T08:29:00Z"
 }
 ```
 
 ```ts
-type AssessmentConfidence = "LOW" | "MEDIUM" | "HIGH";
-type EvidenceStatus = "NOT_EXPLORED" | "PARTIAL" | "SUFFICIENT";
-
 interface InterviewReport {
   sessionId: number;
   status: "SCORING" | "SCORING_FAILED" | "COMPLETED";
   scoringErrorCode: string | null;
   scoringErrorMessage: string | null;
-  technicalScore: number | null;
-  communicationScore: number | null;
-  overallScore: number | null;
-  coveragePercentage: number | null;
-  confidence: AssessmentConfidence | null;
-  overallSummary: string | null;
-  improvements: Array<{ title: string; summary: string }>;
-  communicationFeedback: string | null;
-  focusAreas: Array<{
-    focusAreaId: number; code: string; name: string;
-    priority: "HIGH" | "MEDIUM" | "LOW"; displayOrder: number;
-    score: number | null; confidence: AssessmentConfidence; evidenceStatus: EvidenceStatus;
+  report: {
+    score: number | null;
     summary: string;
-  }>;
+    scores: {
+      technical: { score: number | null; feedback: string };
+      communication: { score: number | null; feedback: string };
+    };
+    focusAreas: Array<{ name: string; score: number | null }>;
+    recommendations: string[];
+  } | null;
   completedAt: string | null;
 }
 ```
 
-`improvements` có tối đa 3 mục và không công khai evidence turn ID.
+`report` chỉ có khi status là `COMPLETED`. `recommendations` có tối đa 3 mục. Response không công khai coverage, confidence, priority, mã nội bộ hoặc evidence turn ID.
 
 Backend tính aggregate:
 
@@ -473,9 +454,9 @@ Backend tính aggregate:
 - Coverage factor: `NOT_EXPLORED=0`, `PARTIAL=0.5`, `SUFFICIENT=1`.
 - Technical score là weighted mean các focus area có score.
 - Overall mặc định = `technical * 0.8 + communication * 0.2`.
-- Nếu coverage dưới ngưỡng config (mặc định hiện tại 50%), `overallScore=null` và confidence `LOW`; summary theo area vẫn có.
+- Nếu coverage dưới ngưỡng config (mặc định hiện tại 50%), `report.score=null`; các score thành phần và feedback vẫn có.
 
-UI coi `overallScore: null` là “chưa đủ evidence”, không hiển thị thành 0.
+UI coi `report.score: null` là “chưa đủ evidence”, không hiển thị thành 0.
 
 ## 9. Retry scoring
 
