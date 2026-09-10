@@ -59,16 +59,15 @@ class InterviewReportServiceImplTest {
 
         assertThat(response.status()).isEqualTo(InterviewSessionStatus.COMPLETED);
         assertThat(response.overallScore()).isEqualByComparingTo("74.00");
-        assertThat(response.strengths()).singleElement().satisfies(item -> {
-            assertThat(item.title()).isEqualTo("Nắm backend");
-            assertThat(item.evidenceTurnIds()).containsExactly(11L);
+        assertThat(response.improvements()).hasSize(3);
+        assertThat(response.improvements().get(0)).satisfies(item -> {
+            assertThat(item.title()).isEqualTo("Bổ sung metrics");
+            assertThat(item.summary()).isEqualTo("Thiếu kết quả định lượng");
         });
-        assertThat(response.actionPlan()).singleElement().satisfies(item ->
-                assertThat(item.priority()).isEqualTo(1));
         assertThat(response.focusAreas()).singleElement().satisfies(area -> {
             assertThat(area.code()).isEqualTo("BACKEND");
             assertThat(area.score()).isEqualByComparingTo("75.00");
-            assertThat(area.evidenceTurnIds()).containsExactly(11L);
+            assertThat(area.summary()).isEqualTo("Có ví dụ REST API.");
         });
     }
 
@@ -202,7 +201,19 @@ class InterviewReportServiceImplTest {
                     .strengthsJson(objectMapper.writeValueAsString(List.of(
                             new InterviewAssessmentResult.ReportItem(
                                     "Nắm backend", "Có ví dụ thực tế", List.of(11L)))))
-                    .improvementsJson("[]")
+                    .improvementsJson(objectMapper.writeValueAsString(List.of(
+                            new InterviewAssessmentResult.ReportItem(
+                                    "Bổ sung metrics", "Thiếu kết quả định lượng",
+                                    List.of(11L)),
+                            new InterviewAssessmentResult.ReportItem(
+                                    "Phân tích trade-off", "Cần so sánh các phương án",
+                                    List.of(12L)),
+                            new InterviewAssessmentResult.ReportItem(
+                                    "System design", "Cần làm rõ bottleneck",
+                                    List.of()),
+                            new InterviewAssessmentResult.ReportItem(
+                                    "Mục thứ tư", "Không được trả về frontend",
+                                    List.of()))))
                     .actionPlanJson(objectMapper.writeValueAsString(List.of(
                             new InterviewAssessmentResult.ActionPlanItem(
                                     1, "Luyện metrics", "Thiếu số liệu",

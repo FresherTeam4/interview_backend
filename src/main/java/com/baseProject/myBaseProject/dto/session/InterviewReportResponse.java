@@ -20,17 +20,13 @@ public record InterviewReportResponse(
         BigDecimal coveragePercentage,
         InterviewAssessmentConfidence confidence,
         String overallSummary,
-        List<ReportItem> strengths,
-        List<ReportItem> improvements,
-        List<ActionPlanItem> actionPlan,
+        List<ImprovementItem> improvements,
         String communicationFeedback,
         List<FocusAreaResult> focusAreas,
         Instant completedAt) {
 
     public InterviewReportResponse {
-        strengths = safe(strengths);
         improvements = safe(improvements);
-        actionPlan = safe(actionPlan);
         focusAreas = safe(focusAreas);
     }
 
@@ -38,21 +34,9 @@ public record InterviewReportResponse(
         return values == null ? List.of() : List.copyOf(values);
     }
 
-    public record ReportItem(
+    public record ImprovementItem(
             String title,
-            String description,
-            List<Long> evidenceTurnIds) {
-
-        public ReportItem {
-            evidenceTurnIds = safe(evidenceTurnIds);
-        }
-    }
-
-    public record ActionPlanItem(
-            int priority,
-            String action,
-            String reason,
-            String suggestion) {
+            String summary) {
     }
 
     public record FocusAreaResult(
@@ -64,16 +48,6 @@ public record InterviewReportResponse(
             BigDecimal score,
             InterviewAssessmentConfidence confidence,
             InterviewEvidenceStatus evidenceStatus,
-            String rationale,
-            List<String> strengths,
-            List<String> gaps,
-            String feedback,
-            List<Long> evidenceTurnIds) {
-
-        public FocusAreaResult {
-            strengths = safe(strengths);
-            gaps = safe(gaps);
-            evidenceTurnIds = safe(evidenceTurnIds);
-        }
+            String summary) {
     }
 }

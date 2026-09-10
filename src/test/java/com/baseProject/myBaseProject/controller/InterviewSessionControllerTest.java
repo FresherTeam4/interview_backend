@@ -253,8 +253,21 @@ class InterviewSessionControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("COMPLETED"))
                 .andExpect(jsonPath("$.overallScore").value(74.0))
-                .andExpect(jsonPath("$.strengths[0].evidenceTurnIds[0]").value(11))
-                .andExpect(jsonPath("$.focusAreas[0].code").value("BACKEND"));
+                .andExpect(jsonPath("$.focusAreas[0].code").value("BACKEND"))
+                .andExpect(jsonPath("$.focusAreas[0].summary")
+                        .value("Có ví dụ REST API."))
+                .andExpect(jsonPath("$.strengths").doesNotExist())
+                .andExpect(jsonPath("$.improvements[0].title")
+                        .value("Phân tích trade-off"))
+                .andExpect(jsonPath("$.improvements[0].summary")
+                        .value("Cần so sánh rõ ưu và nhược điểm của các giải pháp."))
+                .andExpect(jsonPath("$.improvements[0].evidenceTurnIds").doesNotExist())
+                .andExpect(jsonPath("$.actionPlan").doesNotExist())
+                .andExpect(jsonPath("$.focusAreas[0].rationale").doesNotExist())
+                .andExpect(jsonPath("$.focusAreas[0].strengths").doesNotExist())
+                .andExpect(jsonPath("$.focusAreas[0].gaps").doesNotExist())
+                .andExpect(jsonPath("$.focusAreas[0].evidenceTurnIds").doesNotExist())
+                .andExpect(jsonPath("$.focusAreas[0].feedback").doesNotExist());
     }
 
     @Test
@@ -262,7 +275,7 @@ class InterviewSessionControllerTest {
         InterviewReportResponse response = new InterviewReportResponse(
                 501L, InterviewSessionStatus.SCORING,
                 null, null, null, null, null, null, null, null,
-                List.of(), List.of(), List.of(), null, List.of(), null);
+                List.of(), null, List.of(), null);
         when(reportService.retryScoring(7L, 501L)).thenReturn(response);
 
         mockMvc.perform(post("/api/interview-sessions/501/scoring/retry")
@@ -315,10 +328,9 @@ class InterviewSessionControllerTest {
                 new BigDecimal("100.00"),
                 InterviewAssessmentConfidence.HIGH,
                 "Ứng viên có nền tảng backend.",
-                List.of(new InterviewReportResponse.ReportItem(
-                        "Nắm backend", "Có ví dụ thực tế", List.of(11L))),
-                List.of(),
-                List.of(),
+                List.of(new InterviewReportResponse.ImprovementItem(
+                        "Phân tích trade-off",
+                        "Cần so sánh rõ ưu và nhược điểm của các giải pháp.")),
                 "Trình bày rõ ràng.",
                 List.of(new InterviewReportResponse.FocusAreaResult(
                         21L,
@@ -329,11 +341,7 @@ class InterviewSessionControllerTest {
                         new BigDecimal("75.00"),
                         InterviewAssessmentConfidence.HIGH,
                         InterviewEvidenceStatus.SUFFICIENT,
-                        "Có ví dụ REST API.",
-                        List.of("Hiểu Spring"),
-                        List.of("Thiếu metrics"),
-                        "Nên bổ sung kết quả.",
-                        List.of(11L))),
+                        "Có ví dụ REST API.")),
                 NOW);
     }
 

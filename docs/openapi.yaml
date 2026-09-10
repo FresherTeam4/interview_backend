@@ -1196,7 +1196,7 @@ components:
           nullable: true
     InterviewReport:
       type: object
-      required: [sessionId, status, strengths, improvements, actionPlan, focusAreas]
+      required: [sessionId, status, improvements, focusAreas]
       properties:
         sessionId: {type: integer, format: int64}
         status: {$ref: '#/components/schemas/InterviewSessionStatusEnum'}
@@ -1208,30 +1208,22 @@ components:
         coveragePercentage: {type: number, nullable: true}
         confidence: {type: string, enum: [LOW, MEDIUM, HIGH], nullable: true}
         overallSummary: {type: string, nullable: true}
-        strengths: {type: array, items: {$ref: '#/components/schemas/ReportItem'}}
-        improvements: {type: array, items: {$ref: '#/components/schemas/ReportItem'}}
-        actionPlan: {type: array, items: {$ref: '#/components/schemas/ActionPlanItem'}}
+        improvements:
+          type: array
+          maxItems: 3
+          items: {$ref: '#/components/schemas/ImprovementItem'}
         communicationFeedback: {type: string, nullable: true}
         focusAreas: {type: array, items: {$ref: '#/components/schemas/FocusAreaResult'}}
         completedAt: {type: string, format: date-time, nullable: true}
-    ReportItem:
+    ImprovementItem:
       type: object
-      required: [title, description, evidenceTurnIds]
+      required: [title, summary]
       properties:
         title: {type: string}
-        description: {type: string}
-        evidenceTurnIds: {type: array, items: {type: integer, format: int64}}
-    ActionPlanItem:
-      type: object
-      required: [priority, action, reason, suggestion]
-      properties:
-        priority: {type: integer}
-        action: {type: string}
-        reason: {type: string}
-        suggestion: {type: string}
+        summary: {type: string}
     FocusAreaResult:
       type: object
-      required: [focusAreaId, code, name, priority, displayOrder, confidence, evidenceStatus, rationale, strengths, gaps, feedback, evidenceTurnIds]
+      required: [focusAreaId, code, name, priority, displayOrder, confidence, evidenceStatus, summary]
       properties:
         focusAreaId: {type: integer, format: int64}
         code: {type: string}
@@ -1241,11 +1233,7 @@ components:
         score: {type: number, nullable: true}
         confidence: {type: string, enum: [LOW, MEDIUM, HIGH]}
         evidenceStatus: {type: string, enum: [NOT_EXPLORED, PARTIAL, SUFFICIENT]}
-        rationale: {type: string}
-        strengths: {type: array, items: {type: string}}
-        gaps: {type: array, items: {type: string}}
-        feedback: {type: string}
-        evidenceTurnIds: {type: array, items: {type: integer, format: int64}}
+        summary: {type: string}
 
 security:
   - bearerAuth: []

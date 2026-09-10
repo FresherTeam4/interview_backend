@@ -391,9 +391,7 @@ Khi đang scoring:
   "coveragePercentage": null,
   "confidence": null,
   "overallSummary": null,
-  "strengths": [],
   "improvements": [],
-  "actionPlan": [],
   "communicationFeedback": null,
   "focusAreas": [],
   "completedAt": null
@@ -416,12 +414,11 @@ Khi hoàn tất:
   "coveragePercentage": 100.00,
   "confidence": "HIGH",
   "overallSummary": "Ứng viên có nền tảng backend tốt.",
-  "strengths": [
-    { "title": "Backend fundamentals", "description": "Giải thích được một REST API cụ thể.", "evidenceTurnIds": [9002] }
-  ],
-  "improvements": [],
-  "actionPlan": [
-    { "priority": 1, "action": "Luyện system design", "reason": "Phần trade-off còn ngắn", "suggestion": "Thiết kế một service và ghi rõ bottleneck" }
+  "improvements": [
+    {
+      "title": "Phân tích trade-off",
+      "summary": "Cần so sánh rõ ưu và nhược điểm của các giải pháp."
+    }
   ],
   "communicationFeedback": "Câu trả lời rõ ràng và liên quan.",
   "focusAreas": [
@@ -434,11 +431,7 @@ Khi hoàn tất:
       "score": 75.00,
       "confidence": "HIGH",
       "evidenceStatus": "SUFFICIENT",
-      "rationale": "Ứng viên mô tả implementation cụ thể.",
-      "strengths": ["Hiểu Spring Boot"],
-      "gaps": ["Chưa định lượng production impact"],
-      "feedback": "Bổ sung outcome đo được.",
-      "evidenceTurnIds": [9002]
+      "summary": "Ứng viên mô tả implementation cụ thể."
     }
   ],
   "completedAt": "2026-09-07T08:29:00Z"
@@ -460,20 +453,19 @@ interface InterviewReport {
   coveragePercentage: number | null;
   confidence: AssessmentConfidence | null;
   overallSummary: string | null;
-  strengths: Array<{ title: string; description: string; evidenceTurnIds: number[] }>;
-  improvements: Array<{ title: string; description: string; evidenceTurnIds: number[] }>;
-  actionPlan: Array<{ priority: number; action: string; reason: string; suggestion: string }>;
+  improvements: Array<{ title: string; summary: string }>;
   communicationFeedback: string | null;
   focusAreas: Array<{
     focusAreaId: number; code: string; name: string;
     priority: "HIGH" | "MEDIUM" | "LOW"; displayOrder: number;
     score: number | null; confidence: AssessmentConfidence; evidenceStatus: EvidenceStatus;
-    rationale: string; strengths: string[]; gaps: string[]; feedback: string;
-    evidenceTurnIds: number[];
+    summary: string;
   }>;
   completedAt: string | null;
 }
 ```
+
+`improvements` có tối đa 3 mục và không công khai evidence turn ID.
 
 Backend tính aggregate:
 
@@ -481,7 +473,7 @@ Backend tính aggregate:
 - Coverage factor: `NOT_EXPLORED=0`, `PARTIAL=0.5`, `SUFFICIENT=1`.
 - Technical score là weighted mean các focus area có score.
 - Overall mặc định = `technical * 0.8 + communication * 0.2`.
-- Nếu coverage dưới ngưỡng config (mặc định hiện tại 50%), `overallScore=null` và confidence `LOW`; feedback theo area vẫn có.
+- Nếu coverage dưới ngưỡng config (mặc định hiện tại 50%), `overallScore=null` và confidence `LOW`; summary theo area vẫn có.
 
 UI coi `overallScore: null` là “chưa đủ evidence”, không hiển thị thành 0.
 
@@ -504,4 +496,3 @@ Response `202 InterviewReport` với status `SCORING`. Chỉ `SCORING_FAILED` đ
 | Answer | `INTERVIEW_SESSION_NOT_IN_PROGRESS`, `INTERVIEW_TURN_OUT_OF_SEQUENCE`, `INTERVIEW_TURN_IDEMPOTENCY_CONFLICT`, `INTERVIEW_TURN_PROCESSING`, `AI_*` |
 | Report | `INTERVIEW_REPORT_NOT_AVAILABLE`, `INTERVIEW_SCORING_FAILED`, `INTERVIEW_SCORING_NOT_RETRYABLE` |
 | Mọi phase | `INTERVIEW_SESSION_NOT_FOUND`, auth/common errors |
-

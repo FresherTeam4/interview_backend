@@ -29,6 +29,8 @@ import java.util.List;
 
 @Service
 public class InterviewReportServiceImpl implements InterviewReportService {
+    private static final int MAX_IMPROVEMENTS = 3;
+
     private final InterviewSessionRepository sessions;
     private final InterviewAssessmentRepository assessments;
     private final InterviewFocusAreaResultRepository focusAreaResults;
@@ -89,9 +91,7 @@ public class InterviewReportServiceImpl implements InterviewReportService {
                 assessment.getCoveragePercentage(),
                 assessment.getConfidence(),
                 assessment.getOverallSummary(),
-                reportItems(assessment.getStrengthsJson()),
-                reportItems(assessment.getImprovementsJson()),
-                actionPlan(assessment.getActionPlanJson()),
+                improvements(assessment.getImprovementsJson()),
                 assessment.getCommunicationFeedback(),
                 results,
                 session.getCompletedAt());
@@ -136,7 +136,7 @@ public class InterviewReportServiceImpl implements InterviewReportService {
                 session.getScoringErrorCode(),
                 session.getScoringErrorMessage(),
                 null, null, null, null, null, null,
-                List.of(), List.of(), List.of(), null, List.of(),
+                List.of(), null, List.of(),
                 session.getCompletedAt());
     }
 
@@ -151,34 +151,15 @@ public class InterviewReportServiceImpl implements InterviewReportService {
                 result.getScore(),
                 result.getConfidence(),
                 result.getEvidenceStatus(),
-                result.getRationale(),
-                strings(result.getStrengthsJson()),
-                strings(result.getGapsJson()),
-                result.getFeedback(),
-                longs(result.getEvidenceTurnIdsJson()));
+                result.getRationale());
     }
 
-    private List<InterviewReportResponse.ReportItem> reportItems(String json) {
+    private List<InterviewReportResponse.ImprovementItem> improvements(String json) {
         return Arrays.stream(objectMapper.readValue(
                         json, InterviewAssessmentResult.ReportItem[].class))
-                .map(item -> new InterviewReportResponse.ReportItem(
-                        item.title(), item.description(), item.evidenceTurnIds()))
+                .limit(MAX_IMPROVEMENTS)
+                .map(item -> new InterviewReportResponse.ImprovementItem(
+                        item.title(), item.description()))
                 .toList();
-    }
-
-    private List<InterviewReportResponse.ActionPlanItem> actionPlan(String json) {
-        return Arrays.stream(objectMapper.readValue(
-                        json, InterviewAssessmentResult.ActionPlanItem[].class))
-                .map(item -> new InterviewReportResponse.ActionPlanItem(
-                        item.priority(), item.action(), item.reason(), item.suggestion()))
-                .toList();
-    }
-
-    private List<String> strings(String json) {
-        return List.of(objectMapper.readValue(json, String[].class));
-    }
-
-    private List<Long> longs(String json) {
-        return List.of(objectMapper.readValue(json, Long[].class));
     }
 }
