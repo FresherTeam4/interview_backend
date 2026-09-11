@@ -5,16 +5,16 @@ import com.baseProject.myBaseProject.constant.PromptConstant;
 import com.baseProject.myBaseProject.entity.InterviewFocusArea;
 import com.baseProject.myBaseProject.entity.InterviewSession;
 import com.baseProject.myBaseProject.interview.support.InterviewerStyleInstructionProvider;
+import org.springframework.ai.chat.prompt.PromptTemplate;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 
 @Component
 public class RealtimeInterviewInstructionFactory {
-    public static final String PROMPT_VERSION = "v1";
-
     private final InterviewerStyleInstructionProvider styleInstructions;
     private final String prompt;
 
@@ -28,17 +28,18 @@ public class RealtimeInterviewInstructionFactory {
     public String create(
             InterviewSession session,
             List<InterviewFocusArea> focusAreas) {
-        return prompt
-                .replace("{languageName}", languageName(session.getLanguageCode()))
-                .replace("{languageCode}", session.getLanguageCode())
-                .replace("{durationMinutes}", Integer.toString(session.getDurationMinutes()))
-                .replace("{interviewerStyle}", session.getInterviewerStyle().name())
-                .replace("{styleInstruction}", styleInstructions.instructionFor(
-                        session.getInterviewerStyle()))
-                .replace("{jobContext}", safe(session.getJobContextSummary()))
-                .replace("{candidateContext}", safe(session.getCandidateContextSummary()))
-                .replace("{focusAreas}", formatFocusAreas(focusAreas))
-                .replace("{openingMessage}", safe(session.getOpeningMessage()));
+        Map<String, Object> parameters = Map.of(
+                "languageName", languageName(session.getLanguageCode()),
+                "languageCode", session.getLanguageCode(),
+                "durationMinutes", session.getDurationMinutes(),
+                "interviewerStyle", session.getInterviewerStyle().name(),
+                "styleInstruction", styleInstructions.instructionFor(
+                        session.getInterviewerStyle()),
+                "jobContext", safe(session.getJobContextSummary()),
+                "candidateContext", safe(session.getCandidateContextSummary()),
+                "focusAreas", formatFocusAreas(focusAreas),
+                "openingMessage", safe(session.getOpeningMessage()));
+        return new PromptTemplate(prompt).render(parameters);
     }
 
     private String formatFocusAreas(List<InterviewFocusArea> focusAreas) {

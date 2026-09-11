@@ -188,6 +188,7 @@ public class InterviewConversationServiceImpl implements InterviewConversationSe
 
     @Override
     public void continueAfterRealtimeFallback(Long userId, Long sessionId) {
+        // Claim trong transaction để nhiều lệnh disconnect không cùng tạo phản hồi cho một turn.
         Long candidateTurnId = transactions.execute(status ->
                 claimRealtimeFallbackCandidate(userId, sessionId));
         if (candidateTurnId == null) {
@@ -201,11 +202,11 @@ public class InterviewConversationServiceImpl implements InterviewConversationSe
                     remainingSeconds(context.deadlineAt(), clock.instant()));
             persistReply(sessionId, candidateTurnId, reply);
         } catch (RuntimeException exception) {
+            // Vẫn giữ hội thoại tiếp tục được khi AI không thể khôi phục câu trả lời cuối.
             persistFallbackRecoveryPrompt(sessionId, candidateTurnId);
         }
     }
 
-    // helper
     private Long claimRealtimeFallbackCandidate(Long userId, Long sessionId) {
         InterviewSession session = ownedForUpdate(userId, sessionId);
         if (session.getStatus() != InterviewSessionStatus.IN_PROGRESS
@@ -230,6 +231,7 @@ public class InterviewConversationServiceImpl implements InterviewConversationSe
 
     private void persistFallbackRecoveryPrompt(Long sessionId, Long candidateTurnId) {
         transactions.executeWithoutResult(status -> {
+            // Kiểm tra lại dưới row lock vì trạng thái có thể đổi trong lúc chờ AI.
             InterviewSession session = sessions.findByIdForUpdate(sessionId)
                     .orElseThrow(() -> new DomainException(ErrorCode.INTERVIEW_SESSION_NOT_FOUND));
             InterviewTurn candidate = turns.findById(candidateTurnId)

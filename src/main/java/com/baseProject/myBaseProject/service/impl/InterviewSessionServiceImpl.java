@@ -315,6 +315,7 @@ public class InterviewSessionServiceImpl implements InterviewSessionService {
     }
 
     private boolean isModeAvailable(InterviewSessionMode mode) {
+        // Dùng chung quy tắc để option hiển thị và request tạo session không bị lệch nhau.
         return mode != InterviewSessionMode.VOICE_REALTIME || realtimeProperties.enabled();
     }
 

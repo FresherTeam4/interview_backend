@@ -1,13 +1,13 @@
-package com.baseProject.myBaseProject.realtime.gemini;
+package com.baseProject.myBaseProject.realtime.provider.gemini;
 
 import com.baseProject.myBaseProject.config.properites.GeminiLiveProperties;
 import com.baseProject.myBaseProject.enums.RealtimeTransport;
 import com.baseProject.myBaseProject.exception.DomainException;
 import com.baseProject.myBaseProject.exception.ErrorCode;
-import com.baseProject.myBaseProject.realtime.RealtimeInterviewProvider;
-import com.baseProject.myBaseProject.realtime.RealtimeProviderCapabilities;
-import com.baseProject.myBaseProject.realtime.RealtimeSessionGrant;
-import com.baseProject.myBaseProject.realtime.RealtimeSessionSpec;
+import com.baseProject.myBaseProject.realtime.ResumableRealtimeProvider;
+import com.baseProject.myBaseProject.realtime.model.RealtimeSessionGrant;
+import com.baseProject.myBaseProject.realtime.model.RealtimeSessionSpec;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.stereotype.Component;
@@ -19,19 +19,18 @@ import java.net.SocketTimeoutException;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.time.format.DateTimeParseException;
 
 @Component
-public class GeminiLiveRealtimeProvider implements RealtimeInterviewProvider {
+@Slf4j
+public class GeminiLiveRealtimeProvider implements ResumableRealtimeProvider {
     public static final String PROVIDER_NAME = "gemini-live";
-    private static final Duration MAX_TOKEN_LIFETIME = Duration.ofHours(19);
+    private static final Duration SAFE_MAX_TOKEN_LIFETIME = Duration.ofHours(19);
 
     private final RestClient restClient;
     private final GeminiLiveProperties properties;
     private final Clock clock;
+    private final GeminiLiveSessionSetupFactory setupFactory;
 
     public GeminiLiveRealtimeProvider(
             @Qualifier("geminiLiveRestClient") RestClient restClient,
@@ -40,6 +39,7 @@ public class GeminiLiveRealtimeProvider implements RealtimeInterviewProvider {
         this.restClient = restClient;
         this.properties = properties;
         this.clock = clock;
+        setupFactory = new GeminiLiveSessionSetupFactory(properties.model());
     }
 
     @Override
@@ -48,21 +48,8 @@ public class GeminiLiveRealtimeProvider implements RealtimeInterviewProvider {
     }
 
     @Override
-    public RealtimeProviderCapabilities capabilities() {
-        return new RealtimeProviderCapabilities(
-                Set.of(RealtimeTransport.WEBSOCKET),
-                true, true, true, true, true, true,
-                properties.inputSampleRate(), properties.outputSampleRate());
-    }
-
-    @Override
     public String defaultVoice() {
         return canonicalVoice(properties.defaultVoice());
-    }
-
-    @Override
-    public Set<String> supportedVoices() {
-        return Set.copyOf(properties.supportedVoices());
     }
 
     @Override
@@ -82,6 +69,7 @@ public class GeminiLiveRealtimeProvider implements RealtimeInterviewProvider {
         return requestGrant(specification, resumptionHandle.strip());
     }
 
+    // Token sống lâu hơn phiên phỏng vấn một khoảng đệm nhưng vẫn nằm dưới giới hạn của Gemini.
     private RealtimeSessionGrant requestGrant(
             RealtimeSessionSpec specification,
             String resumptionHandle) {
@@ -90,23 +78,24 @@ public class GeminiLiveRealtimeProvider implements RealtimeInterviewProvider {
         Instant now = clock.instant();
         Duration requestedLifetime = Duration.ofMinutes(specification.durationMinutes())
                 .plus(properties.tokenLifetimeBuffer());
-        Instant expiresAt = now.plus(min(requestedLifetime, MAX_TOKEN_LIFETIME));
+        Instant expiresAt = now.plus(min(requestedLifetime, SAFE_MAX_TOKEN_LIFETIME));
         Instant newSessionExpiresAt = now.plus(properties.newSessionTtl());
-        Map<String, Object> liveConfig = liveConfig(
+        GeminiLiveSessionSetupFactory.SessionSetups setups = setupFactory.create(
                 specification.systemInstruction(), voiceName, resumptionHandle);
-        Map<String, Object> body = Map.of(
-                "uses", 1,
-                "expireTime", expiresAt.toString(),
-                "newSessionExpireTime", newSessionExpiresAt.toString(),
-                "bidiGenerateContentSetup", providerSetup(liveConfig));
+        // Mỗi token chỉ mở được một phiên để giảm phạm vi sử dụng nếu token bị lộ.
+        GeminiLiveAuthTokenRequest body = new GeminiLiveAuthTokenRequest(
+                1,
+                expiresAt.toString(),
+                newSessionExpiresAt.toString(),
+                setups.tokenSetup());
 
-        AuthTokenResponse response;
+        GeminiLiveAuthTokenResponse response;
         try {
             response = restClient.post()
                     .uri("/v1beta/auth_tokens")
                     .body(body)
                     .retrieve()
-                    .body(AuthTokenResponse.class);
+                    .body(GeminiLiveAuthTokenResponse.class);
         } catch (RestClientResponseException exception) {
             throw translateResponseError(exception);
         } catch (ResourceAccessException exception) {
@@ -127,49 +116,7 @@ public class GeminiLiveRealtimeProvider implements RealtimeInterviewProvider {
                 properties.websocketEndpoint(), response.name(), null,
                 properties.model(), voiceName,
                 properties.inputSampleRate(), properties.outputSampleRate(),
-                providerExpiresAt, sessionSetup(liveConfig));
-    }
-
-    private Map<String, Object> liveConfig(
-            String systemInstruction,
-            String voiceName,
-            String resumptionHandle) {
-        Map<String, Object> config = new LinkedHashMap<>();
-        config.put("responseModalities", List.of("AUDIO"));
-        config.put("speechConfig", Map.of(
-                "voiceConfig", Map.of(
-                        "prebuiltVoiceConfig", Map.of("voiceName", voiceName))));
-        config.put("systemInstruction", content(systemInstruction));
-        config.put("inputAudioTranscription", Map.of());
-        config.put("outputAudioTranscription", Map.of());
-        config.put("contextWindowCompression", Map.of("slidingWindow", Map.of()));
-        config.put("sessionResumption", resumptionHandle == null
-                ? Map.of()
-                : Map.of("handle", resumptionHandle));
-        return Map.copyOf(config);
-    }
-
-    private Map<String, Object> sessionSetup(Map<String, Object> liveConfig) {
-        Map<String, Object> setup = new LinkedHashMap<>();
-        setup.put("model", modelResourceName());
-        setup.put("generationConfig", Map.of(
-                "responseModalities", liveConfig.get("responseModalities"),
-                "speechConfig", liveConfig.get("speechConfig")));
-        setup.put("inputAudioTranscription", liveConfig.get("inputAudioTranscription"));
-        setup.put("outputAudioTranscription", liveConfig.get("outputAudioTranscription"));
-        setup.put("contextWindowCompression", liveConfig.get("contextWindowCompression"));
-        setup.put("sessionResumption", liveConfig.get("sessionResumption"));
-        return Map.copyOf(setup);
-    }
-
-    private Map<String, Object> providerSetup(Map<String, Object> liveConfig) {
-        Map<String, Object> setup = new LinkedHashMap<>(sessionSetup(liveConfig));
-        setup.put("systemInstruction", liveConfig.get("systemInstruction"));
-        return Map.copyOf(setup);
-    }
-
-    private Map<String, Object> content(String text) {
-        return Map.of("parts", List.of(Map.of("text", text)));
+                providerExpiresAt, setups.clientSetup());
     }
 
     private String canonicalVoice(String requested) {
@@ -193,12 +140,6 @@ public class GeminiLiveRealtimeProvider implements RealtimeInterviewProvider {
         canonicalVoice(properties.defaultVoice());
     }
 
-    private String modelResourceName() {
-        return properties.model().startsWith("models/")
-                ? properties.model()
-                : "models/" + properties.model();
-    }
-
     private DomainException translateResponseError(RestClientResponseException exception) {
         HttpStatusCode status = exception.getStatusCode();
         if (status.value() == 401 || status.value() == 403) {
@@ -215,11 +156,13 @@ public class GeminiLiveRealtimeProvider implements RealtimeInterviewProvider {
 
     private Instant parseInstant(String value, Instant fallback) {
         if (value == null || value.isBlank()) {
+            log.warn("Gemini Live token response omitted expireTime; using requested expiry");
             return fallback;
         }
         try {
             return Instant.parse(value);
-        } catch (RuntimeException ignored) {
+        } catch (DateTimeParseException exception) {
+            log.warn("Gemini Live returned invalid expireTime={}; using requested expiry", value);
             return fallback;
         }
     }
@@ -237,11 +180,5 @@ public class GeminiLiveRealtimeProvider implements RealtimeInterviewProvider {
             current = current.getCause();
         }
         return false;
-    }
-
-    private record AuthTokenResponse(
-            String name,
-            String expireTime,
-            String newSessionExpireTime) {
     }
 }

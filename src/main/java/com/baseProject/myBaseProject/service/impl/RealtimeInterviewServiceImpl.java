@@ -26,8 +26,9 @@ import com.baseProject.myBaseProject.exception.ErrorCode;
 import com.baseProject.myBaseProject.realtime.RealtimeInterviewInstructionFactory;
 import com.baseProject.myBaseProject.realtime.RealtimeInterviewProvider;
 import com.baseProject.myBaseProject.realtime.RealtimeProviderRegistry;
-import com.baseProject.myBaseProject.realtime.RealtimeSessionGrant;
-import com.baseProject.myBaseProject.realtime.RealtimeSessionSpec;
+import com.baseProject.myBaseProject.realtime.ResumableRealtimeProvider;
+import com.baseProject.myBaseProject.realtime.model.RealtimeSessionGrant;
+import com.baseProject.myBaseProject.realtime.model.RealtimeSessionSpec;
 import com.baseProject.myBaseProject.repository.InterviewFocusAreaRepository;
 import com.baseProject.myBaseProject.repository.InterviewRealtimeEventRepository;
 import com.baseProject.myBaseProject.repository.InterviewSessionRepository;
@@ -106,6 +107,7 @@ public class RealtimeInterviewServiceImpl implements RealtimeInterviewService {
                 : request.voiceName().strip();
         String instruction = instructionFactory.create(
                 session, focusAreas.findBySessionIdOrderByDisplayOrderAsc(sessionId));
+        // Gọi provider ngoài transaction để không giữ row lock trong lúc chờ network.
         RealtimeSessionGrant grant = provider.createSession(
                 specification(session, voiceName, instruction));
         Instant now = clock.instant();
@@ -146,14 +148,15 @@ public class RealtimeInterviewServiceImpl implements RealtimeInterviewService {
         InterviewVoiceConnection previous = connections
                 .findByIdAndSessionId(connectionId, sessionId)
                 .orElseThrow(() -> new DomainException(ErrorCode.REALTIME_CONNECTION_NOT_FOUND));
-        RealtimeInterviewProvider provider = providers.provider(previous.getProvider());
-        if (!provider.capabilities().sessionResumption()) {
+        RealtimeInterviewProvider registeredProvider = providers.provider(previous.getProvider());
+        if (!(registeredProvider instanceof ResumableRealtimeProvider provider)) {
             throw new DomainException(ErrorCode.REALTIME_RESUMPTION_NOT_AVAILABLE);
         }
 
         String handle = request.resumptionHandle().strip();
         String instruction = instructionFactory.create(
                 session, focusAreas.findBySessionIdOrderByDisplayOrderAsc(sessionId));
+        // Trạng thái sẽ được kiểm tra lại dưới row lock sau khi provider trả grant.
         RealtimeSessionGrant grant = provider.resumeSession(
                 specification(session, previous.getVoiceName(), instruction), handle);
         Instant now = clock.instant();
@@ -195,6 +198,7 @@ public class RealtimeInterviewServiceImpl implements RealtimeInterviewService {
             throw new DomainException(ErrorCode.INTERNAL_ERROR);
         }
         if (request.fallbackToTurnBased()) {
+            // Tiếp tục hội thoại sau khi transaction đóng kết nối đã nhả row lock.
             conversationService.continueAfterRealtimeFallback(userId, sessionId);
         }
         return response;
@@ -206,6 +210,7 @@ public class RealtimeInterviewServiceImpl implements RealtimeInterviewService {
             String clientPlatform,
             RealtimeSessionGrant grant,
             Instant now) {
+        // Trạng thái có thể đã đổi trong lúc gọi provider nên phải khóa và kiểm tra lại.
         InterviewSession session = sessions.findOwnedByIdForUpdate(sessionId, userId)
                 .orElseThrow(() -> new DomainException(ErrorCode.INTERVIEW_SESSION_NOT_FOUND));
         requireAvailable(session);
@@ -242,6 +247,7 @@ public class RealtimeInterviewServiceImpl implements RealtimeInterviewService {
                 .orElseThrow(() -> new DomainException(ErrorCode.REALTIME_CONNECTION_NOT_FOUND));
         previous.updateResumptionHandle(resumptionHandle);
         if (previous.getDisconnectedAt() == null) {
+            // Mỗi lần resume là một connection mới; connection cũ chỉ giữ lịch sử và handle.
             previous.markDisconnected("SESSION_RESUMED", false, null, null, now);
         }
         InterviewVoiceConnection resumed = connections.save(InterviewVoiceConnection.builder()
@@ -264,6 +270,7 @@ public class RealtimeInterviewServiceImpl implements RealtimeInterviewService {
             Long sessionId,
             Long connectionId,
             List<RealtimeEventRequest> requestedEvents) {
+        // Row lock tuần tự hóa việc cập nhật sequence và currentTurnIndex giữa các batch.
         InterviewSession session = sessions.findOwnedByIdForUpdate(sessionId, userId)
                 .orElseThrow(() -> new DomainException(ErrorCode.INTERVIEW_SESSION_NOT_FOUND));
         if (session.getStatus() != InterviewSessionStatus.IN_PROGRESS) {
@@ -273,6 +280,7 @@ public class RealtimeInterviewServiceImpl implements RealtimeInterviewService {
                 .findByIdAndSessionId(connectionId, sessionId)
                 .orElseThrow(() -> new DomainException(ErrorCode.REALTIME_CONNECTION_NOT_FOUND));
 
+        // Client có thể gửi bù theo batch nên luôn áp dụng event theo thứ tự của provider.
         List<RealtimeEventRequest> ordered = requestedEvents.stream()
                 .sorted(Comparator.comparingLong(RealtimeEventRequest::sequenceNumber))
                 .toList();
@@ -282,6 +290,7 @@ public class RealtimeInterviewServiceImpl implements RealtimeInterviewService {
         int duplicates = 0;
         int createdTurns = 0;
         for (RealtimeEventRequest request : ordered) {
+            // Provider event id cho phép retry; sequence phải ánh xạ duy nhất tới một event.
             String providerEventId = request.providerEventId().strip();
             Long priorSequence = batchProviderIds.putIfAbsent(
                     providerEventId, request.sequenceNumber());
@@ -351,6 +360,7 @@ public class RealtimeInterviewServiceImpl implements RealtimeInterviewService {
             case ASSISTANT_TRANSCRIPT_FINAL -> createTurn(
                     session, InterviewTurnRole.INTERVIEWER, event, now);
             case ASSISTANT_INTERRUPTED -> {
+                // Giữ turn để audit và chỉ đánh dấu phần audio đã bị người dùng ngắt.
                 turns.findFirstBySessionIdAndRoleOrderByTurnIndexDesc(
                                 session.getId(), InterviewTurnRole.INTERVIEWER)
                         .ifPresent(InterviewTurn::markInterrupted);
@@ -378,6 +388,7 @@ public class RealtimeInterviewServiceImpl implements RealtimeInterviewService {
         if (role == InterviewTurnRole.INTERVIEWER
                 && current != null
                 && current.getRole() == InterviewTurnRole.INTERVIEWER) {
+            // Opening turn đã được lưu khi chuẩn bị session; transcript chỉ bổ sung latency.
             if (event.latencyMs() != null && current.getLatencyMs() == null) {
                 current.recordLatency(event.latencyMs());
             }
@@ -424,10 +435,7 @@ public class RealtimeInterviewServiceImpl implements RealtimeInterviewService {
             String voiceName,
             String instruction) {
         return new RealtimeSessionSpec(
-                session.getId(),
-                session.getLanguageCode(),
                 grantDurationMinutes(session),
-                session.getInterviewerStyle(),
                 voiceName,
                 instruction);
     }
@@ -443,6 +451,7 @@ public class RealtimeInterviewServiceImpl implements RealtimeInterviewService {
             throw new DomainException(ErrorCode.REALTIME_SESSION_NOT_AVAILABLE);
         }
         long roundedMinutes = (remainingSeconds + 59) / 60;
+        // Làm tròn lên để token không hết hạn trước phần giây còn lại của session.
         return (int) Math.min(session.getDurationMinutes(), roundedMinutes);
     }
 

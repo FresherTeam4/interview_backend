@@ -1,4 +1,4 @@
-package com.baseProject.myBaseProject.realtime;
+package com.baseProject.myBaseProject.realtime.model;
 
 import com.baseProject.myBaseProject.enums.RealtimeTransport;
 

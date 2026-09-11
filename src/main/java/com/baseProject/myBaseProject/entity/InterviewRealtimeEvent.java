@@ -23,6 +23,7 @@ import org.hibernate.type.SqlTypes;
 
 import java.time.Instant;
 
+// Hai khóa duy nhất giữ idempotency ngay cả khi nhiều batch event đến đồng thời.
 @Entity
 @Table(name = "interview_realtime_events",
         uniqueConstraints = {

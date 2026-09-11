@@ -18,6 +18,7 @@ public class RealtimeConfig {
                 .baseUrl(properties.baseUrl().toString())
                 .requestFactory(requestFactory);
 
+        // Cho phép ứng dụng khởi động khi realtime bị tắt; provider sẽ kiểm tra key lúc cấp grant.
         if (!properties.apiKey().isBlank()) {
             builder.defaultHeader("x-goog-api-key", properties.apiKey());
         }
