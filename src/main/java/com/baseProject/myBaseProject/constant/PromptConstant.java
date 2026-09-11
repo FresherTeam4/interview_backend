@@ -15,6 +15,8 @@ public final class PromptConstant {
             "prompts/interview/conversation-system-v2.st";
     public static final String INTERVIEW_CONVERSATION_USER_PROMPT =
             "prompts/interview/conversation-user-v2.st";
+    public static final String INTERVIEW_REALTIME_SYSTEM_PROMPT =
+            "prompts/interview/realtime-system-v1.st";
     public static final String INTERVIEW_SCORING_SYSTEM_PROMPT =
             "prompts/interview/scoring-system-v3.st";
     public static final String INTERVIEW_SCORING_USER_PROMPT =

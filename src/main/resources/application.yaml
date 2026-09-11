@@ -90,12 +90,31 @@ app:
   interview-session:
     supported-languages: ${INTERVIEW_SUPPORTED_LANGUAGES:vi,en,ja}
     supported-durations: ${INTERVIEW_SUPPORTED_DURATIONS:15,30,45,60}
+    supported-modes: ${INTERVIEW_SUPPORTED_MODES:TEXT,VOICE_TURN_BASED,VOICE_REALTIME}
     deadline-sweep-ms: ${INTERVIEW_DEADLINE_SWEEP_MS:30000}
 
   interview-scoring:
     minimum-coverage-percentage: ${INTERVIEW_MINIMUM_SCORING_COVERAGE:50}
     technical-weight: ${INTERVIEW_TECHNICAL_SCORE_WEIGHT:0.8}
     communication-weight: ${INTERVIEW_COMMUNICATION_SCORE_WEIGHT:0.2}
+
+  realtime:
+    enabled: ${REALTIME_ENABLED:true}
+    provider: ${REALTIME_PROVIDER:gemini-live}
+    providers:
+      gemini-live:
+        base-url: ${GEMINI_LIVE_BASE_URL:https://generativelanguage.googleapis.com}
+        websocket-endpoint: ${GEMINI_LIVE_WEBSOCKET_ENDPOINT:wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContentConstrained}
+        api-key: ${GEMINI_API_KEY:}
+        model: ${GEMINI_LIVE_MODEL:gemini-3.1-flash-live-preview}
+        default-voice: ${GEMINI_LIVE_DEFAULT_VOICE:Kore}
+        supported-voices: ${GEMINI_LIVE_SUPPORTED_VOICES:Zephyr,Puck,Charon,Kore,Fenrir,Leda,Orus,Aoede,Callirrhoe,Autonoe,Enceladus,Iapetus,Umbriel,Algieba,Despina,Erinome,Algenib,Rasalgethi,Laomedeia,Achernar,Alnilam,Schedar,Gacrux,Pulcherrima,Achird,Zubenelgenubi,Vindemiatrix,Sadachbia,Sadaltager,Sulafat}
+        connect-timeout: ${GEMINI_LIVE_CONNECT_TIMEOUT:5s}
+        read-timeout: ${GEMINI_LIVE_READ_TIMEOUT:15s}
+        new-session-ttl: ${GEMINI_LIVE_NEW_SESSION_TTL:1m}
+        token-lifetime-buffer: ${GEMINI_LIVE_TOKEN_LIFETIME_BUFFER:15m}
+        input-sample-rate: ${GEMINI_LIVE_INPUT_SAMPLE_RATE:16000}
+        output-sample-rate: ${GEMINI_LIVE_OUTPUT_SAMPLE_RATE:24000}
 
   speech:
     enabled: ${SPEECH_ENABLED:true}

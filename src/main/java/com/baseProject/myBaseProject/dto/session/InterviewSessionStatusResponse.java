@@ -1,6 +1,7 @@
 package com.baseProject.myBaseProject.dto.session;
 
 import com.baseProject.myBaseProject.enums.InterviewEndReason;
+import com.baseProject.myBaseProject.enums.InterviewSessionMode;
 import com.baseProject.myBaseProject.enums.InterviewSessionStatus;
 import com.baseProject.myBaseProject.enums.InterviewerStyle;
 
@@ -14,6 +15,9 @@ public record InterviewSessionStatusResponse(
         String languageCode,
         int durationMinutes,
         InterviewerStyle interviewerStyle,
+        InterviewSessionMode mode,
+        String realtimeProvider,
+        String realtimeVoiceName,
         String preparationErrorCode,
         String preparationErrorMessage,
         String scoringErrorCode,

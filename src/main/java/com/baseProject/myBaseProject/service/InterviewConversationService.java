@@ -16,4 +16,6 @@ public interface InterviewConversationService {
             SubmitInterviewAnswerRequest request);
 
     InterviewConversationResponse finish(Long userId, Long sessionId);
+
+    void continueAfterRealtimeFallback(Long userId, Long sessionId);
 }

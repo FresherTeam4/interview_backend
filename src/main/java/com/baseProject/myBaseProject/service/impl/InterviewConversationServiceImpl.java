@@ -10,11 +10,13 @@ import com.baseProject.myBaseProject.entity.InterviewSession;
 import com.baseProject.myBaseProject.entity.InterviewTurn;
 import com.baseProject.myBaseProject.enums.CandidateIntent;
 import com.baseProject.myBaseProject.enums.InterviewEndReason;
+import com.baseProject.myBaseProject.enums.InterviewSessionMode;
 import com.baseProject.myBaseProject.enums.InterviewSessionStatus;
 import com.baseProject.myBaseProject.enums.InterviewTransitionActor;
 import com.baseProject.myBaseProject.enums.InterviewTurnAction;
 import com.baseProject.myBaseProject.enums.InterviewTurnProcessingStatus;
 import com.baseProject.myBaseProject.enums.InterviewTurnRole;
+import com.baseProject.myBaseProject.enums.InterviewTurnInputMode;
 import com.baseProject.myBaseProject.exception.DomainException;
 import com.baseProject.myBaseProject.exception.ErrorCode;
 import com.baseProject.myBaseProject.interview.InterviewConversationEngine;
@@ -184,7 +186,83 @@ public class InterviewConversationServiceImpl implements InterviewConversationSe
         return get(userId, sessionId);
     }
 
+    @Override
+    public void continueAfterRealtimeFallback(Long userId, Long sessionId) {
+        Long candidateTurnId = transactions.execute(status ->
+                claimRealtimeFallbackCandidate(userId, sessionId));
+        if (candidateTurnId == null) {
+            return;
+        }
+        try {
+            InterviewContext context = contextLoader.loadInternal(sessionId);
+            List<InterviewTurnContext> recentTurns = recentTurnContext(sessionId);
+            InterviewReplyResult reply = engine.reply(
+                    context, recentTurns,
+                    remainingSeconds(context.deadlineAt(), clock.instant()));
+            persistReply(sessionId, candidateTurnId, reply);
+        } catch (RuntimeException exception) {
+            persistFallbackRecoveryPrompt(sessionId, candidateTurnId);
+        }
+    }
+
     // helper
+    private Long claimRealtimeFallbackCandidate(Long userId, Long sessionId) {
+        InterviewSession session = ownedForUpdate(userId, sessionId);
+        if (session.getStatus() != InterviewSessionStatus.IN_PROGRESS
+                || session.getMode() != InterviewSessionMode.VOICE_TURN_BASED) {
+            return null;
+        }
+        InterviewTurn current = turns
+                .findBySessionIdAndTurnIndex(sessionId, session.getCurrentTurnIndex())
+                .orElse(null);
+        if (current == null
+                || current.getRole() != InterviewTurnRole.CANDIDATE
+                || current.getInputMode() != InterviewTurnInputMode.VOICE_REALTIME
+                || turns.findByReplyToTurnId(current.getId()).isPresent()) {
+            return null;
+        }
+        if (current.getProcessingStatus() == InterviewTurnProcessingStatus.PROCESSING) {
+            throw new DomainException(ErrorCode.INTERVIEW_TURN_PROCESSING);
+        }
+        current.retryProcessing(clock.instant());
+        return current.getId();
+    }
+
+    private void persistFallbackRecoveryPrompt(Long sessionId, Long candidateTurnId) {
+        transactions.executeWithoutResult(status -> {
+            InterviewSession session = sessions.findByIdForUpdate(sessionId)
+                    .orElseThrow(() -> new DomainException(ErrorCode.INTERVIEW_SESSION_NOT_FOUND));
+            InterviewTurn candidate = turns.findById(candidateTurnId)
+                    .orElseThrow(() -> new DomainException(ErrorCode.INTERVIEW_TURN_OUT_OF_SEQUENCE));
+            if (session.getStatus() != InterviewSessionStatus.IN_PROGRESS
+                    || session.getCurrentTurnIndex() != candidate.getTurnIndex()
+                    || turns.findByReplyToTurnId(candidateTurnId).isPresent()) {
+                return;
+            }
+            Instant now = clock.instant();
+            turns.save(InterviewTurn.builder()
+                    .session(session)
+                    .replyToTurn(candidate)
+                    .turnIndex(candidate.getTurnIndex() + 1)
+                    .role(InterviewTurnRole.INTERVIEWER)
+                    .inputMode(InterviewTurnInputMode.VOICE_TURN_BASED)
+                    .contentText(fallbackRecoveryText(session.getLanguageCode()))
+                    .action(InterviewTurnAction.HANDLE_REQUEST)
+                    .createdAt(now)
+                    .build());
+            candidate.markCompleted();
+            session.recordTurn(candidate.getTurnIndex() + 1, null, now);
+        });
+    }
+
+    private String fallbackRecoveryText(String languageCode) {
+        return switch (languageCode) {
+            case "vi" -> "Kết nối realtime vừa bị gián đoạn. Bạn có thể nhắc lại ngắn gọn câu trả lời vừa rồi không?";
+            case "ja" -> "リアルタイム接続が中断されました。先ほどの回答を短くもう一度お願いします。";
+            default -> "The realtime connection was interrupted. Could you briefly repeat your last answer?";
+        };
+    }
+
     private AnswerClaim claimAnswer(
             Long userId,
             Long sessionId,
@@ -407,6 +485,9 @@ public class InterviewConversationServiceImpl implements InterviewConversationSe
         return new InterviewConversationResponse(
                 session.getId(),
                 session.getStatus(),
+                session.getMode(),
+                session.getRealtimeProvider(),
+                session.getRealtimeVoiceName(),
                 session.getStartedAt(),
                 session.getDeadlineAt(),
                 session.getEndReason(),
@@ -421,6 +502,7 @@ public class InterviewConversationServiceImpl implements InterviewConversationSe
                 turn.getId(),
                 turn.getTurnIndex(),
                 turn.getRole(),
+                turn.getInputMode(),
                 turn.getContentText(),
                 turn.getCandidateIntent(),
                 turn.getAction(),
@@ -428,6 +510,8 @@ public class InterviewConversationServiceImpl implements InterviewConversationSe
                 turn.getIdempotencyKey(),
                 turn.getProcessingStatus(),
                 turn.getProcessingErrorCode(),
+                turn.isWasInterrupted(),
+                turn.getLatencyMs(),
                 turn.getCreatedAt());
     }
 

@@ -2,6 +2,7 @@ package com.baseProject.myBaseProject.entity;
 
 import com.baseProject.myBaseProject.enums.CandidateIntent;
 import com.baseProject.myBaseProject.enums.InterviewTurnAction;
+import com.baseProject.myBaseProject.enums.InterviewTurnInputMode;
 import com.baseProject.myBaseProject.enums.InterviewTurnProcessingStatus;
 import com.baseProject.myBaseProject.enums.InterviewTurnRole;
 import jakarta.persistence.Column;
@@ -67,6 +68,12 @@ public class InterviewTurn {
     @Column(nullable = false, updatable = false, length = 20)
     private InterviewTurnRole role;
 
+    @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
+    @Column(name = "input_mode", nullable = false, updatable = false, length = 30)
+    @Builder.Default
+    private InterviewTurnInputMode inputMode = InterviewTurnInputMode.TEXT;
+
     @Column(name = "content_text", nullable = false, updatable = false, columnDefinition = "TEXT")
     private String contentText;
 
@@ -97,6 +104,13 @@ public class InterviewTurn {
     @Column(name = "processing_error_code", length = 80)
     private String processingErrorCode;
 
+    @Column(name = "was_interrupted", nullable = false)
+    @Builder.Default
+    private boolean wasInterrupted = false;
+
+    @Column(name = "latency_ms")
+    private Integer latencyMs;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -119,5 +133,16 @@ public class InterviewTurn {
     public void markFailed(String errorCode) {
         processingStatus = InterviewTurnProcessingStatus.FAILED;
         processingErrorCode = errorCode;
+    }
+
+    public void markInterrupted() {
+        wasInterrupted = true;
+    }
+
+    public void recordLatency(int latencyMs) {
+        if (latencyMs < 0) {
+            throw new IllegalArgumentException("Turn latency must not be negative");
+        }
+        this.latencyMs = latencyMs;
     }
 }

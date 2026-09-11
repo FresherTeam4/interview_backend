@@ -1,6 +1,7 @@
 package com.baseProject.myBaseProject.entity;
 
 import com.baseProject.myBaseProject.enums.InterviewEndReason;
+import com.baseProject.myBaseProject.enums.InterviewSessionMode;
 import com.baseProject.myBaseProject.enums.InterviewSessionStatus;
 import com.baseProject.myBaseProject.enums.InterviewerStyle;
 import jakarta.persistence.Column;
@@ -73,6 +74,18 @@ public class InterviewSession {
     @Column(nullable = false, length = 30)
     @Builder.Default
     private InterviewSessionStatus status = InterviewSessionStatus.PREPARING;
+
+    @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
+    @Column(nullable = false, length = 30)
+    @Builder.Default
+    private InterviewSessionMode mode = InterviewSessionMode.VOICE_TURN_BASED;
+
+    @Column(name = "realtime_provider", length = 50)
+    private String realtimeProvider;
+
+    @Column(name = "realtime_voice_name", length = 50)
+    private String realtimeVoiceName;
 
     @Column(name = "language_code", nullable = false, updatable = false, length = 10)
     private String languageCode;
@@ -224,6 +237,17 @@ public class InterviewSession {
             conversationSummary = summary;
         }
         lastActivityAt = now;
+        updatedAt = now;
+    }
+
+    public void fallbackToTurnBased(Instant now) {
+        mode = InterviewSessionMode.VOICE_TURN_BASED;
+        updatedAt = now;
+    }
+
+    public void configureRealtime(String provider, String voiceName, Instant now) {
+        realtimeProvider = provider;
+        realtimeVoiceName = voiceName;
         updatedAt = now;
     }
 

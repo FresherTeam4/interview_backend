@@ -95,3 +95,21 @@ databaseChangeLog:
             path: db/changelog/sql/006-simplify-interview-report.sql
             splitStatements: true
             stripComments: true
+
+  - changeSet:
+      id: 007-interview-realtime
+      author: my-interview-team
+      changes:
+        - sqlFile:
+            path: db/changelog/sql/007-interview-realtime.sql
+            splitStatements: true
+            stripComments: true
+
+  - changeSet:
+      id: 008-interview-realtime-lifecycle
+      author: my-interview-team
+      changes:
+        - sqlFile:
+            path: db/changelog/sql/008-interview-realtime-lifecycle.sql
+            splitStatements: true
+            stripComments: true

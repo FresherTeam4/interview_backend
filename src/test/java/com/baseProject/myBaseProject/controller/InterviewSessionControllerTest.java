@@ -10,8 +10,10 @@ import com.baseProject.myBaseProject.dto.session.InterviewTurnResponse;
 import com.baseProject.myBaseProject.entity.UserAccount;
 import com.baseProject.myBaseProject.enums.CandidateIntent;
 import com.baseProject.myBaseProject.enums.InterviewEndReason;
+import com.baseProject.myBaseProject.enums.InterviewSessionMode;
 import com.baseProject.myBaseProject.enums.InterviewSessionStatus;
 import com.baseProject.myBaseProject.enums.InterviewTurnAction;
+import com.baseProject.myBaseProject.enums.InterviewTurnInputMode;
 import com.baseProject.myBaseProject.enums.InterviewTurnRole;
 import com.baseProject.myBaseProject.enums.InterviewerStyle;
 import com.baseProject.myBaseProject.enums.UserRole;
@@ -111,7 +113,9 @@ class InterviewSessionControllerTest {
         when(service.options()).thenReturn(new InterviewSessionOptionsResponse(
                 List.of(new InterviewOptionResponse("vi", "Tiếng Việt")),
                 List.of(15, 30),
-                List.of(new InterviewOptionResponse("PROFESSIONAL", "Chuyên nghiệp"))));
+                List.of(new InterviewOptionResponse("PROFESSIONAL", "Chuyên nghiệp")),
+                List.of(new InterviewOptionResponse(
+                        "VOICE_REALTIME", "Giọng nói thời gian thực"))));
 
         mockMvc.perform(get("/api/interview-session-options").with(user(userDetails())))
                 .andExpect(status().isOk())
@@ -159,17 +163,19 @@ class InterviewSessionControllerTest {
     @Test
     void userCanSubmitAnswerForCurrentTurn() throws Exception {
         InterviewTurnResponse candidate = new InterviewTurnResponse(
-                2L, 1, InterviewTurnRole.CANDIDATE, "Tôi xây dựng REST API.",
+                2L, 1, InterviewTurnRole.CANDIDATE, InterviewTurnInputMode.TEXT,
+                "Tôi xây dựng REST API.",
                 CandidateIntent.ANSWER,
                 null, null, "answer-1",
                 com.baseProject.myBaseProject.enums.InterviewTurnProcessingStatus.COMPLETED,
-                null, NOW.plusSeconds(20));
+                null, false, null, NOW.plusSeconds(20));
         InterviewTurnResponse interviewer = new InterviewTurnResponse(
                 3L, 2, InterviewTurnRole.INTERVIEWER,
+                InterviewTurnInputMode.TEXT,
                 "Bạn đã xử lý lỗi API đó như thế nào?",
                 null,
                 InterviewTurnAction.FOLLOW_UP, "BACKEND",
-                null, null, null, NOW.plusSeconds(21));
+                null, null, null, false, null, NOW.plusSeconds(21));
         when(conversationService.answer(eq(7L), eq(501L), eq("answer-1"), any()))
                 .thenReturn(new InterviewAnswerResponse(
                         501L,
@@ -205,6 +211,9 @@ class InterviewSessionControllerTest {
         InterviewConversationResponse response = new InterviewConversationResponse(
                 501L,
                 InterviewSessionStatus.SCORING,
+                InterviewSessionMode.VOICE_TURN_BASED,
+                null,
+                null,
                 NOW,
                 NOW.plusSeconds(1800),
                 InterviewEndReason.CANDIDATE_FINISHED,
@@ -277,7 +286,9 @@ class InterviewSessionControllerTest {
     private InterviewSessionStatusResponse response(InterviewSessionStatus status) {
         return new InterviewSessionStatusResponse(
                 501L, status, "Backend Java", "Minh profile", "vi", 30,
-                InterviewerStyle.PROFESSIONAL, null, null, null, null,
+                InterviewerStyle.PROFESSIONAL,
+                InterviewSessionMode.VOICE_TURN_BASED, null, null,
+                null, null, null, null,
                 NOW, null, null, null);
     }
 
@@ -286,6 +297,7 @@ class InterviewSessionControllerTest {
                 1L,
                 0,
                 InterviewTurnRole.INTERVIEWER,
+                InterviewTurnInputMode.TEXT,
                 "Xin chào, bạn hãy giới thiệu về mình.",
                 null,
                 InterviewTurnAction.OPENING,
@@ -293,10 +305,15 @@ class InterviewSessionControllerTest {
                 null,
                 null,
                 null,
+                false,
+                null,
                 NOW);
         return new InterviewConversationResponse(
                 501L,
                 InterviewSessionStatus.IN_PROGRESS,
+                InterviewSessionMode.VOICE_TURN_BASED,
+                null,
+                null,
                 NOW,
                 NOW.plusSeconds(1800),
                 null,

@@ -578,6 +578,107 @@ paths:
               schema: {$ref: '#/components/schemas/InterviewSessionStatus'}
         '404': {$ref: '#/components/responses/NotFound'}
         '409': {$ref: '#/components/responses/Conflict'}
+  /api/interview-sessions/{sessionId}/realtime/session-grants:
+    parameters:
+      - {$ref: '#/components/parameters/SessionId'}
+    post:
+      tags: [Interview]
+      operationId: createRealtimeSessionGrant
+      summary: Create a constrained realtime provider grant
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/CreateRealtimeSessionRequest'}
+      responses:
+        '200':
+          description: Short-lived token and WebSocket setup.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/RealtimeSessionGrant'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '502': {$ref: '#/components/responses/BadGateway'}
+        '503': {$ref: '#/components/responses/ServiceUnavailable'}
+        '504': {$ref: '#/components/responses/GatewayTimeout'}
+  /api/interview-sessions/{sessionId}/realtime/connections/{connectionId}/events:
+    parameters:
+      - {$ref: '#/components/parameters/SessionId'}
+      - name: connectionId
+        in: path
+        required: true
+        schema: {type: integer, format: int64}
+    post:
+      tags: [Interview]
+      operationId: recordRealtimeEvents
+      summary: Persist realtime events and final transcript turns
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/RealtimeEventBatchRequest'}
+      responses:
+        '200':
+          description: Idempotent batch result.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/RealtimeEventBatchResponse'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+  /api/interview-sessions/{sessionId}/realtime/connections/{connectionId}/resume-grants:
+    parameters:
+      - {$ref: '#/components/parameters/SessionId'}
+      - name: connectionId
+        in: path
+        required: true
+        schema: {type: integer, format: int64}
+    post:
+      tags: [Interview]
+      operationId: resumeRealtimeConnection
+      summary: Create a new constrained grant from a resumption handle
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/CreateRealtimeResumeRequest'}
+      responses:
+        '200':
+          description: New connection ID, token and provider setup.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/RealtimeSessionGrant'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '502': {$ref: '#/components/responses/BadGateway'}
+        '503': {$ref: '#/components/responses/ServiceUnavailable'}
+        '504': {$ref: '#/components/responses/GatewayTimeout'}
+  /api/interview-sessions/{sessionId}/realtime/connections/{connectionId}/disconnect:
+    parameters:
+      - {$ref: '#/components/parameters/SessionId'}
+      - name: connectionId
+        in: path
+        required: true
+        schema: {type: integer, format: int64}
+    post:
+      tags: [Interview]
+      operationId: disconnectRealtimeConnection
+      summary: Close a connection and optionally fall back to turn-based voice
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/DisconnectRealtimeConnectionRequest'}
+      responses:
+        '200':
+          description: Persisted connection status.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/RealtimeConnection'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '404': {$ref: '#/components/responses/NotFound'}
   /api/interview-sessions/{sessionId}/start:
     parameters:
       - {$ref: '#/components/parameters/SessionId'}
@@ -1079,6 +1180,7 @@ components:
       properties:
         expectedVersion: {type: integer, format: int64, minimum: 0}
     InterviewerStyle: {type: string, enum: [FRIENDLY, PROFESSIONAL, CHALLENGING]}
+    InterviewSessionMode: {type: string, enum: [TEXT, VOICE_TURN_BASED, VOICE_REALTIME]}
     InterviewSessionStatusEnum:
       type: string
       enum: [PREPARING, READY, PREPARATION_FAILED, IN_PROGRESS, SCORING, COMPLETED, SCORING_FAILED, CANCELLED, EXPIRED]
@@ -1088,11 +1190,12 @@ components:
       nullable: true
     InterviewSessionOptions:
       type: object
-      required: [languages, durations, interviewerStyles]
+      required: [languages, durations, interviewerStyles, modes]
       properties:
         languages: {type: array, items: {$ref: '#/components/schemas/InterviewOption'}}
         durations: {type: array, items: {type: integer}}
         interviewerStyles: {type: array, items: {$ref: '#/components/schemas/InterviewOption'}}
+        modes: {type: array, items: {$ref: '#/components/schemas/InterviewOption'}}
     InterviewOption:
       type: object
       required: [code, name]
@@ -1108,9 +1211,10 @@ components:
         languageCode: {type: string, minLength: 1, maxLength: 10}
         durationMinutes: {type: integer, minimum: 1}
         interviewerStyle: {$ref: '#/components/schemas/InterviewerStyle'}
+        mode: {$ref: '#/components/schemas/InterviewSessionMode'}
     InterviewSessionStatus:
       type: object
-      required: [id, status, templateTitle, profileName, languageCode, durationMinutes, interviewerStyle]
+      required: [id, status, templateTitle, profileName, languageCode, durationMinutes, interviewerStyle, mode]
       properties:
         id: {type: integer, format: int64}
         status: {$ref: '#/components/schemas/InterviewSessionStatusEnum'}
@@ -1119,6 +1223,9 @@ components:
         languageCode: {type: string}
         durationMinutes: {type: integer}
         interviewerStyle: {$ref: '#/components/schemas/InterviewerStyle'}
+        mode: {$ref: '#/components/schemas/InterviewSessionMode'}
+        realtimeProvider: {type: string, nullable: true}
+        realtimeVoiceName: {type: string, nullable: true}
         preparationErrorCode: {type: string, nullable: true}
         preparationErrorMessage: {type: string, nullable: true}
         scoringErrorCode: {type: string, nullable: true}
@@ -1127,6 +1234,94 @@ components:
         endReason: {$ref: '#/components/schemas/InterviewEndReason'}
         endedAt: {type: string, format: date-time, nullable: true}
         completedAt: {type: string, format: date-time, nullable: true}
+    CreateRealtimeSessionRequest:
+      type: object
+      properties:
+        voiceName: {type: string, maxLength: 50, nullable: true}
+        clientPlatform: {type: string, maxLength: 50, nullable: true}
+    RealtimeAudioFormat:
+      type: object
+      required: [mimeType, sampleRate, bitDepth, channels]
+      properties:
+        mimeType: {type: string}
+        sampleRate: {type: integer, minimum: 1}
+        bitDepth: {type: integer, minimum: 1}
+        channels: {type: integer, minimum: 1}
+    RealtimeSessionGrant:
+      type: object
+      required: [connectionId, provider, transport, endpoint, accessToken, modelName, voiceName, inputAudio, outputAudio, expiresAt, sessionSetup]
+      properties:
+        connectionId: {type: integer, format: int64}
+        provider: {type: string}
+        transport: {type: string, enum: [WEBRTC, WEBSOCKET]}
+        endpoint: {type: string, format: uri}
+        accessToken: {type: string, format: password}
+        modelName: {type: string}
+        voiceName: {type: string}
+        inputAudio: {$ref: '#/components/schemas/RealtimeAudioFormat'}
+        outputAudio: {$ref: '#/components/schemas/RealtimeAudioFormat'}
+        expiresAt: {type: string, format: date-time}
+        sessionSetup:
+          type: object
+          additionalProperties: true
+    RealtimeEventType:
+      type: string
+      enum: [SESSION_CONNECTED, SESSION_RESUMPTION_UPDATED, USER_SPEECH_STARTED, USER_TRANSCRIPT_PARTIAL, USER_TRANSCRIPT_FINAL, ASSISTANT_SPEECH_STARTED, ASSISTANT_TRANSCRIPT_FINAL, ASSISTANT_INTERRUPTED, SESSION_DISCONNECTED, PROVIDER_ERROR]
+    RealtimeEventRequest:
+      type: object
+      required: [providerEventId, sequenceNumber, eventType, occurredAt]
+      properties:
+        providerEventId: {type: string, minLength: 1, maxLength: 255}
+        sequenceNumber: {type: integer, format: int64, minimum: 0}
+        eventType: {$ref: '#/components/schemas/RealtimeEventType'}
+        transcriptText: {type: string, maxLength: 16000, nullable: true}
+        detail: {type: string, maxLength: 65535, nullable: true}
+        latencyMs: {type: integer, minimum: 0, maximum: 600000, nullable: true}
+        occurredAt: {type: string, format: date-time}
+    RealtimeEventBatchRequest:
+      type: object
+      required: [events]
+      properties:
+        events:
+          type: array
+          minItems: 1
+          maxItems: 100
+          items: {$ref: '#/components/schemas/RealtimeEventRequest'}
+    RealtimeEventBatchResponse:
+      type: object
+      required: [connectionId, acceptedEventCount, duplicateEventCount, createdTurnCount, currentTurnIndex]
+      properties:
+        connectionId: {type: integer, format: int64}
+        acceptedEventCount: {type: integer, minimum: 0}
+        duplicateEventCount: {type: integer, minimum: 0}
+        createdTurnCount: {type: integer, minimum: 0}
+        currentTurnIndex: {type: integer, minimum: 0}
+    CreateRealtimeResumeRequest:
+      type: object
+      required: [resumptionHandle]
+      properties:
+        resumptionHandle: {type: string, minLength: 1, maxLength: 65535}
+        clientPlatform: {type: string, maxLength: 50, nullable: true}
+    DisconnectRealtimeConnectionRequest:
+      type: object
+      required: [fallbackToTurnBased]
+      properties:
+        reason: {type: string, maxLength: 255, nullable: true}
+        fallbackToTurnBased: {type: boolean}
+        p50LatencyMs: {type: integer, minimum: 0, maximum: 600000, nullable: true}
+        p95LatencyMs: {type: integer, minimum: 0, maximum: 600000, nullable: true}
+    RealtimeConnection:
+      type: object
+      required: [connectionId, sessionMode, fellBackToTurnBased]
+      properties:
+        connectionId: {type: integer, format: int64}
+        sessionMode: {$ref: '#/components/schemas/InterviewSessionMode'}
+        connectedAt: {type: string, format: date-time, nullable: true}
+        disconnectedAt: {type: string, format: date-time, nullable: true}
+        disconnectReason: {type: string, nullable: true}
+        fellBackToTurnBased: {type: boolean}
+        p50LatencyMs: {type: integer, minimum: 0, nullable: true}
+        p95LatencyMs: {type: integer, minimum: 0, nullable: true}
     CandidateIntent:
       type: string
       enum: [ANSWER, REQUEST_REPEAT, REQUEST_CLARIFICATION, REQUEST_TIME, ASK_INTERVIEWER, CANNOT_ANSWER, DECLINE_OR_SKIP, CORRECT_PREVIOUS_ANSWER, REQUEST_END, SOCIAL_OR_META, OFF_TOPIC, INAPPROPRIATE, OTHER]
@@ -1137,11 +1332,12 @@ components:
       nullable: true
     InterviewTurn:
       type: object
-      required: [id, turnIndex, role, content, createdAt]
+      required: [id, turnIndex, role, inputMode, content, wasInterrupted, createdAt]
       properties:
         id: {type: integer, format: int64}
         turnIndex: {type: integer}
         role: {type: string, enum: [INTERVIEWER, CANDIDATE]}
+        inputMode: {$ref: '#/components/schemas/InterviewSessionMode'}
         content: {type: string}
         candidateIntent: {$ref: '#/components/schemas/CandidateIntent'}
         action: {$ref: '#/components/schemas/InterviewTurnAction'}
@@ -1149,13 +1345,18 @@ components:
         requestId: {type: string, nullable: true}
         processingStatus: {type: string, enum: [PROCESSING, COMPLETED, FAILED], nullable: true}
         processingErrorCode: {type: string, nullable: true}
+        wasInterrupted: {type: boolean}
+        latencyMs: {type: integer, minimum: 0, nullable: true}
         createdAt: {type: string, format: date-time}
     InterviewConversation:
       type: object
-      required: [sessionId, status, remainingSeconds, currentTurnIndex, turns]
+      required: [sessionId, status, mode, remainingSeconds, currentTurnIndex, turns]
       properties:
         sessionId: {type: integer, format: int64}
         status: {$ref: '#/components/schemas/InterviewSessionStatusEnum'}
+        mode: {$ref: '#/components/schemas/InterviewSessionMode'}
+        realtimeProvider: {type: string, nullable: true}
+        realtimeVoiceName: {type: string, nullable: true}
         startedAt: {type: string, format: date-time, nullable: true}
         deadlineAt: {type: string, format: date-time, nullable: true}
         endReason: {$ref: '#/components/schemas/InterviewEndReason'}

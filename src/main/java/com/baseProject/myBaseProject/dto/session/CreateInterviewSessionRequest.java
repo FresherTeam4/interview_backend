@@ -1,5 +1,6 @@
 package com.baseProject.myBaseProject.dto.session;
 
+import com.baseProject.myBaseProject.enums.InterviewSessionMode;
 import com.baseProject.myBaseProject.enums.InterviewerStyle;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -24,5 +25,7 @@ public record CreateInterviewSessionRequest(
         Integer durationMinutes,
 
         @NotNull(message = "Interviewer style is required")
-        InterviewerStyle interviewerStyle) {
+        InterviewerStyle interviewerStyle,
+
+        InterviewSessionMode mode) {
 }

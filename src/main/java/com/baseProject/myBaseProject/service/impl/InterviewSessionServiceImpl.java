@@ -1,6 +1,7 @@
 package com.baseProject.myBaseProject.service.impl;
 
 import com.baseProject.myBaseProject.config.properites.InterviewSessionProperties;
+import com.baseProject.myBaseProject.config.properites.RealtimeProperties;
 import com.baseProject.myBaseProject.constant.Message;
 import com.baseProject.myBaseProject.dto.session.CreateInterviewSessionRequest;
 import com.baseProject.myBaseProject.dto.session.InterviewOptionResponse;
@@ -9,6 +10,7 @@ import com.baseProject.myBaseProject.dto.session.InterviewSessionStatusResponse;
 import com.baseProject.myBaseProject.entity.CandidateProfile;
 import com.baseProject.myBaseProject.entity.InterviewSession;
 import com.baseProject.myBaseProject.entity.InterviewTemplate;
+import com.baseProject.myBaseProject.enums.InterviewSessionMode;
 import com.baseProject.myBaseProject.enums.InterviewSessionStatus;
 import com.baseProject.myBaseProject.enums.InterviewTransitionActor;
 import com.baseProject.myBaseProject.enums.InterviewerStyle;
@@ -50,6 +52,7 @@ public class InterviewSessionServiceImpl implements InterviewSessionService {
     private final InterviewSessionTransitionRecorder transitionRecorder;
     private final InterviewSessionMapper mapper;
     private final InterviewSessionProperties properties;
+    private final RealtimeProperties realtimeProperties;
     private final Clock clock;
     private final TransactionTemplate transactions;
 
@@ -64,6 +67,7 @@ public class InterviewSessionServiceImpl implements InterviewSessionService {
             InterviewSessionTransitionRecorder transitionRecorder,
             InterviewSessionMapper mapper,
             InterviewSessionProperties properties,
+            RealtimeProperties realtimeProperties,
             Clock clock,
             PlatformTransactionManager transactionManager) {
         this.sessions = sessions;
@@ -76,6 +80,7 @@ public class InterviewSessionServiceImpl implements InterviewSessionService {
         this.transitionRecorder = transitionRecorder;
         this.mapper = mapper;
         this.properties = properties;
+        this.realtimeProperties = realtimeProperties;
         this.clock = clock;
         this.transactions = new TransactionTemplate(transactionManager);
     }
@@ -88,9 +93,13 @@ public class InterviewSessionServiceImpl implements InterviewSessionService {
         List<InterviewOptionResponse> styles = Arrays.stream(InterviewerStyle.values())
                 .map(style -> new InterviewOptionResponse(style.name(), styleName(style)))
                 .toList();
+        List<InterviewOptionResponse> modes = properties.supportedModes().stream()
+                .filter(this::isModeAvailable)
+                .map(mode -> new InterviewOptionResponse(mode.name(), modeName(mode)))
+                .toList();
 
         return new InterviewSessionOptionsResponse(
-                languages, properties.supportedDurations(), styles);
+                languages, properties.supportedDurations(), styles, modes);
     }
 
     @Override
@@ -99,18 +108,19 @@ public class InterviewSessionServiceImpl implements InterviewSessionService {
         String idempotencyKey = IdempotencyKeyNormalizer.normalize(rawIdempotencyKey);
         String languageCode = normalizeLanguage(request.languageCode());
         int durationMinutes = requireDuration(request.durationMinutes());
+        InterviewSessionMode mode = requireMode(request.mode());
 
         CreationResult result;
 
         // Unique constraint xử lý race khi hai request cùng idempotency key đồng thời tạo session.
         try {
             result = transactions.execute(status -> createInTransaction(
-                    userId, idempotencyKey, request, languageCode, durationMinutes));
+                    userId, idempotencyKey, request, languageCode, durationMinutes, mode));
         } catch (DataIntegrityViolationException exception) {
             InterviewSession existing = sessions
                     .findByUserIdAndIdempotencyKey(userId, idempotencyKey)
                     .orElseThrow(() -> exception);
-            requireSameRequest(existing, request, languageCode, durationMinutes);
+            requireSameRequest(existing, request, languageCode, durationMinutes, mode);
             result = new CreationResult(existing.getId(), false);
         }
         if (result == null) {
@@ -167,12 +177,13 @@ public class InterviewSessionServiceImpl implements InterviewSessionService {
             String idempotencyKey,
             CreateInterviewSessionRequest request,
             String languageCode,
-            int durationMinutes) {
+            int durationMinutes,
+            InterviewSessionMode mode) {
         InterviewSession existing = sessions
                 .findByUserIdAndIdempotencyKey(userId, idempotencyKey)
                 .orElse(null);
         if (existing != null) {
-            requireSameRequest(existing, request, languageCode, durationMinutes);
+            requireSameRequest(existing, request, languageCode, durationMinutes, mode);
 
             return new CreationResult(existing.getId(), false);
         }
@@ -206,6 +217,7 @@ public class InterviewSessionServiceImpl implements InterviewSessionService {
                 .templateTitleSnapshot(template.getTitle())
                 .profileNameSnapshot(profile.getName())
                 .status(InterviewSessionStatus.PREPARING)
+                .mode(mode)
                 .languageCode(languageCode)
                 .durationMinutes(durationMinutes)
                 .interviewerStyle(request.interviewerStyle())
@@ -253,14 +265,16 @@ public class InterviewSessionServiceImpl implements InterviewSessionService {
             InterviewSession existing,
             CreateInterviewSessionRequest request,
             String languageCode,
-            int durationMinutes) {
+            int durationMinutes,
+            InterviewSessionMode mode) {
 
         // Một idempotency key chỉ được đại diện cho duy nhất một nội dung request
         boolean same = existing.getTemplate().getId().equals(request.templateId())
                 && existing.getProfile().getId().equals(request.profileId())
                 && existing.getLanguageCode().equals(languageCode)
                 && existing.getDurationMinutes() == durationMinutes
-                && existing.getInterviewerStyle() == request.interviewerStyle();
+                && existing.getInterviewerStyle() == request.interviewerStyle()
+                && existing.getMode() == mode;
         if (!same) {
             throw new DomainException(ErrorCode.INTERVIEW_SESSION_IDEMPOTENCY_CONFLICT);
         }
@@ -288,6 +302,22 @@ public class InterviewSessionServiceImpl implements InterviewSessionService {
         return requested;
     }
 
+    private InterviewSessionMode requireMode(InterviewSessionMode requested) {
+        InterviewSessionMode mode = requested == null
+                ? InterviewSessionMode.VOICE_TURN_BASED
+                : requested;
+        if (!properties.supportedModes().contains(mode) || !isModeAvailable(mode)) {
+            throw new DomainException(
+                    ErrorCode.INTERVIEW_SESSION_OPTION_INVALID,
+                    "Unsupported interview mode: " + mode);
+        }
+        return mode;
+    }
+
+    private boolean isModeAvailable(InterviewSessionMode mode) {
+        return mode != InterviewSessionMode.VOICE_REALTIME || realtimeProperties.enabled();
+    }
+
     private String languageName(String code) {
         return switch (code.toLowerCase(Locale.ROOT)) {
             case "vi" -> "Tiếng Việt";
@@ -302,6 +332,14 @@ public class InterviewSessionServiceImpl implements InterviewSessionService {
             case FRIENDLY -> "Thân thiện";
             case PROFESSIONAL -> "Chuyên nghiệp";
             case CHALLENGING -> "Thử thách";
+        };
+    }
+
+    private String modeName(InterviewSessionMode mode) {
+        return switch (mode) {
+            case TEXT -> "Văn bản";
+            case VOICE_TURN_BASED -> "Giọng nói theo lượt";
+            case VOICE_REALTIME -> "Giọng nói thời gian thực";
         };
     }
 

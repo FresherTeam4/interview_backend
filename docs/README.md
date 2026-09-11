@@ -12,6 +12,7 @@ Thư mục này là contract tích hợp frontend của backend `my-interview`. 
 | [jd-template-api.md](./jd-template-api.md) | **Một luồng JD + Interview Template**: nhập JD, poll AI analysis, edit, confirm, publish |
 | [interview-session-api.md](./interview-session-api.md) | Tạo session, chuẩn bị, phỏng vấn, retry answer, kết thúc, chấm điểm và report |
 | [speech-api.md](./speech-api.md) | Push-to-talk STT, audio interviewer, cấu hình ElevenLabs và cách đổi speech provider |
+| [realtime-api.md](./realtime-api.md) | Gemini Live grant, event/transcript, resume, fallback và browser client mẫu |
 | [frontend-implementation-guide.md](./frontend-implementation-guide.md) | Kiến trúc client, route/screen, state machine, query invalidation và checklist hoàn thiện |
 | [openapi.yaml](./openapi.yaml) | OpenAPI 3.0 để sinh type/client hoặc nạp vào công cụ API |
 | [database-migrations.md](./database-migrations.md) | Cách Liquibase quản lý schema, tiếp quản database cũ và thêm migration mới |
@@ -96,6 +97,10 @@ Thứ tự API tối thiểu cho happy path:
 | POST | `/api/interview-sessions/{id}/answers` | Bearer, owner | Lưu answer và đợi AI reply |
 | POST | `/api/interview-sessions/{id}/speech/transcriptions` | Bearer, owner | Chuyển audio ứng viên thành text |
 | POST | `/api/interview-sessions/{id}/speech/turns/{turnId}/audio` | Bearer, owner | Tạo hoặc lấy MP3 cho interviewer turn |
+| POST | `/api/interview-sessions/{id}/realtime/session-grants` | Bearer, owner | Cấp ephemeral token và WebSocket setup cho voice realtime |
+| POST | `/api/interview-sessions/{id}/realtime/connections/{connectionId}/events` | Bearer, owner | Lưu event/transcript idempotent và tạo interview turn |
+| POST | `/api/interview-sessions/{id}/realtime/connections/{connectionId}/resume-grants` | Bearer, owner | Cấp token mới từ resumption handle |
+| POST | `/api/interview-sessions/{id}/realtime/connections/{connectionId}/disconnect` | Bearer, owner | Lưu latency và tùy chọn fallback turn-based |
 | POST | `/api/interview-sessions/{id}/finish` | Bearer, owner | Kết thúc sớm và chuyển scoring |
 | GET | `/api/interview-sessions/{id}/report` | Bearer, owner | Trạng thái scoring hoặc report |
 | POST | `/api/interview-sessions/{id}/scoring/retry` | Bearer, owner | `202`, retry scoring |
@@ -103,6 +108,6 @@ Thứ tự API tối thiểu cho happy path:
 ## Giới hạn contract frontend cần biết
 
 - Backend hiện **không có API list interview sessions**. Frontend chỉ có thể mở lại session khi đã giữ `sessionId` cục bộ hoặc nhận ID từ nơi khác.
-- Cấu hình CORS hiện chưa liệt kê `Idempotency-Key` trong `allowedHeaders`. Khi frontend và backend khác origin, browser có thể chặn hai endpoint cần header này ở preflight. Trong lúc backend chưa thêm header, dev frontend cần dùng same-origin proxy; production cần cấu hình backend cho phép `Idempotency-Key`.
+- CORS đã cho phép `Idempotency-Key`; production cần cấu hình đúng frontend origin bằng `CORS_ALLOWED_ORIGINS`.
 - Không có endpoint cancel session `PREPARING`/`READY`, không có endpoint tạo profile thủ công khi chưa upload CV, và không có endpoint clone template đã confirm.
 - Mọi API lấy resource theo ID đều kiểm tra owner hoặc visibility; frontend phải coi `404` là resource không tồn tại hoặc không có quyền xem, không suy luận owner từ ID.

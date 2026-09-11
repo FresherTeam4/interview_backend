@@ -235,11 +235,9 @@ App bootstrap:
 
 Route interview phải fetch server state trước khi quyết định màn hình; URL không chứng minh state hiện tại. Ví dụ user mở thẳng `/interviews/501`, conversation có thể đã `SCORING` và phải redirect report.
 
-## Known integration blocker
+## CORS trong môi trường frontend
 
-Backend `SecurityConfig` hiện cho phép CORS headers `Authorization`, `Content-Type`, `Accept`, `Origin`, `X-Requested-With` nhưng thiếu `Idempotency-Key`. Browser cross-origin sẽ preflight và có thể chặn create session/submit answer.
-
-Giải pháp frontend trong local dev là proxy `/api` qua cùng origin. Production cần backend thêm `Idempotency-Key` vào allowed headers; không bỏ header vì backend thực tế bắt buộc nó.
+Backend đã cho phép `Idempotency-Key` trong CORS headers. Cấu hình origin frontend bằng `CORS_ALLOWED_ORIGINS`; microphone vẫn yêu cầu HTTPS hoặc `localhost` theo chính sách browser.
 
 ## Definition of done
 

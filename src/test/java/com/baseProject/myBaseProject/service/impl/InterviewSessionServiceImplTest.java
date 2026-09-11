@@ -1,11 +1,13 @@
 package com.baseProject.myBaseProject.service.impl;
 
 import com.baseProject.myBaseProject.config.properites.InterviewSessionProperties;
+import com.baseProject.myBaseProject.config.properites.RealtimeProperties;
 import com.baseProject.myBaseProject.dto.session.CreateInterviewSessionRequest;
 import com.baseProject.myBaseProject.entity.CandidateProfile;
 import com.baseProject.myBaseProject.entity.InterviewSession;
 import com.baseProject.myBaseProject.entity.InterviewTemplate;
 import com.baseProject.myBaseProject.entity.UserAccount;
+import com.baseProject.myBaseProject.enums.InterviewSessionMode;
 import com.baseProject.myBaseProject.enums.InterviewSessionStatus;
 import com.baseProject.myBaseProject.enums.InterviewerStyle;
 import com.baseProject.myBaseProject.exception.DomainException;
@@ -110,7 +112,7 @@ class InterviewSessionServiceImplTest {
     }
 
     private static CreateInterviewSessionRequest request(InterviewerStyle style) {
-        return new CreateInterviewSessionRequest(101L, 35L, "vi", 30, style);
+        return new CreateInterviewSessionRequest(101L, 35L, "vi", 30, style, null);
     }
 
     private static class Fixture {
@@ -126,11 +128,21 @@ class InterviewSessionServiceImplTest {
         private final UserAccount user = UserAccount.builder().id(USER_ID).build();
         private final InterviewTemplate template = template();
         private final CandidateProfile profile = profile();
-        private final InterviewSessionServiceImpl service = new InterviewSessionServiceImpl(
-                sessions, templates, profiles, users, focusAreas, snapshotFactory,
-                preparationService, transitionRecorder, new InterviewSessionMapper(),
-                new InterviewSessionProperties(List.of("vi", "en"), List.of(15, 30, 45, 60)),
-                Clock.fixed(NOW, ZoneOffset.UTC), transactionManager());
+        private final InterviewSessionServiceImpl service;
+
+        private Fixture() {
+            service = new InterviewSessionServiceImpl(
+                    sessions, templates, profiles, users, focusAreas, snapshotFactory,
+                    preparationService, transitionRecorder, new InterviewSessionMapper(),
+                    new InterviewSessionProperties(
+                            List.of("vi", "en"),
+                            List.of(15, 30, 45, 60),
+                            List.of(InterviewSessionMode.TEXT,
+                                    InterviewSessionMode.VOICE_TURN_BASED,
+                                    InterviewSessionMode.VOICE_REALTIME)),
+                    new RealtimeProperties(true, "gemini-live"),
+                    Clock.fixed(NOW, ZoneOffset.UTC), transactionManager());
+        }
 
         private void stubNewSession() {
             when(sessions.findByUserIdAndIdempotencyKey(USER_ID, "request-1"))
@@ -163,6 +175,7 @@ class InterviewSessionServiceImplTest {
                     .templateTitleSnapshot(template.getTitle())
                     .profileNameSnapshot(profile.getName())
                     .status(status)
+                    .mode(InterviewSessionMode.VOICE_TURN_BASED)
                     .languageCode("vi")
                     .durationMinutes(30)
                     .interviewerStyle(InterviewerStyle.PROFESSIONAL)

@@ -42,6 +42,19 @@ public final class Message {
     public static final String SPEECH_SYNTHESIS_FAILED = "Speech service returned empty audio";
     public static final String SPEECH_TURN_NOT_SYNTHESIZABLE = "Interview turn cannot be converted to speech";
 
+    // Realtime interview
+    public static final String REALTIME_CONFIG_ERROR = "Realtime interview service is not configured properly";
+    public static final String REALTIME_NOT_ENABLED = "Realtime interview is not enabled";
+    public static final String REALTIME_SESSION_NOT_AVAILABLE = "Realtime session is not available for this interview";
+    public static final String REALTIME_VOICE_NOT_SUPPORTED = "Realtime voice is not supported";
+    public static final String REALTIME_PROVIDER_UNAVAILABLE = "Realtime interview provider is temporarily unavailable";
+    public static final String REALTIME_PROVIDER_TIMEOUT = "Realtime interview provider timed out";
+    public static final String REALTIME_PROVIDER_ERROR = "Realtime interview provider rejected the request";
+    public static final String REALTIME_CONNECTION_NOT_FOUND = "Realtime connection not found";
+    public static final String REALTIME_EVENT_INVALID = "Realtime event payload is invalid";
+    public static final String REALTIME_EVENT_SEQUENCE_CONFLICT = "Realtime event sequence was already used";
+    public static final String REALTIME_RESUMPTION_NOT_AVAILABLE = "Realtime session cannot be resumed";
+
     // Job description processing
     public static final String JD_FILE_REQUIRED = "Job description file is required";
     public static final String JD_INVALID_FILE_TYPE = "Job description must be a valid PDF file";

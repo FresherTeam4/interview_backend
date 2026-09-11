@@ -24,6 +24,7 @@ Mọi endpoint yêu cầu Bearer token và chỉ owner của session truy cập 
 
 ```ts
 type InterviewerStyle = "FRIENDLY" | "PROFESSIONAL" | "CHALLENGING";
+type InterviewSessionMode = "TEXT" | "VOICE_TURN_BASED" | "VOICE_REALTIME";
 type InterviewSessionStatus =
   | "PREPARING"
   | "READY"
@@ -52,6 +53,7 @@ interface InterviewSessionOptions {
   languages: Array<{ code: string; name: string }>;
   durations: number[];
   interviewerStyles: Array<{ code: InterviewerStyle; name: string }>;
+  modes: Array<{ code: InterviewSessionMode; name: string }>;
 }
 
 interface InterviewSessionStatusResponse {
@@ -62,6 +64,9 @@ interface InterviewSessionStatusResponse {
   languageCode: string;
   durationMinutes: number;
   interviewerStyle: InterviewerStyle;
+  mode: InterviewSessionMode;
+  realtimeProvider: string | null;
+  realtimeVoiceName: string | null;
   preparationErrorCode: string | null;
   preparationErrorMessage: string | null;
   scoringErrorCode: string | null;
@@ -76,6 +81,7 @@ interface InterviewTurn {
   id: number;
   turnIndex: number;
   role: InterviewTurnRole;
+  inputMode: InterviewSessionMode;
   content: string;
   candidateIntent: CandidateIntent | null;
   action: InterviewTurnAction | null;
@@ -83,12 +89,17 @@ interface InterviewTurn {
   requestId: string | null;
   processingStatus: TurnProcessingStatus | null;
   processingErrorCode: string | null;
+  wasInterrupted: boolean;
+  latencyMs: number | null;
   createdAt: string;
 }
 
 interface InterviewConversation {
   sessionId: number;
   status: InterviewSessionStatus;
+  mode: InterviewSessionMode;
+  realtimeProvider: string | null;
+  realtimeVoiceName: string | null;
   startedAt: string | null;
   deadlineAt: string | null;
   endReason: InterviewEndReason | null;
@@ -129,11 +140,18 @@ Authorization: Bearer <accessToken>
     { "code": "FRIENDLY", "name": "Thân thiện" },
     { "code": "PROFESSIONAL", "name": "Chuyên nghiệp" },
     { "code": "CHALLENGING", "name": "Thử thách" }
+  ],
+  "modes": [
+    { "code": "TEXT", "name": "Văn bản" },
+    { "code": "VOICE_TURN_BASED", "name": "Giọng nói theo lượt" },
+    { "code": "VOICE_REALTIME", "name": "Giọng nói thời gian thực" }
   ]
 }
 ```
 
 Giá trị lấy từ config server; không hard-code danh sách để submit. `FRIENDLY` có giọng khuyến khích, `PROFESSIONAL` trung tính/có cấu trúc, `CHALLENGING` hỏi trực diện về claim và trade-off.
+
+`VOICE_REALTIME` được bật mặc định và xuất hiện trong options. Có thể ẩn/tắt mode này bằng `REALTIME_ENABLED=false`. Request cũ không truyền `mode` được xử lý như `VOICE_TURN_BASED`.
 
 ## 2. Tạo session và chuẩn bị plan
 
@@ -148,7 +166,8 @@ Content-Type: application/json
   "profileId": 35,
   "languageCode": "vi",
   "durationMinutes": 30,
-  "interviewerStyle": "PROFESSIONAL"
+  "interviewerStyle": "PROFESSIONAL",
+  "mode": "VOICE_REALTIME"
 }
 ```
 
@@ -171,6 +190,9 @@ Response luôn `202 Accepted` với `InterviewSessionStatusResponse`:
   "languageCode": "vi",
   "durationMinutes": 30,
   "interviewerStyle": "PROFESSIONAL",
+  "mode": "VOICE_REALTIME",
+  "realtimeProvider": null,
+  "realtimeVoiceName": null,
   "preparationErrorCode": null,
   "preparationErrorMessage": null,
   "scoringErrorCode": null,
