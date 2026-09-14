@@ -184,6 +184,7 @@ public class InterviewConversationServiceImpl implements InterviewConversationSe
                     InterviewTransitionActor.USER,
                     clock.instant());
         });
+
         return get(userId, sessionId);
     }
 
@@ -227,6 +228,7 @@ public class InterviewConversationServiceImpl implements InterviewConversationSe
             throw new DomainException(ErrorCode.INTERVIEW_TURN_PROCESSING);
         }
         current.retryProcessing(clock.instant());
+
         return current.getId();
     }
 

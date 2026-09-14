@@ -10,9 +10,7 @@ import com.baseProject.myBaseProject.enums.InterviewTurnAction;
 import com.baseProject.myBaseProject.enums.InterviewTurnRole;
 import com.baseProject.myBaseProject.enums.InterviewerStyle;
 import com.baseProject.myBaseProject.interview.impl.InterviewConversationEngineImpl;
-import com.baseProject.myBaseProject.interview.model.CandidateProfileSnapshot;
 import com.baseProject.myBaseProject.interview.model.InterviewContext;
-import com.baseProject.myBaseProject.interview.model.InterviewTemplateSnapshot;
 import com.baseProject.myBaseProject.interview.model.InterviewTurnContext;
 import com.baseProject.myBaseProject.interview.support.InterviewerStyleInstructionProvider;
 import com.baseProject.myBaseProject.interview.validation.InterviewReplyValidator;
@@ -20,7 +18,6 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import tools.jackson.databind.ObjectMapper;
 
-import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -34,7 +31,7 @@ import static org.mockito.Mockito.when;
 
 class InterviewConversationEngineTest {
     @Test
-    void suppliesTimeStyleSnapshotsAndRecentTurnsToAi() throws Exception {
+    void suppliesTimeStyleSummariesAndRecentTurnsWithoutSnapshots() throws Exception {
         AiService aiService = mock(AiService.class);
         InterviewConversationEngineImpl engine = new InterviewConversationEngineImpl(
                 aiService,
@@ -62,10 +59,12 @@ class InterviewConversationEngineTest {
                 30);
 
         ArgumentCaptor<String> systemPrompt = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<String> userPrompt = ArgumentCaptor.forClass(String.class);
         @SuppressWarnings("unchecked")
         ArgumentCaptor<Map<String, Object>> params = ArgumentCaptor.forClass(Map.class);
         verify(aiService).generateStructured(
-                systemPrompt.capture(), any(), params.capture(), eq(InterviewReplyResult.class));
+                systemPrompt.capture(), userPrompt.capture(), params.capture(),
+                eq(InterviewReplyResult.class));
         assertThat(systemPrompt.getValue())
                 .contains("no more than about 45 words")
                 .contains("Ask exactly one primary question at a time")
@@ -75,7 +74,13 @@ class InterviewConversationEngineTest {
                 .containsEntry("languageCode", "vi")
                 .containsEntry("remainingSeconds", 30L)
                 .containsEntry("mustClose", true)
-                .containsEntry("interviewerStyle", "FRIENDLY");
+                .containsEntry("interviewerStyle", "FRIENDLY")
+                .containsEntry("jobSummary", "Backend Java role")
+                .containsEntry("candidateSummary", "Candidate has Java experience")
+                .doesNotContainKeys("templateSnapshot", "candidateSnapshot");
+        assertThat(userPrompt.getValue())
+                .contains("Prepared job summary", "Prepared candidate summary")
+                .doesNotContain("templateSnapshot", "candidateSnapshot");
         assertThat((String) params.getValue().get("recentTurns"))
                 .contains("REST API", "CANDIDATE");
         assertThat(result.action()).isEqualTo(InterviewTurnAction.CLOSE);
@@ -88,13 +93,6 @@ class InterviewConversationEngineTest {
                 "vi",
                 30,
                 InterviewerStyle.FRIENDLY,
-                new InterviewTemplateSnapshot(
-                        "v1", 101L, 1, "Backend", "Java Developer",
-                        "Junior", "v1", null, "Build APIs"),
-                new CandidateProfileSnapshot(
-                        "v1", 35L, 1, "Minh", "Backend Developer",
-                        "Java developer", BigDecimal.ONE, "Java Developer",
-                        "Junior", List.of(), List.of(), List.of()),
                 "Backend Java role",
                 "Candidate has Java experience",
                 "Xin chào",

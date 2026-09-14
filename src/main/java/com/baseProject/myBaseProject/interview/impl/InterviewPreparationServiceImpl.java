@@ -66,7 +66,7 @@ public class InterviewPreparationServiceImpl implements InterviewPreparationServ
     @Async(AsyncConfig.INTERVIEW_PREPARATION_EXECUTOR)
     public void prepareAsync(Long sessionId) {
         try {
-            // Claim trong transaction ngắn để không giữ khóa database trong lúc gọi AI.
+            // chỉ một work làm việc với sessionId này
             WorkItem item = claim(sessionId);
             if (item == null) {
                 return;
@@ -88,7 +88,7 @@ public class InterviewPreparationServiceImpl implements InterviewPreparationServ
 
     private WorkItem claim(Long sessionId) {
         return transactions.execute(status -> {
-            // Khóa bản ghi và đánh dấu startedAt để mỗi session chỉ có một worker được xử lý.
+            // permistic lock session
             InterviewSession session = sessions.findByIdForUpdate(sessionId).orElse(null);
             if (session == null || session.getStatus() != InterviewSessionStatus.PREPARING
                     || session.getPreparationStartedAt() != null) {

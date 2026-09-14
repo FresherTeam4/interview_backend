@@ -4,22 +4,18 @@ import com.baseProject.myBaseProject.entity.InterviewFocusArea;
 import com.baseProject.myBaseProject.entity.InterviewSession;
 import com.baseProject.myBaseProject.exception.DomainException;
 import com.baseProject.myBaseProject.exception.ErrorCode;
-import com.baseProject.myBaseProject.interview.model.CandidateProfileSnapshot;
 import com.baseProject.myBaseProject.interview.model.InterviewContext;
-import com.baseProject.myBaseProject.interview.model.InterviewTemplateSnapshot;
 import com.baseProject.myBaseProject.repository.InterviewFocusAreaRepository;
 import com.baseProject.myBaseProject.repository.InterviewSessionRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
-import tools.jackson.databind.ObjectMapper;
 
 @Component
 @RequiredArgsConstructor
 public class InterviewContextLoader {
     private final InterviewSessionRepository sessions;
     private final InterviewFocusAreaRepository focusAreas;
-    private final ObjectMapper objectMapper;
 
     @Transactional(readOnly = true)
     public InterviewContext loadOwned(Long userId, Long sessionId) {
@@ -42,10 +38,6 @@ public class InterviewContextLoader {
                 session.getLanguageCode(),
                 session.getDurationMinutes(),
                 session.getInterviewerStyle(),
-                objectMapper.readValue(
-                        session.getTemplateSnapshotJson(), InterviewTemplateSnapshot.class),
-                objectMapper.readValue(
-                        session.getProfileSnapshotJson(), CandidateProfileSnapshot.class),
                 session.getJobContextSummary(),
                 session.getCandidateContextSummary(),
                 session.getOpeningMessage(),

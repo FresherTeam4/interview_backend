@@ -14,8 +14,6 @@ public record InterviewContext(
         String languageCode,
         int durationMinutes,
         InterviewerStyle interviewerStyle,
-        InterviewTemplateSnapshot template,
-        CandidateProfileSnapshot candidate,
         String jobContextSummary,
         String candidateContextSummary,
         String openingMessage,

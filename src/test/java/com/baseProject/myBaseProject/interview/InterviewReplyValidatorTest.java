@@ -187,8 +187,6 @@ class InterviewReplyValidatorTest {
                 "vi",
                 30,
                 InterviewerStyle.PROFESSIONAL,
-                null,
-                null,
                 "Backend Java",
                 "Candidate",
                 "Xin chào",

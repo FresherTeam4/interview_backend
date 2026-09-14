@@ -19,7 +19,7 @@ import java.util.Map;
 @Service
 public class InterviewConversationEngineImpl implements InterviewConversationEngine {
     public static final String CONVERSATION_PROMPT_VERSION =
-            "v3-style-" + InterviewerStyleInstructionProvider.STYLE_POLICY_VERSION;
+            "v4-style-" + InterviewerStyleInstructionProvider.STYLE_POLICY_VERSION;
     private static final long CLOSING_WINDOW_SECONDS = 45;
 
     private final AiService aiService;
@@ -64,10 +64,6 @@ public class InterviewConversationEngineImpl implements InterviewConversationEng
                         Map.entry("interviewerStyle", context.interviewerStyle().name()),
                         Map.entry("styleInstruction", styleInstructions.instructionFor(
                                 context.interviewerStyle())),
-                        Map.entry("templateSnapshot", objectMapper.writeValueAsString(
-                                context.template())),
-                        Map.entry("candidateSnapshot", objectMapper.writeValueAsString(
-                                context.candidate())),
                         Map.entry("jobSummary", textOrEmpty(context.jobContextSummary())),
                         Map.entry("candidateSummary", textOrEmpty(
                                 context.candidateContextSummary())),

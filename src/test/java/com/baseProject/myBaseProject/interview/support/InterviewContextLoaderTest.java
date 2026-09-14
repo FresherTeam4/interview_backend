@@ -11,7 +11,6 @@ import com.baseProject.myBaseProject.exception.ErrorCode;
 import com.baseProject.myBaseProject.repository.InterviewFocusAreaRepository;
 import com.baseProject.myBaseProject.repository.InterviewSessionRepository;
 import org.junit.jupiter.api.Test;
-import tools.jackson.databind.ObjectMapper;
 
 import java.time.Instant;
 import java.util.List;
@@ -30,8 +29,7 @@ class InterviewContextLoaderTest {
     void ownedLoaderDoesNotFallBackToAnUnscopedSessionLookup() {
         InterviewSessionRepository sessions = mock(InterviewSessionRepository.class);
         InterviewFocusAreaRepository focusAreas = mock(InterviewFocusAreaRepository.class);
-        InterviewContextLoader loader = new InterviewContextLoader(
-                sessions, focusAreas, new ObjectMapper());
+        InterviewContextLoader loader = new InterviewContextLoader(sessions, focusAreas);
         when(sessions.findByIdAndUserId(501L, 7L)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> loader.loadOwned(7L, 501L))
@@ -43,11 +41,10 @@ class InterviewContextLoaderTest {
     }
 
     @Test
-    void loadsOwnedAiContextWithImmutableSnapshotsAndSessionState() {
+    void loadsOwnedConversationContextWithoutReadingSnapshots() {
         InterviewSessionRepository sessions = mock(InterviewSessionRepository.class);
         InterviewFocusAreaRepository focusAreas = mock(InterviewFocusAreaRepository.class);
-        InterviewContextLoader loader = new InterviewContextLoader(
-                sessions, focusAreas, new ObjectMapper());
+        InterviewContextLoader loader = new InterviewContextLoader(sessions, focusAreas);
 
         InterviewSession session = InterviewSession.builder()
                 .id(501L)
@@ -55,26 +52,9 @@ class InterviewContextLoaderTest {
                 .languageCode("vi")
                 .durationMinutes(30)
                 .interviewerStyle(InterviewerStyle.PROFESSIONAL)
-                .templateSnapshotJson("""
-                        {
-                          "snapshotSchemaVersion": "v1",
-                          "templateId": 101,
-                          "templateVersion": 2,
-                          "title": "Backend Java",
-                          "jobDescriptionText": "Build Java APIs"
-                        }
-                        """)
-                .profileSnapshotJson("""
-                        {
-                          "snapshotSchemaVersion": "v1",
-                          "profileId": 35,
-                          "profileVersion": 4,
-                          "name": "Minh",
-                          "skills": [],
-                          "educations": [],
-                          "projects": []
-                        }
-                        """)
+                // Invalid JSON proves the per-turn loader does not deserialize full snapshots.
+                .templateSnapshotJson("not-loaded")
+                .profileSnapshotJson("not-loaded")
                 .jobContextSummary("Backend Java role")
                 .candidateContextSummary("Spring Boot experience")
                 .openingMessage("Chào bạn")
@@ -102,9 +82,6 @@ class InterviewContextLoaderTest {
         var context = loader.loadOwned(7L, 501L);
 
         assertThat(context.status()).isEqualTo(InterviewSessionStatus.READY);
-        assertThat(context.template().title()).isEqualTo("Backend Java");
-        assertThat(context.template().jobDescriptionText()).isEqualTo("Build Java APIs");
-        assertThat(context.candidate().name()).isEqualTo("Minh");
         assertThat(context.jobContextSummary()).isEqualTo("Backend Java role");
         assertThat(context.candidateContextSummary()).isEqualTo("Spring Boot experience");
         assertThat(context.deadlineAt())

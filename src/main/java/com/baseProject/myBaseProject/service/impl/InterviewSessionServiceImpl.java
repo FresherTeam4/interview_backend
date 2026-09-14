@@ -128,7 +128,7 @@ public class InterviewSessionServiceImpl implements InterviewSessionService {
         }
         if (result.dispatchPreparation()) {
 
-            // Chỉ giao việc sau khi transaction đã commit để worker đọc được session mới.
+            // tạo việc
             submitPreparation(result.sessionId());
         }
 
