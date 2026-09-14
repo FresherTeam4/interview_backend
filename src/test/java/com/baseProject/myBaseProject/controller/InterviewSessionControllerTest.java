@@ -195,7 +195,8 @@ class InterviewSessionControllerTest {
                         .content("""
                                 {
                                   "expectedTurnIndex": 0,
-                                  "answer": "Tôi xây dựng REST API."
+                                  "answer": "Tôi xây dựng REST API.",
+                                  "inputMode": "TEXT"
                                 }
                                 """))
                 .andExpect(status().isOk())
@@ -211,7 +212,7 @@ class InterviewSessionControllerTest {
         InterviewConversationResponse response = new InterviewConversationResponse(
                 501L,
                 InterviewSessionStatus.SCORING,
-                InterviewSessionMode.VOICE_TURN_BASED,
+                InterviewSessionMode.TURN_BASED,
                 null,
                 null,
                 NOW,
@@ -287,7 +288,7 @@ class InterviewSessionControllerTest {
         return new InterviewSessionStatusResponse(
                 501L, status, "Backend Java", "Minh profile", "vi", 30,
                 InterviewerStyle.PROFESSIONAL,
-                InterviewSessionMode.VOICE_TURN_BASED, null, null,
+                InterviewSessionMode.TURN_BASED, null, null,
                 null, null, null, null,
                 NOW, null, null, null);
     }
@@ -311,7 +312,7 @@ class InterviewSessionControllerTest {
         return new InterviewConversationResponse(
                 501L,
                 InterviewSessionStatus.IN_PROGRESS,
-                InterviewSessionMode.VOICE_TURN_BASED,
+                InterviewSessionMode.TURN_BASED,
                 null,
                 null,
                 NOW,

@@ -79,7 +79,7 @@ public class InterviewSession {
     @JdbcTypeCode(SqlTypes.VARCHAR)
     @Column(nullable = false, length = 30)
     @Builder.Default
-    private InterviewSessionMode mode = InterviewSessionMode.VOICE_TURN_BASED;
+    private InterviewSessionMode mode = InterviewSessionMode.TURN_BASED;
 
     @Column(name = "realtime_provider", length = 50)
     private String realtimeProvider;
@@ -241,7 +241,7 @@ public class InterviewSession {
     }
 
     public void fallbackToTurnBased(Instant now) {
-        mode = InterviewSessionMode.VOICE_TURN_BASED;
+        mode = InterviewSessionMode.TURN_BASED;
         updatedAt = now;
     }
 

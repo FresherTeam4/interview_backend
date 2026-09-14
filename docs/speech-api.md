@@ -34,7 +34,7 @@ Không đưa `ELEVENLABS_API_KEY` vào frontend. Các lỗi provider được ch
 1. Frontend ghi một câu trả lời bằng `MediaRecorder`.
 2. Upload blob qua API transcription.
 3. Cho người dùng kiểm tra transcript nếu UI hỗ trợ chỉnh sửa.
-4. Gửi transcript qua `POST /api/interview-sessions/{id}/answers` và giữ nguyên `Idempotency-Key` khi retry.
+4. Gửi transcript qua `POST /api/interview-sessions/{id}/answers` với `inputMode=VOICE` và giữ nguyên `Idempotency-Key` khi retry.
 5. Lấy `interviewerTurn.id` trong response.
 6. Gọi API audio của turn và phát MP3 trả về.
 
@@ -47,7 +47,7 @@ Content-Type: multipart/form-data
 ```
 
 Form field bắt buộc là `audio`. Backend lấy ngôn ngữ từ session và chấp nhận các MIME type `audio/*`, `video/webm`, `video/mp4`.
-Session phải đang ở trạng thái `IN_PROGRESS`.
+Session phải có mode `TURN_BASED` và đang ở trạng thái `IN_PROGRESS`.
 
 ```json
 {
@@ -66,7 +66,7 @@ Authorization: Bearer <access-token>
 Accept: audio/mpeg
 ```
 
-Backend chỉ tổng hợp turn có role `INTERVIEWER` và thuộc session của user hiện tại. Response là MP3. Audio được cache trong MinIO theo provider, model, voice, ngôn ngữ và nội dung turn để thao tác nghe lại không gọi TTS lần nữa.
+Backend chỉ tổng hợp turn có role `INTERVIEWER`, thuộc session `TURN_BASED` của user hiện tại. Response là MP3. Audio được cache trong MinIO theo provider, model, voice, ngôn ngữ và nội dung turn để thao tác nghe lại không gọi TTS lần nữa.
 
 ## Đổi provider
 

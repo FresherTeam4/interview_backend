@@ -133,11 +133,12 @@ public class InterviewConversationServiceImpl implements InterviewConversationSe
             SubmitInterviewAnswerRequest request) {
         String idempotencyKey = IdempotencyKeyNormalizer.normalize(rawIdempotencyKey);
         String answer = request.answer().strip();
+        InterviewTurnInputMode inputMode = requireTurnBasedInputMode(request.inputMode());
 
         // lưu câu trả lời vào db
         AnswerClaim claim = transactions.execute(status -> claimAnswer(
                 userId, sessionId, idempotencyKey,
-                request.expectedTurnIndex(), answer));
+                request.expectedTurnIndex(), answer, inputMode));
         if (claim == null) {
             throw new IllegalStateException("Interview answer transaction returned no result");
         }
@@ -210,7 +211,7 @@ public class InterviewConversationServiceImpl implements InterviewConversationSe
     private Long claimRealtimeFallbackCandidate(Long userId, Long sessionId) {
         InterviewSession session = ownedForUpdate(userId, sessionId);
         if (session.getStatus() != InterviewSessionStatus.IN_PROGRESS
-                || session.getMode() != InterviewSessionMode.VOICE_TURN_BASED) {
+                || session.getMode() != InterviewSessionMode.TURN_BASED) {
             return null;
         }
         InterviewTurn current = turns
@@ -247,7 +248,6 @@ public class InterviewConversationServiceImpl implements InterviewConversationSe
                     .replyToTurn(candidate)
                     .turnIndex(candidate.getTurnIndex() + 1)
                     .role(InterviewTurnRole.INTERVIEWER)
-                    .inputMode(InterviewTurnInputMode.VOICE_TURN_BASED)
                     .contentText(fallbackRecoveryText(session.getLanguageCode()))
                     .action(InterviewTurnAction.HANDLE_REQUEST)
                     .createdAt(now)
@@ -270,7 +270,8 @@ public class InterviewConversationServiceImpl implements InterviewConversationSe
             Long sessionId,
             String idempotencyKey,
             int expectedTurnIndex,
-            String answer) {
+            String answer,
+            InterviewTurnInputMode inputMode) {
         InterviewSession session = ownedForUpdate(userId, sessionId);
         Instant now = clock.instant();
         InterviewTurn existing = turns
@@ -278,12 +279,13 @@ public class InterviewConversationServiceImpl implements InterviewConversationSe
                 .orElse(null);
         if (existing != null) {
             // retry tránh tạo thêm câu trả lời mới
-            requireSameAnswer(existing, expectedTurnIndex, answer);
+            requireSameAnswer(existing, expectedTurnIndex, answer, inputMode);
 
             return reclaimExisting(session, existing, now);
         }
 
         requireInProgress(session);
+        requireTurnBasedSession(session);
 
         // check session deadline end chưa
         if (isDeadlineReached(session, now)) {
@@ -310,6 +312,7 @@ public class InterviewConversationServiceImpl implements InterviewConversationSe
                 .session(session)
                 .turnIndex(expectedTurnIndex + 1)
                 .role(InterviewTurnRole.CANDIDATE)
+                .inputMode(inputMode)
                 .contentText(answer)
                 .idempotencyKey(idempotencyKey)
                 .processingStatus(InterviewTurnProcessingStatus.PROCESSING)
@@ -345,9 +348,13 @@ public class InterviewConversationServiceImpl implements InterviewConversationSe
     }
 
     private void requireSameAnswer(
-            InterviewTurn existing, int expectedTurnIndex, String answer) {
+            InterviewTurn existing,
+            int expectedTurnIndex,
+            String answer,
+            InterviewTurnInputMode inputMode) {
         boolean same = existing.getTurnIndex() == expectedTurnIndex + 1
-                && existing.getContentText().equals(answer);
+                && existing.getContentText().equals(answer)
+                && existing.getInputMode() == inputMode;
         if (!same) {
             throw new DomainException(ErrorCode.INTERVIEW_TURN_IDEMPOTENCY_CONFLICT);
         }
@@ -526,6 +533,25 @@ public class InterviewConversationServiceImpl implements InterviewConversationSe
         if (session.getStatus() != InterviewSessionStatus.IN_PROGRESS) {
             throw new DomainException(ErrorCode.INTERVIEW_SESSION_NOT_IN_PROGRESS);
         }
+    }
+
+    private void requireTurnBasedSession(InterviewSession session) {
+        if (session.getMode() != InterviewSessionMode.TURN_BASED) {
+            throw new DomainException(
+                    ErrorCode.INTERVIEW_SESSION_MODE_MISMATCH,
+                    "Answer endpoint requires a TURN_BASED session");
+        }
+    }
+
+    private InterviewTurnInputMode requireTurnBasedInputMode(
+            InterviewTurnInputMode inputMode) {
+        if (inputMode != InterviewTurnInputMode.TEXT
+                && inputMode != InterviewTurnInputMode.VOICE) {
+            throw new DomainException(
+                    ErrorCode.INTERVIEW_SESSION_OPTION_INVALID,
+                    "Turn-based answers require TEXT or VOICE input mode");
+        }
+        return inputMode;
     }
 
     private boolean isDeadlineReached(InterviewSession session, Instant now) {

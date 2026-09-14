@@ -120,7 +120,7 @@ Tách khỏi `user_accounts` vì hai lý do: `user_accounts` là bảng đọc �
 | Cột | Vì sao có |
 |---|---|
 | `barge_in_enabled` | Tiêu chí nghiệm thu ghi rõ "tắt được trong cài đặt nếu người dùng thấy phiền" |
-| `preferred_mode` | Nhớ lựa chọn văn bản / giọng nói turn-based / realtime |
+| `preferred_mode` | Nhớ lựa chọn turn-based / realtime; kênh text hoặc voice được chọn theo từng lượt turn-based |
 | `interview_language` | Chuẩn bị cho việc mở rộng tiếng Anh sau này |
 
 Quan hệ `1–1` với `user_accounts` (ràng buộc `unique(user_id)`). Tạo hàng này ngay lúc đăng ký với giá trị mặc định, đừng để `NULL` rồi phải kiểm tra ở mọi chỗ đọc.
@@ -409,7 +409,7 @@ Một buổi phỏng vấn = một hàng.
 |---|---|
 | `profile_id` | Hồ sơ dùng để sinh câu hỏi. `restrict` — không cho xóa hồ sơ khi còn phiên |
 | `rubric_version_id` | **Chốt version rubric ngay lúc tạo phiên.** Xem nhóm 3 |
-| `mode` | `TEXT` / `VOICE_TURN_BASED` / `VOICE_REALTIME`. Phiên có thể bắt đầu ở realtime rồi tụt xuống turn-based khi mất mạng |
+| `mode` | `TURN_BASED` / `VOICE_REALTIME`. Text và voice theo lượt dùng chung `TURN_BASED`; phiên realtime có thể fallback về mode này khi mất mạng |
 | `status` | Trạng thái hiện tại của máy trạng thái |
 | `current_turn_index` | **Chìa khóa của việc khôi phục.** Mở lại là biết đang dở ở lượt nào |
 | `last_activity_at` | Job dọn dẹp quét cột này để tìm phiên bỏ quá 24 giờ |
@@ -477,7 +477,7 @@ Từng lượt nói trong hội thoại. Đây là bảng có nhiều hàng nh�
 | `is_followup`, `followup_depth` | Enforce quy tắc "tối đa 2 follow-up liên tiếp" |
 | `content_text` | Với lượt giọng nói: đây là transcript **cuối cùng đã dùng để chấm** |
 | `was_interrupted` | Lượt AI bị người dùng cắt ngang (tính năng barge-in) |
-| `input_mode` | Lượt này diễn ra ở chế độ nào — phiên có thể đổi chế độ giữa chừng |
+| `input_mode` | Kênh của lượt: `TEXT`, `VOICE` hoặc `VOICE_REALTIME` |
 | `latency_ms` | Đo độ trễ thật để tính p95 |
 
 **`parent_turn_id` hoạt động thế nào:**

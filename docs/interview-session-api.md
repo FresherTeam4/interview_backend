@@ -24,7 +24,8 @@ Mọi endpoint yêu cầu Bearer token và chỉ owner của session truy cập 
 
 ```ts
 type InterviewerStyle = "FRIENDLY" | "PROFESSIONAL" | "CHALLENGING";
-type InterviewSessionMode = "TEXT" | "VOICE_TURN_BASED" | "VOICE_REALTIME";
+type InterviewSessionMode = "TURN_BASED" | "VOICE_REALTIME";
+type InterviewTurnInputMode = "TEXT" | "VOICE" | "VOICE_REALTIME";
 type InterviewSessionStatus =
   | "PREPARING"
   | "READY"
@@ -81,7 +82,7 @@ interface InterviewTurn {
   id: number;
   turnIndex: number;
   role: InterviewTurnRole;
-  inputMode: InterviewSessionMode;
+  inputMode: InterviewTurnInputMode;
   content: string;
   candidateIntent: CandidateIntent | null;
   action: InterviewTurnAction | null;
@@ -142,8 +143,7 @@ Authorization: Bearer <accessToken>
     { "code": "CHALLENGING", "name": "Thử thách" }
   ],
   "modes": [
-    { "code": "TEXT", "name": "Văn bản" },
-    { "code": "VOICE_TURN_BASED", "name": "Giọng nói theo lượt" },
+    { "code": "TURN_BASED", "name": "Theo lượt" },
     { "code": "VOICE_REALTIME", "name": "Giọng nói thời gian thực" }
   ]
 }
@@ -151,7 +151,9 @@ Authorization: Bearer <accessToken>
 
 Giá trị lấy từ config server; không hard-code danh sách để submit. `FRIENDLY` có giọng khuyến khích, `PROFESSIONAL` trung tính/có cấu trúc, `CHALLENGING` hỏi trực diện về claim và trade-off.
 
-`VOICE_REALTIME` được bật mặc định và xuất hiện trong options. Có thể ẩn/tắt mode này bằng `REALTIME_ENABLED=false`. Request cũ không truyền `mode` được xử lý như `VOICE_TURN_BASED`.
+`TURN_BASED` dùng chung conversation engine cho câu trả lời gõ và câu trả lời đã qua STT. `inputMode` trên từng answer phân biệt hai kênh này. TTS là kênh xuất tùy chọn cho interviewer turn.
+
+`VOICE_REALTIME` được bật mặc định và xuất hiện trong options. Có thể ẩn/tắt mode này bằng `REALTIME_ENABLED=false`. Request không truyền `mode` được xử lý như `TURN_BASED`.
 
 ## 2. Tạo session và chuẩn bị plan
 
@@ -209,6 +211,8 @@ Backend snapshot toàn bộ profile và template ngay khi tạo. Edit/unpublish/
 Cùng user + cùng idempotency key + cùng năm option trả session cũ và không dispatch preparation lần nữa. Dùng key cũ với payload khác trả `409 INTERVIEW_SESSION_IDEMPOTENCY_CONFLICT`.
 
 Lỗi eligibility: `TEMPLATE_NOT_FOUND`, `TEMPLATE_ARCHIVED`, `TEMPLATE_CONFIRM_REQUIRED`, `PROFILE_NOT_FOUND`, `PROFILE_CONFIRM_REQUIRED`, `INTERVIEW_SESSION_OPTION_INVALID`, `VALIDATION_FAILED`.
+
+Các endpoint answer và Speech chỉ dùng cho session `TURN_BASED`; gọi chúng với session `VOICE_REALTIME` trả `409 INTERVIEW_SESSION_MODE_MISMATCH`.
 
 ## 3. Poll preparation
 
@@ -286,12 +290,14 @@ Content-Type: application/json
 
 {
   "expectedTurnIndex": 0,
-  "answer": "Tôi đã xây dựng REST API bằng Spring Boot..."
+  "answer": "Tôi đã xây dựng REST API bằng Spring Boot...",
+  "inputMode": "TEXT"
 }
 ```
 
 - `expectedTurnIndex` là index của **interviewer turn đang được trả lời**, không phải index candidate sắp tạo.
 - `answer` sau trim phải còn nội dung, tối đa 8.000 ký tự.
+- `inputMode` là `TEXT` nếu ứng viên gõ trực tiếp hoặc `VOICE` nếu `answer` là transcript từ Speech API. `VOICE_REALTIME` không đi qua endpoint này.
 - Mỗi answer mới dùng UUID mới. Retry cùng answer dùng lại key, `expectedTurnIndex` và text y hệt sau trim.
 - Endpoint chờ AI đồng bộ. UI phải disable submit cho đến khi request kết thúc hoặc state được reconcile.
 

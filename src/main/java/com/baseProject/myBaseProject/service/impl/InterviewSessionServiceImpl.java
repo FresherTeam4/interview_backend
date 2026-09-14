@@ -304,7 +304,7 @@ public class InterviewSessionServiceImpl implements InterviewSessionService {
 
     private InterviewSessionMode requireMode(InterviewSessionMode requested) {
         InterviewSessionMode mode = requested == null
-                ? InterviewSessionMode.VOICE_TURN_BASED
+                ? InterviewSessionMode.TURN_BASED
                 : requested;
         if (!properties.supportedModes().contains(mode) || !isModeAvailable(mode)) {
             throw new DomainException(
@@ -338,8 +338,7 @@ public class InterviewSessionServiceImpl implements InterviewSessionService {
 
     private String modeName(InterviewSessionMode mode) {
         return switch (mode) {
-            case TEXT -> "Văn bản";
-            case VOICE_TURN_BASED -> "Giọng nói theo lượt";
+            case TURN_BASED -> "Theo lượt";
             case VOICE_REALTIME -> "Giọng nói thời gian thực";
         };
     }

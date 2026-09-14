@@ -25,6 +25,7 @@ public final class Message {
 
     public static final String INTERVIEW_SESSION_NOT_STARTABLE = "Interview session is not ready to start";
     public static final String INTERVIEW_SESSION_NOT_IN_PROGRESS = "Interview session is not in progress";
+    public static final String INTERVIEW_SESSION_MODE_MISMATCH = "Operation is not supported for this interview session mode";
     public static final String INTERVIEW_TURN_OUT_OF_SEQUENCE = "Interview answer does not match the current interviewer turn";
     public static final String INTERVIEW_TURN_IDEMPOTENCY_CONFLICT = "Idempotency key was already used for a different answer";
     public static final String INTERVIEW_TURN_PROCESSING = "The interviewer is already processing this answer";

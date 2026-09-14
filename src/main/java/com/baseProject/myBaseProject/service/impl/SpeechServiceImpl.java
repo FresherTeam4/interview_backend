@@ -3,6 +3,7 @@ package com.baseProject.myBaseProject.service.impl;
 import com.baseProject.myBaseProject.config.properites.SpeechProperties;
 import com.baseProject.myBaseProject.entity.InterviewSession;
 import com.baseProject.myBaseProject.entity.InterviewTurn;
+import com.baseProject.myBaseProject.enums.InterviewSessionMode;
 import com.baseProject.myBaseProject.enums.InterviewSessionStatus;
 import com.baseProject.myBaseProject.enums.InterviewTurnRole;
 import com.baseProject.myBaseProject.exception.DomainException;
@@ -51,6 +52,7 @@ public class SpeechServiceImpl implements SpeechService {
             Long userId, Long sessionId, MultipartFile audio) {
         requireEnabled();
         InterviewSession session = ownedSession(userId, sessionId);
+        requireTurnBasedSession(session);
         if (session.getStatus() != InterviewSessionStatus.IN_PROGRESS) {
             throw new DomainException(ErrorCode.INTERVIEW_SESSION_NOT_IN_PROGRESS);
         }
@@ -76,6 +78,7 @@ public class SpeechServiceImpl implements SpeechService {
             Long userId, Long sessionId, Long turnId) {
         requireEnabled();
         InterviewSession session = ownedSession(userId, sessionId);
+        requireTurnBasedSession(session);
         InterviewTurn turn = turns.findByIdAndSessionId(turnId, sessionId)
                 .orElseThrow(() -> new DomainException(
                         ErrorCode.SPEECH_TURN_NOT_SYNTHESIZABLE));
@@ -110,6 +113,14 @@ public class SpeechServiceImpl implements SpeechService {
     private void requireEnabled() {
         if (!properties.enabled()) {
             throw new DomainException(ErrorCode.SPEECH_NOT_ENABLED);
+        }
+    }
+
+    private void requireTurnBasedSession(InterviewSession session) {
+        if (session.getMode() != InterviewSessionMode.TURN_BASED) {
+            throw new DomainException(
+                    ErrorCode.INTERVIEW_SESSION_MODE_MISMATCH,
+                    "Speech endpoints require a TURN_BASED session");
         }
     }
 

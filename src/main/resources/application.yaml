@@ -90,7 +90,7 @@ app:
   interview-session:
     supported-languages: ${INTERVIEW_SUPPORTED_LANGUAGES:vi,en,ja}
     supported-durations: ${INTERVIEW_SUPPORTED_DURATIONS:15,30,45,60}
-    supported-modes: ${INTERVIEW_SUPPORTED_MODES:TEXT,VOICE_TURN_BASED,VOICE_REALTIME}
+    supported-modes: ${INTERVIEW_SUPPORTED_MODES:TURN_BASED,VOICE_REALTIME}
     deadline-sweep-ms: ${INTERVIEW_DEADLINE_SWEEP_MS:30000}
 
   interview-scoring:

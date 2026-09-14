@@ -9,8 +9,10 @@ import com.baseProject.myBaseProject.enums.CandidateIntent;
 import com.baseProject.myBaseProject.enums.InterviewEndReason;
 import com.baseProject.myBaseProject.enums.InterviewEvidenceStatus;
 import com.baseProject.myBaseProject.enums.InterviewFocusPriority;
+import com.baseProject.myBaseProject.enums.InterviewSessionMode;
 import com.baseProject.myBaseProject.enums.InterviewSessionStatus;
 import com.baseProject.myBaseProject.enums.InterviewTurnAction;
+import com.baseProject.myBaseProject.enums.InterviewTurnInputMode;
 import com.baseProject.myBaseProject.enums.InterviewTurnRole;
 import com.baseProject.myBaseProject.enums.InterviewerStyle;
 import com.baseProject.myBaseProject.exception.DomainException;
@@ -119,12 +121,15 @@ class InterviewConversationServiceImplTest {
                 USER_ID,
                 SESSION_ID,
                 "answer-1",
-                new SubmitInterviewAnswerRequest(0, "Tôi đã tối ưu truy vấn SQL."));
+                new SubmitInterviewAnswerRequest(
+                        0, "Tôi đã tối ưu truy vấn SQL.", InterviewTurnInputMode.VOICE));
 
         assertThat(response.status()).isEqualTo(InterviewSessionStatus.IN_PROGRESS);
         assertThat(response.candidateTurn().turnIndex()).isEqualTo(1);
         assertThat(response.candidateTurn().candidateIntent())
                 .isEqualTo(CandidateIntent.ANSWER);
+        assertThat(response.candidateTurn().inputMode())
+                .isEqualTo(InterviewTurnInputMode.VOICE);
         assertThat(response.interviewerTurn().turnIndex()).isEqualTo(2);
         assertThat(response.interviewerTurn().action()).isEqualTo(
                 InterviewTurnAction.FOLLOW_UP);
@@ -141,7 +146,8 @@ class InterviewConversationServiceImplTest {
                 USER_ID,
                 SESSION_ID,
                 "answer-1",
-                new SubmitInterviewAnswerRequest(0, "Tôi đã tối ưu truy vấn SQL."));
+                new SubmitInterviewAnswerRequest(
+                        0, "Tôi đã tối ưu truy vấn SQL.", InterviewTurnInputMode.VOICE));
 
         assertThat(retried.candidateTurn().id()).isEqualTo(response.candidateTurn().id());
         assertThat(retried.interviewerTurn().id()).isEqualTo(
@@ -164,7 +170,8 @@ class InterviewConversationServiceImplTest {
                 USER_ID,
                 SESSION_ID,
                 "answer-1",
-                new SubmitInterviewAnswerRequest(0, "Tôi đã xây dựng REST API.")))
+                new SubmitInterviewAnswerRequest(
+                        0, "Tôi đã xây dựng REST API.", InterviewTurnInputMode.TEXT)))
                 .isInstanceOfSatisfying(DomainException.class, exception ->
                         assertThat(exception.getCode()).isEqualTo(ErrorCode.AI_TIMEOUT));
 
@@ -175,6 +182,28 @@ class InterviewConversationServiceImplTest {
             assertThat(turn.processingStatus().name()).isEqualTo("FAILED");
             assertThat(turn.processingErrorCode()).isEqualTo("AI_TIMEOUT");
         });
+    }
+
+    @Test
+    void rejectsTurnBasedAnswerForRealtimeSession() {
+        InterviewSession session = baseSession(InterviewSessionStatus.IN_PROGRESS)
+                .mode(InterviewSessionMode.VOICE_REALTIME)
+                .startedAt(NOW.minusSeconds(30))
+                .deadlineAt(NOW.plusSeconds(1770))
+                .build();
+        Fixture fixture = new Fixture(session);
+
+        assertThatThrownBy(() -> fixture.service.answer(
+                USER_ID,
+                SESSION_ID,
+                "answer-1",
+                new SubmitInterviewAnswerRequest(
+                        0, "Câu trả lời", InterviewTurnInputMode.TEXT)))
+                .isInstanceOfSatisfying(DomainException.class, exception ->
+                        assertThat(exception.getCode())
+                                .isEqualTo(ErrorCode.INTERVIEW_SESSION_MODE_MISMATCH));
+
+        verifyNoInteractions(fixture.engine);
     }
 
     @Test
@@ -217,7 +246,8 @@ class InterviewConversationServiceImplTest {
                 USER_ID,
                 SESSION_ID,
                 "answer-1",
-                new SubmitInterviewAnswerRequest(0, "Câu trả lời đến quá muộn."));
+                new SubmitInterviewAnswerRequest(
+                        0, "Câu trả lời đến quá muộn.", InterviewTurnInputMode.TEXT));
 
         assertThat(response.status()).isEqualTo(InterviewSessionStatus.SCORING);
         assertThat(response.endReason()).isEqualTo(InterviewEndReason.TIME_EXPIRED);
@@ -246,7 +276,8 @@ class InterviewConversationServiceImplTest {
                 USER_ID,
                 SESSION_ID,
                 "answer-1",
-                new SubmitInterviewAnswerRequest(0, "Cảm ơn anh/chị."));
+                new SubmitInterviewAnswerRequest(
+                        0, "Cảm ơn anh/chị.", InterviewTurnInputMode.TEXT));
 
         assertThat(response.status()).isEqualTo(InterviewSessionStatus.SCORING);
         assertThat(response.endReason()).isEqualTo(InterviewEndReason.AI_COMPLETED);
@@ -282,7 +313,8 @@ class InterviewConversationServiceImplTest {
                 USER_ID,
                 SESSION_ID,
                 "answer-1",
-                new SubmitInterviewAnswerRequest(0, "Tôi muốn dừng phỏng vấn."));
+                new SubmitInterviewAnswerRequest(
+                        0, "Tôi muốn dừng phỏng vấn.", InterviewTurnInputMode.TEXT));
 
         assertThat(response.status()).isEqualTo(InterviewSessionStatus.SCORING);
         assertThat(response.endReason()).isEqualTo(InterviewEndReason.CANDIDATE_FINISHED);

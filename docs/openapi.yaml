@@ -1180,7 +1180,8 @@ components:
       properties:
         expectedVersion: {type: integer, format: int64, minimum: 0}
     InterviewerStyle: {type: string, enum: [FRIENDLY, PROFESSIONAL, CHALLENGING]}
-    InterviewSessionMode: {type: string, enum: [TEXT, VOICE_TURN_BASED, VOICE_REALTIME]}
+    InterviewSessionMode: {type: string, enum: [TURN_BASED, VOICE_REALTIME]}
+    InterviewTurnInputMode: {type: string, enum: [TEXT, VOICE, VOICE_REALTIME]}
     InterviewSessionStatusEnum:
       type: string
       enum: [PREPARING, READY, PREPARATION_FAILED, IN_PROGRESS, SCORING, COMPLETED, SCORING_FAILED, CANCELLED, EXPIRED]
@@ -1337,7 +1338,7 @@ components:
         id: {type: integer, format: int64}
         turnIndex: {type: integer}
         role: {type: string, enum: [INTERVIEWER, CANDIDATE]}
-        inputMode: {$ref: '#/components/schemas/InterviewSessionMode'}
+        inputMode: {$ref: '#/components/schemas/InterviewTurnInputMode'}
         content: {type: string}
         candidateIntent: {$ref: '#/components/schemas/CandidateIntent'}
         action: {$ref: '#/components/schemas/InterviewTurnAction'}
@@ -1366,10 +1367,11 @@ components:
         turns: {type: array, items: {$ref: '#/components/schemas/InterviewTurn'}}
     SubmitInterviewAnswerRequest:
       type: object
-      required: [expectedTurnIndex, answer]
+      required: [expectedTurnIndex, answer, inputMode]
       properties:
         expectedTurnIndex: {type: integer, minimum: 0}
         answer: {type: string, minLength: 1, maxLength: 8000}
+        inputMode: {type: string, enum: [TEXT, VOICE]}
     SpeechTranscription:
       type: object
       required: [text, languageCode]

@@ -32,7 +32,7 @@ Khi tạo interview session, gửi thêm mode:
 }
 ```
 
-Request cũ không có `mode` tiếp tục dùng `VOICE_TURN_BASED`.
+Request không có `mode` dùng `TURN_BASED`.
 
 ## Cấp Gemini Live session grant
 
@@ -171,7 +171,7 @@ Content-Type: application/json
 }
 ```
 
-Nếu `fallbackToTurnBased=true`, backend đổi session mode thành `VOICE_TURN_BASED`. Nếu WebSocket rớt sau khi candidate transcript đã được lưu nhưng trước assistant transcript, backend dùng conversation engine hiện có để tạo interviewer turn kế tiếp. Nếu engine tạm lỗi, backend tạo một lượt yêu cầu ứng viên nhắc lại để hội thoại không mắc kẹt ở candidate turn. Frontend sau đó refetch conversation và dùng speech/answer API. `p50LatencyMs` không được lớn hơn `p95LatencyMs`.
+Nếu `fallbackToTurnBased=true`, backend đổi session mode thành `TURN_BASED`. Nếu WebSocket rớt sau khi candidate transcript đã được lưu nhưng trước assistant transcript, backend dùng conversation engine hiện có để tạo interviewer turn kế tiếp. Nếu engine tạm lỗi, backend tạo một lượt yêu cầu ứng viên nhắc lại để hội thoại không mắc kẹt ở candidate turn. Frontend sau đó refetch conversation và dùng speech/answer API. `p50LatencyMs` không được lớn hơn `p95LatencyMs`.
 
 ## Client trình duyệt mẫu
 

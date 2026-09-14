@@ -37,8 +37,7 @@ Enum profile_source {
 }
 
 Enum session_mode {
-  TEXT
-  VOICE_TURN_BASED
+  TURN_BASED
   VOICE_REALTIME
 }
 
@@ -67,7 +66,7 @@ Enum turn_role {
 
 Enum turn_input_mode {
   TEXT
-  VOICE_TURN_BASED
+  VOICE
   VOICE_REALTIME
 }
 
@@ -132,7 +131,7 @@ Table refresh_tokens {
 Table user_preferences {
   id                 bigint          [pk, increment]
   user_id            bigint          [not null, unique]
-  preferred_mode     session_mode    [not null, default: 'VOICE_TURN_BASED']
+  preferred_mode     session_mode    [not null, default: 'TURN_BASED']
   barge_in_enabled   boolean         [not null, default: true, note: 'AC ngắt lời: tắt được trong cài đặt']
   tts_voice_code     varchar(50)
   interview_language varchar(10)     [not null, default: 'vi', note: 'vi | en']

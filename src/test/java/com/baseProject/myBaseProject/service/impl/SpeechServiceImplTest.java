@@ -3,6 +3,7 @@ package com.baseProject.myBaseProject.service.impl;
 import com.baseProject.myBaseProject.config.properites.SpeechProperties;
 import com.baseProject.myBaseProject.entity.InterviewSession;
 import com.baseProject.myBaseProject.entity.InterviewTurn;
+import com.baseProject.myBaseProject.enums.InterviewSessionMode;
 import com.baseProject.myBaseProject.enums.InterviewSessionStatus;
 import com.baseProject.myBaseProject.enums.InterviewTurnRole;
 import com.baseProject.myBaseProject.exception.DomainException;
@@ -150,6 +151,26 @@ class SpeechServiceImplTest {
                                 .isEqualTo(ErrorCode.SPEECH_NOT_ENABLED));
 
         verify(sessions, never()).findByIdAndUserId(any(), any());
+    }
+
+    @Test
+    void rejectsSpeechForRealtimeSession() {
+        InterviewSession session = InterviewSession.builder()
+                .id(51L)
+                .mode(InterviewSessionMode.VOICE_REALTIME)
+                .languageCode("vi")
+                .status(InterviewSessionStatus.IN_PROGRESS)
+                .build();
+        MockMultipartFile audio = new MockMultipartFile(
+                "audio", "answer.webm", "audio/webm", new byte[]{1});
+        when(sessions.findByIdAndUserId(51L, 7L)).thenReturn(Optional.of(session));
+
+        assertThatThrownBy(() -> service.transcribe(7L, 51L, audio))
+                .isInstanceOfSatisfying(DomainException.class,
+                        exception -> assertThat(exception.getCode())
+                                .isEqualTo(ErrorCode.INTERVIEW_SESSION_MODE_MISMATCH));
+
+        verify(providers, never()).speechToText(anyString());
     }
 
     private SpeechProperties properties(boolean enabled) {

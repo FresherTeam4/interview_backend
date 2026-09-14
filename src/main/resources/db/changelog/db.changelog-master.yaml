@@ -113,3 +113,12 @@ databaseChangeLog:
             path: db/changelog/sql/008-interview-realtime-lifecycle.sql
             splitStatements: true
             stripComments: true
+
+  - changeSet:
+      id: 009-simplify-interview-modes
+      author: my-interview-team
+      changes:
+        - sqlFile:
+            path: db/changelog/sql/009-simplify-interview-modes.sql
+            splitStatements: true
+            stripComments: true

@@ -40,7 +40,7 @@ Client thực hiện sẵn các việc sau:
 - Capture mono PCM16, resample 16 kHz và gửi chunk 20 ms.
 - Phát PCM16 24 kHz; khi Gemini trả `interrupted=true`, dừng ngay các source đang phát và xóa playback queue.
 - Đồng bộ partial/final transcript theo batch tối đa 100 event. Mỗi event có UUID và sequence để backend xử lý retry idempotent.
-- Ghi resumption handle, thử resume hai lần khi WebSocket đóng hoặc nhận `goAway`, sau đó gọi fallback sang `VOICE_TURN_BASED`.
+- Ghi resumption handle, thử resume hai lần khi WebSocket đóng hoặc nhận `goAway`, sau đó gọi fallback sang `TURN_BASED`.
 - Thu thập latency từng turn và gửi p50/p95 khi disconnect.
 - Dùng `deadlineAt` từ `/start` để đóng media và gọi `/finish` đúng thời gian, kể cả sau khi resume.
 

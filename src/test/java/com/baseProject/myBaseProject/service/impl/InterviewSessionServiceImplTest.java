@@ -3,6 +3,7 @@ package com.baseProject.myBaseProject.service.impl;
 import com.baseProject.myBaseProject.config.properites.InterviewSessionProperties;
 import com.baseProject.myBaseProject.config.properites.RealtimeProperties;
 import com.baseProject.myBaseProject.dto.session.CreateInterviewSessionRequest;
+import com.baseProject.myBaseProject.dto.session.InterviewOptionResponse;
 import com.baseProject.myBaseProject.entity.CandidateProfile;
 import com.baseProject.myBaseProject.entity.InterviewSession;
 import com.baseProject.myBaseProject.entity.InterviewTemplate;
@@ -56,11 +57,21 @@ class InterviewSessionServiceImplTest {
 
         assertThat(response.id()).isEqualTo(501L);
         assertThat(response.status()).isEqualTo(InterviewSessionStatus.PREPARING);
+        assertThat(response.mode()).isEqualTo(InterviewSessionMode.TURN_BASED);
         assertThat(response.templateTitle()).isEqualTo("Backend Java");
         assertThat(response.profileName()).isEqualTo("Minh profile");
         assertThat(fixture.saved.get().getTemplateSnapshotJson()).isEqualTo("{\"template\":1}");
         assertThat(fixture.saved.get().getProfileSnapshotJson()).isEqualTo("{\"profile\":2}");
         verify(fixture.preparationService).prepareAsync(501L);
+    }
+
+    @Test
+    void exposesOnlyTurnBasedAndRealtimeExecutionModes() {
+        Fixture fixture = new Fixture();
+
+        assertThat(fixture.service.options().modes())
+                .extracting(InterviewOptionResponse::code)
+                .containsExactly("TURN_BASED", "VOICE_REALTIME");
     }
 
     @Test
@@ -137,8 +148,7 @@ class InterviewSessionServiceImplTest {
                     new InterviewSessionProperties(
                             List.of("vi", "en"),
                             List.of(15, 30, 45, 60),
-                            List.of(InterviewSessionMode.TEXT,
-                                    InterviewSessionMode.VOICE_TURN_BASED,
+                            List.of(InterviewSessionMode.TURN_BASED,
                                     InterviewSessionMode.VOICE_REALTIME)),
                     new RealtimeProperties(true, "gemini-live"),
                     Clock.fixed(NOW, ZoneOffset.UTC), transactionManager());
@@ -175,7 +185,7 @@ class InterviewSessionServiceImplTest {
                     .templateTitleSnapshot(template.getTitle())
                     .profileNameSnapshot(profile.getName())
                     .status(status)
-                    .mode(InterviewSessionMode.VOICE_TURN_BASED)
+                    .mode(InterviewSessionMode.TURN_BASED)
                     .languageCode("vi")
                     .durationMinutes(30)
                     .interviewerStyle(InterviewerStyle.PROFESSIONAL)
