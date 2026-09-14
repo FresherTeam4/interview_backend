@@ -61,10 +61,16 @@ class InterviewConversationEngineTest {
                         null)),
                 30);
 
+        ArgumentCaptor<String> systemPrompt = ArgumentCaptor.forClass(String.class);
         @SuppressWarnings("unchecked")
         ArgumentCaptor<Map<String, Object>> params = ArgumentCaptor.forClass(Map.class);
         verify(aiService).generateStructured(
-                any(), any(), params.capture(), eq(InterviewReplyResult.class));
+                systemPrompt.capture(), any(), params.capture(), eq(InterviewReplyResult.class));
+        assertThat(systemPrompt.getValue())
+                .contains("no more than about 45 words")
+                .contains("Ask exactly one primary question at a time")
+                .contains("This overrides every intent rule below")
+                .contains("complete replacement summary for the session");
         assertThat(params.getValue())
                 .containsEntry("languageCode", "vi")
                 .containsEntry("remainingSeconds", 30L)

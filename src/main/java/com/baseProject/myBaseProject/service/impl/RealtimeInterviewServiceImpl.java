@@ -116,6 +116,7 @@ public class RealtimeInterviewServiceImpl implements RealtimeInterviewService {
         if (connectionId == null) {
             throw new DomainException(ErrorCode.INTERNAL_ERROR);
         }
+
         return toResponse(connectionId, grant);
     }
 

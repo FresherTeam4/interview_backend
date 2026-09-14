@@ -15,7 +15,7 @@ class InterviewerStyleInstructionProviderTest {
         InterviewerStyleInstructionProvider provider =
                 new InterviewerStyleInstructionProvider();
 
-        assertThat(InterviewerStyleInstructionProvider.STYLE_POLICY_VERSION).isEqualTo("v1");
+        assertThat(InterviewerStyleInstructionProvider.STYLE_POLICY_VERSION).isEqualTo("v2");
         assertThat(Arrays.stream(InterviewerStyle.values())
                 .map(provider::instructionFor))
                 .allSatisfy(instruction -> assertThat(instruction).isNotBlank());

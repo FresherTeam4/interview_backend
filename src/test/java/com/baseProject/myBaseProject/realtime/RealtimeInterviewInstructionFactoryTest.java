@@ -44,6 +44,9 @@ class RealtimeInterviewInstructionFactoryTest {
 
         assertThat(instruction)
                 .contains("Interview language: Vietnamese (vi)")
+                .contains("first receive START_INTERVIEW")
+                .contains("about 5 to 12 seconds to speak")
+                .contains("Ask exactly one primary question at a time")
                 .contains("Literal marker: {candidateContext}")
                 .contains("Literal marker: {focusAreas}")
                 .contains("- [HIGH] Java: Concurrency")

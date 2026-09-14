@@ -12,7 +12,7 @@ import java.util.Objects;
 
 @Component
 public class InterviewerStyleInstructionProvider {
-    public static final String STYLE_POLICY_VERSION = "v1";
+    public static final String STYLE_POLICY_VERSION = "v2";
 
     private final Map<InterviewerStyle, String> instructions;
 

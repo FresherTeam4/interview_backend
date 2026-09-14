@@ -40,6 +40,9 @@ class InterviewPlanningPromptTest {
                 .contains("Use a neutral, concise, and structured tone")
                 .contains("Ask precise follow-ups")
                 .contains("must not change focus-area selection")
+                .contains("exactly 2 or 3 short sentences")
+                .contains("no more than about 15 seconds to speak")
+                .contains("introduce themselves")
                 .doesNotContain("{styleInstruction}")
                 .doesNotContain("{\"name\":\"Minh\"}");
         assertThat(userPrompt)

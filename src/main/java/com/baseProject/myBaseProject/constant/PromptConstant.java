@@ -8,23 +8,23 @@ public final class PromptConstant {
     public static final String JOB_DESCRIPTION_ANALYSIS_PROMPT =
             "prompts/jobdescription/analysis-v1.st";
     public static final String INTERVIEW_PLAN_SYSTEM_PROMPT =
-            "prompts/interview/planning-system-v2.st";
+            "prompts/interview/planning-system-v3.st";
     public static final String INTERVIEW_PLAN_USER_PROMPT =
             "prompts/interview/planning-user-v2.st";
     public static final String INTERVIEW_CONVERSATION_SYSTEM_PROMPT =
-            "prompts/interview/conversation-system-v2.st";
+            "prompts/interview/conversation-system-v3.st";
     public static final String INTERVIEW_CONVERSATION_USER_PROMPT =
             "prompts/interview/conversation-user-v2.st";
     public static final String INTERVIEW_REALTIME_SYSTEM_PROMPT =
-            "prompts/interview/realtime-system-v1.st";
+            "prompts/interview/realtime-system-v2.st";
     public static final String INTERVIEW_SCORING_SYSTEM_PROMPT =
             "prompts/interview/scoring-system-v3.st";
     public static final String INTERVIEW_SCORING_USER_PROMPT =
             "prompts/interview/scoring-user-v3.st";
     public static final String INTERVIEW_STYLE_FRIENDLY =
-            "prompts/interview/styles/friendly-v1.st";
+            "prompts/interview/styles/friendly-v2.st";
     public static final String INTERVIEW_STYLE_PROFESSIONAL =
-            "prompts/interview/styles/professional-v1.st";
+            "prompts/interview/styles/professional-v2.st";
     public static final String INTERVIEW_STYLE_CHALLENGING =
-            "prompts/interview/styles/challenging-v1.st";
+            "prompts/interview/styles/challenging-v2.st";
 }

@@ -35,7 +35,7 @@ import java.util.List;
 public class InterviewPreparationServiceImpl implements InterviewPreparationService {
     public static final String PLAN_SCHEMA_VERSION = "v1";
     public static final String PLAN_PROMPT_VERSION =
-            "v2-style-" + InterviewerStyleInstructionProvider.STYLE_POLICY_VERSION;
+            "v3-style-" + InterviewerStyleInstructionProvider.STYLE_POLICY_VERSION;
 
     private final InterviewSessionRepository sessions;
     private final InterviewFocusAreaRepository focusAreas;
