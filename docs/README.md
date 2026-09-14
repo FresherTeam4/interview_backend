@@ -8,6 +8,7 @@ Thư mục này là contract tích hợp frontend của backend `my-interview`. 
 |---|---|
 | [api-conventions.md](./api-conventions.md) | Base URL, auth header/cookie, format lỗi, refresh token, retry và quy ước dữ liệu chung |
 | [auth-api.md](./auth-api.md) | Đăng ký, đăng nhập mật khẩu/Google, lấy user hiện tại, refresh, logout |
+| [admin-api.md](./admin-api.md) | Dashboard, quản lý tài khoản và vận hành session dành cho admin |
 | [cv-profile-api.md](./cv-profile-api.md) | **Một luồng CV + Candidate Profile**: upload, poll parse, review/edit, confirm |
 | [jd-template-api.md](./jd-template-api.md) | **Một luồng JD + Interview Template**: nhập JD, poll AI analysis, edit, confirm, publish |
 | [interview-session-api.md](./interview-session-api.md) | Tạo session, chuẩn bị, phỏng vấn, retry answer, kết thúc, chấm điểm và report |
@@ -64,6 +65,14 @@ Thứ tự API tối thiểu cho happy path:
 | POST | `/api/auth/refresh` | Refresh cookie | `200 AuthResponse` + cookie mới |
 | POST | `/api/auth/logout` | Cookie tùy chọn | `204`, xóa cookie |
 | POST | `/api/auth/logout-all` | Bearer | `204`, thu hồi mọi refresh token |
+| GET | `/api/admin/overview` | Bearer, role `ADMIN` | Số liệu user, session và public template |
+| GET | `/api/admin/users` | Bearer, role `ADMIN` | Tìm kiếm, lọc và phân trang tài khoản |
+| GET | `/api/admin/users/{id}` | Bearer, role `ADMIN` | Chi tiết và thống kê hoạt động của tài khoản |
+| PATCH | `/api/admin/users/{id}/status` | Bearer, role `ADMIN` | Khóa/mở tài khoản `USER` |
+| GET | `/api/admin/interview-sessions` | Bearer, role `ADMIN` | Tìm kiếm, lọc và phân trang mọi session |
+| GET | `/api/admin/interview-sessions/{id}` | Bearer, role `ADMIN` | Metadata lỗi và lịch sử trạng thái session |
+| POST | `/api/admin/interview-sessions/{id}/preparation/retry` | Bearer, role `ADMIN` | Retry preparation thất bại |
+| POST | `/api/admin/interview-sessions/{id}/scoring/retry` | Bearer, role `ADMIN` | Retry scoring thất bại |
 | POST | `/api/cvs` | Bearer, role `USER` | `202` mới / `200` tái sử dụng |
 | GET | `/api/cvs` | Bearer, role `USER` | Danh sách CV đang active |
 | GET | `/api/cvs/{cvId}` | Bearer, role `USER` | Trạng thái parse và profile liên kết |
@@ -107,7 +116,7 @@ Thứ tự API tối thiểu cho happy path:
 
 ## Giới hạn contract frontend cần biết
 
-- Backend hiện **không có API list interview sessions**. Frontend chỉ có thể mở lại session khi đã giữ `sessionId` cục bộ hoặc nhận ID từ nơi khác.
+- Backend hiện **không có API list interview sessions dành cho user**. Frontend phía ứng viên chỉ có thể mở lại session khi đã giữ `sessionId` cục bộ hoặc nhận ID từ nơi khác; API list dưới `/api/admin` không dùng cho luồng này.
 - CORS đã cho phép `Idempotency-Key`; production cần cấu hình đúng frontend origin bằng `CORS_ALLOWED_ORIGINS`.
 - Không có endpoint cancel session `PREPARING`/`READY`, không có endpoint tạo profile thủ công khi chưa upload CV, và không có endpoint clone template đã confirm.
 - Mọi API lấy resource theo ID đều kiểm tra owner hoặc visibility; frontend phải coi `404` là resource không tồn tại hoặc không có quyền xem, không suy luận owner từ ID.

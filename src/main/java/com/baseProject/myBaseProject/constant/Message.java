@@ -83,6 +83,8 @@ public final class Message {
     public static final String INTERNAL_ERROR = "Internal server error";
     public static final String EMAIL_NOT_FOUND = "Email not found";
     public static final String USER_NOT_FOUND = "User not found";
+    public static final String ADMIN_USER_STATUS_PROTECTED =
+            "Administrator accounts cannot be enabled or disabled through this endpoint";
     public static final String MISSING_REFRESH_TOKEN = "Refresh token cookie is missing";
     public static final String INVALID_GOOGLE_TOKEN = "Google ID token is invalid or has expired";
     public static final String GOOGLE_EMAIL_NOT_VERIFIED = "This Google account has no verified email";

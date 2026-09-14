@@ -113,7 +113,6 @@ export interface ApiError {
 | Public | Auth endpoints, trừ `/me` và `/logout-all` |
 | `USER` | CV và Candidate Profile |
 | Authenticated | JD, đọc/template owner hoặc public, interview session của chính mình |
-| `ADMIN` | Publish/unpublish template **do chính admin sở hữu** |
+| `ADMIN` | Dashboard, quản lý trạng thái tài khoản `USER`, vận hành mọi session và publish/unpublish template do chính admin sở hữu |
 
 Các endpoint owner-scoped thường trả `404` thay vì `403` khi ID thuộc người khác.
-

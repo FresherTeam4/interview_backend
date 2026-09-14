@@ -146,10 +146,34 @@ public class InterviewSessionServiceImpl implements InterviewSessionService {
 
     @Override
     public InterviewSessionStatusResponse retryPreparation(Long userId, Long sessionId) {
+        retryPreparation(
+                userId,
+                sessionId,
+                InterviewTransitionActor.USER,
+                "User retried interview preparation");
+        return get(userId, sessionId);
+    }
+
+    @Override
+    public void retryPreparationForAdmin(Long sessionId) {
+        retryPreparation(
+                null,
+                sessionId,
+                InterviewTransitionActor.ADMIN,
+                "Admin retried interview preparation");
+    }
+
+    private void retryPreparation(
+            Long ownerId,
+            Long sessionId,
+            InterviewTransitionActor actor,
+            String reason) {
         transactions.executeWithoutResult(status -> {
 
             // Khóa session để các request retry đồng thời không cùng khởi tạo lại kế hoạch.
-            InterviewSession session = sessions.findOwnedByIdForUpdate(sessionId, userId)
+            InterviewSession session = (ownerId == null
+                    ? sessions.findByIdForUpdate(sessionId)
+                    : sessions.findOwnedByIdForUpdate(sessionId, ownerId))
                     .orElseThrow(() -> new DomainException(ErrorCode.INTERVIEW_SESSION_NOT_FOUND));
             if (session.getStatus() != InterviewSessionStatus.PREPARATION_FAILED) {
                 throw new DomainException(
@@ -163,12 +187,10 @@ public class InterviewSessionServiceImpl implements InterviewSessionService {
             transitionRecorder.record(
                     session, InterviewSessionStatus.PREPARATION_FAILED,
                     InterviewSessionStatus.PREPARING,
-                    "User retried interview preparation",
-                    InterviewTransitionActor.USER, now);
+                    reason,
+                    actor, now);
         });
         submitPreparation(sessionId);
-
-        return get(userId, sessionId);
     }
 
     // helper

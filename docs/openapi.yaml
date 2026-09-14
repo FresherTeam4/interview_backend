@@ -16,6 +16,8 @@ tags:
     description: Interview preparation, conversation, scoring, and reporting.
   - name: Interview Speech
     description: Provider-independent transcription and interviewer speech synthesis.
+  - name: Admin
+    description: Administrator dashboard, account management, and interview operations.
 
 paths:
   /api/auth/register:
@@ -828,6 +830,201 @@ paths:
         '404': {$ref: '#/components/responses/NotFound'}
         '409': {$ref: '#/components/responses/Conflict'}
 
+  /api/admin/overview:
+    get:
+      tags: [Admin]
+      operationId: getAdminOverview
+      summary: Get administrator overview metrics
+      parameters:
+        - name: days
+          in: query
+          required: false
+          schema: {type: integer, minimum: 1, maximum: 90, default: 7}
+      responses:
+        '200':
+          description: User, interview-session, and published-template metrics.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AdminOverview'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+
+  /api/admin/users:
+    get:
+      tags: [Admin]
+      operationId: listAdminUsers
+      summary: Search and filter user accounts
+      parameters:
+        - name: keyword
+          in: query
+          required: false
+          schema: {type: string}
+        - name: role
+          in: query
+          required: false
+          schema: {$ref: '#/components/schemas/UserRole'}
+        - name: enabled
+          in: query
+          required: false
+          schema: {type: boolean}
+        - name: page
+          in: query
+          required: false
+          schema: {type: integer, minimum: 0, default: 0}
+        - name: size
+          in: query
+          required: false
+          schema: {type: integer, minimum: 1, maximum: 100, default: 20}
+      responses:
+        '200':
+          description: Matching accounts ordered newest first.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AdminUserPage'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+
+  /api/admin/users/{userId}:
+    parameters:
+      - {$ref: '#/components/parameters/UserId'}
+    get:
+      tags: [Admin]
+      operationId: getAdminUser
+      summary: Get account details and activity counts
+      responses:
+        '200':
+          description: Account details.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AdminUserDetail'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+
+  /api/admin/users/{userId}/status:
+    parameters:
+      - {$ref: '#/components/parameters/UserId'}
+    patch:
+      tags: [Admin]
+      operationId: updateAdminUserStatus
+      summary: Enable or disable a USER account
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/UpdateUserStatusRequest'}
+      responses:
+        '200':
+          description: Updated account. Disabling also revokes all refresh tokens.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AdminUserDetail'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+
+  /api/admin/interview-sessions:
+    get:
+      tags: [Admin]
+      operationId: listAdminInterviewSessions
+      summary: Search and filter all interview sessions
+      parameters:
+        - name: keyword
+          in: query
+          required: false
+          description: Case-insensitive owner name or email search.
+          schema: {type: string}
+        - name: status
+          in: query
+          required: false
+          schema: {$ref: '#/components/schemas/InterviewSessionStatusEnum'}
+        - name: mode
+          in: query
+          required: false
+          schema: {$ref: '#/components/schemas/InterviewSessionMode'}
+        - name: from
+          in: query
+          required: false
+          schema: {type: string, format: date-time}
+        - name: to
+          in: query
+          required: false
+          schema: {type: string, format: date-time}
+        - name: page
+          in: query
+          required: false
+          schema: {type: integer, minimum: 0, default: 0}
+        - name: size
+          in: query
+          required: false
+          schema: {type: integer, minimum: 1, maximum: 100, default: 20}
+      responses:
+        '200':
+          description: Matching sessions ordered newest first.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AdminSessionPage'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+
+  /api/admin/interview-sessions/{sessionId}:
+    parameters:
+      - {$ref: '#/components/parameters/SessionId'}
+    get:
+      tags: [Admin]
+      operationId: getAdminInterviewSession
+      summary: Get interview-session operational details
+      responses:
+        '200':
+          description: Session metadata, processing errors, and transition history.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AdminSessionDetail'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+
+  /api/admin/interview-sessions/{sessionId}/preparation/retry:
+    parameters:
+      - {$ref: '#/components/parameters/SessionId'}
+    post:
+      tags: [Admin]
+      operationId: retryAdminInterviewPreparation
+      summary: Retry failed interview preparation as an administrator
+      responses:
+        '202':
+          description: Preparation redispatched.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AdminSessionDetail'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+
+  /api/admin/interview-sessions/{sessionId}/scoring/retry:
+    parameters:
+      - {$ref: '#/components/parameters/SessionId'}
+    post:
+      tags: [Admin]
+      operationId: retryAdminInterviewScoring
+      summary: Retry failed interview scoring as an administrator
+      responses:
+        '202':
+          description: Scoring redispatched.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AdminSessionDetail'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+
 components:
   securitySchemes:
     bearerAuth:
@@ -861,6 +1058,11 @@ components:
       schema: {type: integer, format: int64, minimum: 1}
     SessionId:
       name: sessionId
+      in: path
+      required: true
+      schema: {type: integer, format: int64, minimum: 1}
+    UserId:
+      name: userId
       in: path
       required: true
       schema: {type: integer, format: int64, minimum: 1}
@@ -969,6 +1171,166 @@ components:
         role: {$ref: '#/components/schemas/UserRole'}
         createdAt: {type: string, format: date-time}
         updatedAt: {type: string, format: date-time}
+    AdminOverview:
+      type: object
+      required: [generatedAt, periodDays, users, sessions, templates]
+      properties:
+        generatedAt: {type: string, format: date-time}
+        periodDays: {type: integer, minimum: 1, maximum: 90}
+        users:
+          type: object
+          required: [total, enabled, newInPeriod]
+          properties:
+            total: {type: integer, format: int64, minimum: 0}
+            enabled: {type: integer, format: int64, minimum: 0}
+            newInPeriod: {type: integer, format: int64, minimum: 0}
+        sessions:
+          type: object
+          required: [totalInPeriod, completed, inProgress, preparationFailed, scoringFailed, completionRate]
+          properties:
+            totalInPeriod: {type: integer, format: int64, minimum: 0}
+            completed: {type: integer, format: int64, minimum: 0}
+            inProgress: {type: integer, format: int64, minimum: 0}
+            preparationFailed: {type: integer, format: int64, minimum: 0}
+            scoringFailed: {type: integer, format: int64, minimum: 0}
+            completionRate: {type: number, format: double, minimum: 0, maximum: 100}
+        templates:
+          type: object
+          required: [published]
+          properties:
+            published: {type: integer, format: int64, minimum: 0}
+    AdminUserSummary:
+      type: object
+      required: [id, fullName, email, role, enabled, createdAt, updatedAt]
+      properties:
+        id: {type: integer, format: int64}
+        fullName: {type: string}
+        email: {type: string, format: email}
+        role: {$ref: '#/components/schemas/UserRole'}
+        enabled: {type: boolean}
+        createdAt: {type: string, format: date-time}
+        updatedAt: {type: string, format: date-time}
+    AdminUserActivity:
+      type: object
+      required: [activeCvCount, activeJobDescriptionCount, interviewSessionCount, completedInterviewSessionCount]
+      properties:
+        activeCvCount: {type: integer, format: int64, minimum: 0}
+        activeJobDescriptionCount: {type: integer, format: int64, minimum: 0}
+        interviewSessionCount: {type: integer, format: int64, minimum: 0}
+        completedInterviewSessionCount: {type: integer, format: int64, minimum: 0}
+    AdminUserDetail:
+      type: object
+      required: [id, fullName, email, role, enabled, createdAt, updatedAt, activity]
+      properties:
+        id: {type: integer, format: int64}
+        fullName: {type: string}
+        email: {type: string, format: email}
+        avatarUrl: {type: string, format: uri, nullable: true}
+        role: {$ref: '#/components/schemas/UserRole'}
+        enabled: {type: boolean}
+        createdAt: {type: string, format: date-time}
+        updatedAt: {type: string, format: date-time}
+        activity: {$ref: '#/components/schemas/AdminUserActivity'}
+    UpdateUserStatusRequest:
+      type: object
+      required: [enabled]
+      properties:
+        enabled: {type: boolean}
+    AdminUserPage:
+      type: object
+      required: [items, page, size, totalElements]
+      properties:
+        items:
+          type: array
+          items: {$ref: '#/components/schemas/AdminUserSummary'}
+        page: {type: integer, minimum: 0}
+        size: {type: integer, minimum: 1}
+        totalElements: {type: integer, format: int64, minimum: 0}
+    AdminUserReference:
+      type: object
+      required: [id, fullName, email]
+      properties:
+        id: {type: integer, format: int64}
+        fullName: {type: string}
+        email: {type: string, format: email}
+    AdminSessionSummary:
+      type: object
+      required: [id, user, status, templateTitle, profileName, mode, languageCode, durationMinutes, createdAt, updatedAt]
+      properties:
+        id: {type: integer, format: int64}
+        user: {$ref: '#/components/schemas/AdminUserReference'}
+        status: {$ref: '#/components/schemas/InterviewSessionStatusEnum'}
+        templateTitle: {type: string}
+        profileName: {type: string}
+        mode: {$ref: '#/components/schemas/InterviewSessionMode'}
+        languageCode: {type: string}
+        durationMinutes: {type: integer, minimum: 1}
+        preparationErrorCode: {type: string, nullable: true}
+        scoringErrorCode: {type: string, nullable: true}
+        createdAt: {type: string, format: date-time}
+        updatedAt: {type: string, format: date-time}
+    AdminSessionPage:
+      type: object
+      required: [items, page, size, totalElements]
+      properties:
+        items:
+          type: array
+          items: {$ref: '#/components/schemas/AdminSessionSummary'}
+        page: {type: integer, minimum: 0}
+        size: {type: integer, minimum: 1}
+        totalElements: {type: integer, format: int64, minimum: 0}
+    InterviewTransitionActor:
+      type: string
+      enum: [USER, ADMIN, SYSTEM, SCHEDULER]
+    AdminSessionTransition:
+      type: object
+      required: [id, toStatus, actor, occurredAt]
+      properties:
+        id: {type: integer, format: int64}
+        fromStatus:
+          allOf: [{$ref: '#/components/schemas/InterviewSessionStatusEnum'}]
+          nullable: true
+        toStatus: {$ref: '#/components/schemas/InterviewSessionStatusEnum'}
+        reason: {type: string, nullable: true}
+        actor: {$ref: '#/components/schemas/InterviewTransitionActor'}
+        occurredAt: {type: string, format: date-time}
+    AdminSessionDetail:
+      type: object
+      required: [id, user, status, templateTitle, profileName, languageCode, durationMinutes, interviewerStyle, mode, currentTurnIndex, createdAt, updatedAt, transitions]
+      properties:
+        id: {type: integer, format: int64}
+        user: {$ref: '#/components/schemas/AdminUserReference'}
+        status: {$ref: '#/components/schemas/InterviewSessionStatusEnum'}
+        templateTitle: {type: string}
+        profileName: {type: string}
+        languageCode: {type: string}
+        durationMinutes: {type: integer, minimum: 1}
+        interviewerStyle: {$ref: '#/components/schemas/InterviewerStyle'}
+        mode: {$ref: '#/components/schemas/InterviewSessionMode'}
+        realtimeProvider: {type: string, nullable: true}
+        realtimeVoiceName: {type: string, nullable: true}
+        currentTurnIndex: {type: integer, minimum: 0}
+        preparationErrorCode: {type: string, nullable: true}
+        preparationErrorMessage: {type: string, nullable: true}
+        planSchemaVersion: {type: string, nullable: true}
+        planModelName: {type: string, nullable: true}
+        planPromptVersion: {type: string, nullable: true}
+        scoringErrorCode: {type: string, nullable: true}
+        scoringErrorMessage: {type: string, nullable: true}
+        preparationStartedAt: {type: string, format: date-time, nullable: true}
+        preparedAt: {type: string, format: date-time, nullable: true}
+        startedAt: {type: string, format: date-time, nullable: true}
+        deadlineAt: {type: string, format: date-time, nullable: true}
+        lastActivityAt: {type: string, format: date-time, nullable: true}
+        endReason: {$ref: '#/components/schemas/InterviewEndReason'}
+        endedAt: {type: string, format: date-time, nullable: true}
+        scoringStartedAt: {type: string, format: date-time, nullable: true}
+        completedAt: {type: string, format: date-time, nullable: true}
+        createdAt: {type: string, format: date-time}
+        updatedAt: {type: string, format: date-time}
+        transitions:
+          type: array
+          items: {$ref: '#/components/schemas/AdminSessionTransition'}
     CvDocument:
       type: object
       required: [id, originalFilename, contentType, fileSizeBytes, status, uploadedAt, profileConfirmed]

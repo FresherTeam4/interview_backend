@@ -42,6 +42,8 @@ public interface InterviewTemplateRepository extends JpaRepository<InterviewTemp
 
     Optional<InterviewTemplate> findByIdAndPublishedAtIsNotNullAndArchivedAtIsNull(Long id);
 
+    long countByPublishedAtIsNotNullAndArchivedAtIsNull();
+
     @Query("""
             SELECT template
             FROM InterviewTemplate template

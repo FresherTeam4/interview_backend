@@ -122,6 +122,27 @@ class InterviewSessionServiceImplTest {
         verify(fixture.snapshotFactory, never()).create(any(), any());
     }
 
+    @Test
+    void adminRetriesPreparationWithoutImpersonatingSessionOwner() {
+        Fixture fixture = new Fixture();
+        InterviewSession session = fixture.session(
+                501L, InterviewSessionStatus.PREPARATION_FAILED);
+        when(fixture.sessions.findByIdForUpdate(501L)).thenReturn(Optional.of(session));
+
+        fixture.service.retryPreparationForAdmin(501L);
+
+        assertThat(session.getStatus()).isEqualTo(InterviewSessionStatus.PREPARING);
+        verify(fixture.focusAreas).deleteBySessionId(501L);
+        verify(fixture.preparationService).prepareAsync(501L);
+        verify(fixture.transitionRecorder).record(
+                session,
+                InterviewSessionStatus.PREPARATION_FAILED,
+                InterviewSessionStatus.PREPARING,
+                "Admin retried interview preparation",
+                com.baseProject.myBaseProject.enums.InterviewTransitionActor.ADMIN,
+                NOW);
+    }
+
     private static CreateInterviewSessionRequest request(InterviewerStyle style) {
         return new CreateInterviewSessionRequest(101L, 35L, "vi", 30, style, null);
     }

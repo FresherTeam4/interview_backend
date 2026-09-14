@@ -100,8 +100,32 @@ public class InterviewReportServiceImpl implements InterviewReportService {
 
     @Override
     public InterviewReportResponse retryScoring(Long userId, Long sessionId) {
+        retryScoring(
+                userId,
+                sessionId,
+                InterviewTransitionActor.USER,
+                "User retried interview scoring");
+        return get(userId, sessionId);
+    }
+
+    @Override
+    public void retryScoringForAdmin(Long sessionId) {
+        retryScoring(
+                null,
+                sessionId,
+                InterviewTransitionActor.ADMIN,
+                "Admin retried interview scoring");
+    }
+
+    private void retryScoring(
+            Long ownerId,
+            Long sessionId,
+            InterviewTransitionActor actor,
+            String reason) {
         transactions.executeWithoutResult(status -> {
-            InterviewSession session = sessions.findOwnedByIdForUpdate(sessionId, userId)
+            InterviewSession session = (ownerId == null
+                    ? sessions.findByIdForUpdate(sessionId)
+                    : sessions.findOwnedByIdForUpdate(sessionId, ownerId))
                     .orElseThrow(() -> new DomainException(
                             ErrorCode.INTERVIEW_SESSION_NOT_FOUND));
             if (session.getStatus() != InterviewSessionStatus.SCORING_FAILED) {
@@ -113,13 +137,12 @@ public class InterviewReportServiceImpl implements InterviewReportService {
                     session,
                     InterviewSessionStatus.SCORING_FAILED,
                     InterviewSessionStatus.SCORING,
-                    "User retried interview scoring",
-                    InterviewTransitionActor.USER,
+                    reason,
+                    actor,
                     now);
             // Listener AFTER_COMMIT chỉ dispatch retry sau khi SCORING đã được lưu.
             events.publishEvent(new InterviewScoringRequestedEvent(sessionId));
         });
-        return get(userId, sessionId);
     }
 
     private void requireReportState(InterviewSession session) {

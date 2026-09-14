@@ -122,3 +122,39 @@ databaseChangeLog:
             path: db/changelog/sql/009-simplify-interview-modes.sql
             splitStatements: true
             stripComments: true
+
+  - changeSet:
+      id: 010-drop-interview-transition-actor-check
+      author: my-interview-team
+      preConditions:
+        - onFail: MARK_RAN
+        - sqlCheck:
+            expectedResult: 1
+            sql: >-
+              SELECT COUNT(*) FROM information_schema.table_constraints
+              WHERE constraint_schema = DATABASE()
+                AND table_name = 'interview_session_transitions'
+                AND constraint_name = 'chk_interview_session_transition_actor'
+      changes:
+        - sqlFile:
+            path: db/changelog/sql/010-drop-interview-transition-actor-check.sql
+            splitStatements: true
+            stripComments: true
+
+  - changeSet:
+      id: 010-admin-transition-actor
+      author: my-interview-team
+      preConditions:
+        - onFail: MARK_RAN
+        - sqlCheck:
+            expectedResult: 0
+            sql: >-
+              SELECT COUNT(*) FROM information_schema.table_constraints
+              WHERE constraint_schema = DATABASE()
+                AND table_name = 'interview_session_transitions'
+                AND constraint_name = 'chk_interview_session_transition_actor'
+      changes:
+        - sqlFile:
+            path: db/changelog/sql/010-admin-transition-actor.sql
+            splitStatements: true
+            stripComments: true

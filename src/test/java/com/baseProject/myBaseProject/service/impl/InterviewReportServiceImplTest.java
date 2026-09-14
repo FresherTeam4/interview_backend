@@ -124,6 +124,27 @@ class InterviewReportServiceImplTest {
     }
 
     @Test
+    void adminRetriesScoringWithoutImpersonatingSessionOwner() {
+        InterviewSession session = session(InterviewSessionStatus.SCORING_FAILED);
+        Fixture fixture = new Fixture(session);
+        when(fixture.sessions.findByIdForUpdate(SESSION_ID))
+                .thenReturn(Optional.of(session));
+
+        fixture.service.retryScoringForAdmin(SESSION_ID);
+
+        assertThat(session.getStatus()).isEqualTo(InterviewSessionStatus.SCORING);
+        verify(fixture.transitions).record(
+                session,
+                InterviewSessionStatus.SCORING_FAILED,
+                InterviewSessionStatus.SCORING,
+                "Admin retried interview scoring",
+                com.baseProject.myBaseProject.enums.InterviewTransitionActor.ADMIN,
+                NOW);
+        verify(fixture.events).publishEvent(
+                new InterviewScoringRequestedEvent(SESSION_ID));
+    }
+
+    @Test
     void rejectsReportBeforeInterviewEnds() {
         Fixture fixture = new Fixture(session(InterviewSessionStatus.IN_PROGRESS));
 

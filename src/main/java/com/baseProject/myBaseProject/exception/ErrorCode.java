@@ -82,10 +82,12 @@ public enum ErrorCode {
     // ---- 404 ----
     ENDPOINT_NOT_FOUND(HttpStatus.NOT_FOUND, Message.ENDPOINT_NOT_FOUND),
     RESOURCE_NOT_FOUND(HttpStatus.NOT_FOUND, "Resource not found"),
+    USER_NOT_FOUND(HttpStatus.NOT_FOUND, Message.USER_NOT_FOUND),
 
     // ---- 409 ----
     DUPLICATE_EMAIL(HttpStatus.CONFLICT, "Email already registered"),
     DATA_CONSTRAINT_VIOLATION(HttpStatus.CONFLICT, Message.CONSTRAINT_VIOLATION),
+    ADMIN_USER_STATUS_PROTECTED(HttpStatus.CONFLICT, Message.ADMIN_USER_STATUS_PROTECTED),
 
     // ---- 400 ----
     VALIDATION_FAILED(HttpStatus.BAD_REQUEST, Message.VALIDATION_FAILED),

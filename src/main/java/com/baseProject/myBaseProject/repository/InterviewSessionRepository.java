@@ -1,8 +1,12 @@
 package com.baseProject.myBaseProject.repository;
 
 import com.baseProject.myBaseProject.entity.InterviewSession;
+import com.baseProject.myBaseProject.enums.InterviewSessionMode;
 import com.baseProject.myBaseProject.enums.InterviewSessionStatus;
+import com.baseProject.myBaseProject.repository.projection.InterviewSessionStatusCount;
 import jakarta.persistence.LockModeType;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
@@ -42,4 +46,53 @@ public interface InterviewSessionRepository extends JpaRepository<InterviewSessi
 
     List<InterviewSession> findTop100ByStatusAndDeadlineAtLessThanEqualOrderByDeadlineAtAsc(
             InterviewSessionStatus status, Instant deadline);
+
+    long countByUserId(Long userId);
+
+    long countByUserIdAndStatus(Long userId, InterviewSessionStatus status);
+
+    @Query("""
+            SELECT session.status AS status, COUNT(session) AS total
+            FROM InterviewSession session
+            WHERE session.createdAt >= :createdAfter
+            GROUP BY session.status
+            """)
+    List<InterviewSessionStatusCount> countStatusesCreatedAfter(
+            @Param("createdAfter") Instant createdAfter);
+
+    @Query(value = """
+            SELECT session
+            FROM InterviewSession session
+            JOIN FETCH session.user user
+            WHERE (:keyword IS NULL
+                   OR LOWER(user.fullName) LIKE :keyword
+                   OR LOWER(user.email) LIKE :keyword)
+              AND (:sessionStatus IS NULL OR session.status = :sessionStatus)
+              AND (:sessionMode IS NULL OR session.mode = :sessionMode)
+              AND (:createdFrom IS NULL OR session.createdAt >= :createdFrom)
+              AND (:createdTo IS NULL OR session.createdAt <= :createdTo)
+            """,
+            countQuery = """
+                    SELECT COUNT(session)
+                    FROM InterviewSession session
+                    JOIN session.user user
+                    WHERE (:keyword IS NULL
+                           OR LOWER(user.fullName) LIKE :keyword
+                           OR LOWER(user.email) LIKE :keyword)
+                      AND (:sessionStatus IS NULL OR session.status = :sessionStatus)
+                      AND (:sessionMode IS NULL OR session.mode = :sessionMode)
+                      AND (:createdFrom IS NULL OR session.createdAt >= :createdFrom)
+                      AND (:createdTo IS NULL OR session.createdAt <= :createdTo)
+                    """)
+    Page<InterviewSession> searchForAdmin(
+            @Param("keyword") String keyword,
+            @Param("sessionStatus") InterviewSessionStatus status,
+            @Param("sessionMode") InterviewSessionMode mode,
+            @Param("createdFrom") Instant createdFrom,
+            @Param("createdTo") Instant createdTo,
+            Pageable pageable);
+
+    @EntityGraph(attributePaths = "user")
+    @Query("SELECT session FROM InterviewSession session WHERE session.id = :id")
+    Optional<InterviewSession> findByIdForAdmin(@Param("id") Long id);
 }

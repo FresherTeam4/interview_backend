@@ -6,4 +6,6 @@ public interface InterviewReportService {
     InterviewReportResponse get(Long userId, Long sessionId);
 
     InterviewReportResponse retryScoring(Long userId, Long sessionId);
+
+    void retryScoringForAdmin(Long sessionId);
 }

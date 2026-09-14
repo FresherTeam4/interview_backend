@@ -13,4 +13,6 @@ public interface InterviewSessionService {
     InterviewSessionStatusResponse get(Long userId, Long sessionId);
 
     InterviewSessionStatusResponse retryPreparation(Long userId, Long sessionId);
+
+    void retryPreparationForAdmin(Long sessionId);
 }
