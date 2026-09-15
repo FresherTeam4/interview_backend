@@ -69,11 +69,11 @@ public class GeminiLiveRealtimeProvider implements ResumableRealtimeProvider {
         return requestGrant(specification, resumptionHandle.strip());
     }
 
-    // Token sống lâu hơn phiên phỏng vấn một khoảng đệm nhưng vẫn nằm dưới giới hạn của Gemini.
     private RealtimeSessionGrant requestGrant(
             RealtimeSessionSpec specification,
             String resumptionHandle) {
         requireConfigured();
+
         String voiceName = canonicalVoice(specification.voiceName());
         Instant now = clock.instant();
         Duration requestedLifetime = Duration.ofMinutes(specification.durationMinutes())
@@ -82,7 +82,8 @@ public class GeminiLiveRealtimeProvider implements ResumableRealtimeProvider {
         Instant newSessionExpiresAt = now.plus(properties.newSessionTtl());
         GeminiLiveSessionSetupFactory.SessionSetups setups = setupFactory.create(
                 specification.systemInstruction(), voiceName, resumptionHandle);
-        // Mỗi token chỉ mở được một phiên để giảm phạm vi sử dụng nếu token bị lộ.
+
+        // một token chỉ mở một phiên
         GeminiLiveAuthTokenRequest body = new GeminiLiveAuthTokenRequest(
                 1,
                 expiresAt.toString(),
@@ -111,6 +112,7 @@ public class GeminiLiveRealtimeProvider implements ResumableRealtimeProvider {
         }
 
         Instant providerExpiresAt = parseInstant(response.expireTime(), expiresAt);
+
         return new RealtimeSessionGrant(
                 name(), RealtimeTransport.WEBSOCKET,
                 properties.websocketEndpoint(), response.name(), null,

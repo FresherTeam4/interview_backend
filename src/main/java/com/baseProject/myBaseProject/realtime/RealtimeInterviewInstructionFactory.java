@@ -39,6 +39,7 @@ public class RealtimeInterviewInstructionFactory {
                 "candidateContext", safe(session.getCandidateContextSummary()),
                 "focusAreas", formatFocusAreas(focusAreas),
                 "openingMessage", safe(session.getOpeningMessage()));
+
         return new PromptTemplate(prompt).render(parameters);
     }
 

@@ -101,15 +101,18 @@ public class RealtimeInterviewServiceImpl implements RealtimeInterviewService {
                 .orElseThrow(() -> new DomainException(ErrorCode.INTERVIEW_SESSION_NOT_FOUND));
         requireAvailable(session);
 
-        RealtimeInterviewProvider provider = providers.provider(properties.provider());
+        RealtimeInterviewProvider provider = providers.getProvider(properties.provider());
         String voiceName = request.voiceName() == null || request.voiceName().isBlank()
                 ? provider.defaultVoice()
                 : request.voiceName().strip();
+
         String instruction = instructionFactory.create(
                 session, focusAreas.findBySessionIdOrderByDisplayOrderAsc(sessionId));
-        // Gọi provider ngoài transaction để không giữ row lock trong lúc chờ network.
+
+        // lấy token trước khi mở transaction
         RealtimeSessionGrant grant = provider.createSession(
                 specification(session, voiceName, instruction));
+
         Instant now = clock.instant();
         Long connectionId = transactions.execute(status -> persistGrant(
                 userId, sessionId, request.clientPlatform(), grant, now));
@@ -131,6 +134,7 @@ public class RealtimeInterviewServiceImpl implements RealtimeInterviewService {
         if (response == null) {
             throw new DomainException(ErrorCode.INTERNAL_ERROR);
         }
+
         return response;
     }
 
@@ -145,11 +149,15 @@ public class RealtimeInterviewServiceImpl implements RealtimeInterviewService {
         }
         InterviewSession session = sessions.findByIdAndUserId(sessionId, userId)
                 .orElseThrow(() -> new DomainException(ErrorCode.INTERVIEW_SESSION_NOT_FOUND));
+
         requireInProgressRealtime(session);
+
+        // tìm connection bị mất
         InterviewVoiceConnection previous = connections
                 .findByIdAndSessionId(connectionId, sessionId)
                 .orElseThrow(() -> new DomainException(ErrorCode.REALTIME_CONNECTION_NOT_FOUND));
-        RealtimeInterviewProvider registeredProvider = providers.provider(previous.getProvider());
+
+        RealtimeInterviewProvider registeredProvider = providers.getProvider(previous.getProvider());
         if (!(registeredProvider instanceof ResumableRealtimeProvider provider)) {
             throw new DomainException(ErrorCode.REALTIME_RESUMPTION_NOT_AVAILABLE);
         }
@@ -166,6 +174,7 @@ public class RealtimeInterviewServiceImpl implements RealtimeInterviewService {
         if (resumedConnectionId == null) {
             throw new DomainException(ErrorCode.INTERNAL_ERROR);
         }
+
         return toResponse(resumedConnectionId, grant);
     }
 
@@ -178,10 +187,13 @@ public class RealtimeInterviewServiceImpl implements RealtimeInterviewService {
         RealtimeConnectionResponse response = transactions.execute(status -> {
             InterviewSession session = sessions.findOwnedByIdForUpdate(sessionId, userId)
                     .orElseThrow(() -> new DomainException(ErrorCode.INTERVIEW_SESSION_NOT_FOUND));
+
             InterviewVoiceConnection connection = connections
                     .findByIdAndSessionId(connectionId, sessionId)
                     .orElseThrow(() -> new DomainException(ErrorCode.REALTIME_CONNECTION_NOT_FOUND));
+
             requireLatencyOrder(request.p50LatencyMs(), request.p95LatencyMs());
+
             Instant now = clock.instant();
             connection.markDisconnected(
                     normalizeReason(request.reason()),
@@ -189,19 +201,23 @@ public class RealtimeInterviewServiceImpl implements RealtimeInterviewService {
                     request.p50LatencyMs(),
                     request.p95LatencyMs(),
                     now);
+
             if (request.fallbackToTurnBased()
                     && session.getMode() == InterviewSessionMode.VOICE_REALTIME) {
                 session.fallbackToTurnBased(now);
             }
+
             return toConnectionResponse(session, connection);
         });
+
         if (response == null) {
             throw new DomainException(ErrorCode.INTERNAL_ERROR);
         }
         if (request.fallbackToTurnBased()) {
-            // Tiếp tục hội thoại sau khi transaction đóng kết nối đã nhả row lock.
+            // Tiếp tục hội thoại sau khi transaction đóng kết nối
             conversationService.continueAfterRealtimeFallback(userId, sessionId);
         }
+
         return response;
     }
 
@@ -229,6 +245,7 @@ public class RealtimeInterviewServiceImpl implements RealtimeInterviewService {
                         .outputSampleRate(grant.outputSampleRate())
                         .createdAt(now)
                         .build());
+
         return connection.getId();
     }
 
@@ -271,73 +288,117 @@ public class RealtimeInterviewServiceImpl implements RealtimeInterviewService {
             Long sessionId,
             Long connectionId,
             List<RealtimeEventRequest> requestedEvents) {
-        // Row lock tuần tự hóa việc cập nhật sequence và currentTurnIndex giữa các batch.
+        // khóa và kiểm tra session
         InterviewSession session = sessions.findOwnedByIdForUpdate(sessionId, userId)
                 .orElseThrow(() -> new DomainException(ErrorCode.INTERVIEW_SESSION_NOT_FOUND));
         if (session.getStatus() != InterviewSessionStatus.IN_PROGRESS) {
             throw new DomainException(ErrorCode.INTERVIEW_SESSION_NOT_IN_PROGRESS);
         }
+
         InterviewVoiceConnection connection = connections
                 .findByIdAndSessionId(connectionId, sessionId)
                 .orElseThrow(() -> new DomainException(ErrorCode.REALTIME_CONNECTION_NOT_FOUND));
 
-        // Client có thể gửi bù theo batch nên luôn áp dụng event theo thứ tự của provider.
-        List<RealtimeEventRequest> ordered = requestedEvents.stream()
-                .sorted(Comparator.comparingLong(RealtimeEventRequest::sequenceNumber))
-                .toList();
-        Map<String, Long> batchProviderIds = new HashMap<>();
-        Map<Long, String> batchSequences = new HashMap<>();
+        Map<String, Long> sequencesByProviderEventId = new HashMap<>();
+        Map<Long, String> providerEventIdsBySequence = new HashMap<>();
         int accepted = 0;
         int duplicates = 0;
         int createdTurns = 0;
-        for (RealtimeEventRequest request : ordered) {
-            // Provider event id cho phép retry; sequence phải ánh xạ duy nhất tới một event.
+
+        for (RealtimeEventRequest request : sortEventsBySequence(requestedEvents)) {
             String providerEventId = request.providerEventId().strip();
-            Long priorSequence = batchProviderIds.putIfAbsent(
-                    providerEventId, request.sequenceNumber());
-            if (priorSequence != null) {
-                if (priorSequence != request.sequenceNumber()) {
-                    throw new DomainException(ErrorCode.REALTIME_EVENT_INVALID);
-                }
+            if (isDuplicateInBatch(
+                    providerEventId,
+                    request.sequenceNumber(),
+                    sequencesByProviderEventId,
+                    providerEventIdsBySequence)) {
                 duplicates++;
                 continue;
             }
-            String priorProviderId = batchSequences.putIfAbsent(
-                    request.sequenceNumber(), providerEventId);
-            if (priorProviderId != null && !priorProviderId.equals(providerEventId)) {
-                throw new DomainException(ErrorCode.REALTIME_EVENT_SEQUENCE_CONFLICT);
-            }
-            if (events.findByConnectionIdAndProviderEventId(connectionId, providerEventId)
-                    .isPresent()) {
+            if (isDuplicateInDatabase(
+                    connectionId, providerEventId, request.sequenceNumber())) {
                 duplicates++;
                 continue;
-            }
-            if (events.findByConnectionIdAndSequenceNumber(
-                    connectionId, request.sequenceNumber()).isPresent()) {
-                throw new DomainException(ErrorCode.REALTIME_EVENT_SEQUENCE_CONFLICT);
             }
 
-            requireEventPayload(request);
-            Instant now = clock.instant();
-            InterviewRealtimeEvent event = InterviewRealtimeEvent.builder()
-                    .connection(connection)
-                    .providerEventId(providerEventId)
-                    .sequenceNumber(request.sequenceNumber())
-                    .eventType(request.eventType())
-                    .transcriptText(normalize(request.transcriptText()))
-                    .detail(normalize(request.detail()))
-                    .latencyMs(request.latencyMs())
-                    .occurredAt(request.occurredAt())
-                    .createdAt(now)
-                    .build();
-            events.save(event);
-            createdTurns += applyEvent(session, connection, request, now);
-            event.markProcessed(now);
+            createdTurns += storeAndApplyEvent(
+                    session, connection, providerEventId, request);
             accepted++;
         }
+
         return new RealtimeEventBatchResponse(
                 connectionId, accepted, duplicates, createdTurns,
                 session.getCurrentTurnIndex());
+    }
+
+    private List<RealtimeEventRequest> sortEventsBySequence(
+            List<RealtimeEventRequest> requestedEvents) {
+        return requestedEvents.stream()
+                .sorted(Comparator.comparingLong(RealtimeEventRequest::sequenceNumber))
+                .toList();
+    }
+
+    private boolean isDuplicateInBatch(
+            String providerEventId,
+            long sequenceNumber,
+            Map<String, Long> sequencesByProviderEventId,
+            Map<Long, String> providerEventIdsBySequence) {
+        Long existingSequence = sequencesByProviderEventId.putIfAbsent(
+                providerEventId, sequenceNumber);
+        if (existingSequence != null) {
+            if (existingSequence != sequenceNumber) {
+                throw new DomainException(ErrorCode.REALTIME_EVENT_INVALID);
+            }
+            return true;
+        }
+
+        String existingProviderEventId = providerEventIdsBySequence.putIfAbsent(
+                sequenceNumber, providerEventId);
+        if (existingProviderEventId != null
+                && !existingProviderEventId.equals(providerEventId)) {
+            throw new DomainException(ErrorCode.REALTIME_EVENT_SEQUENCE_CONFLICT);
+        }
+        return false;
+    }
+
+    private boolean isDuplicateInDatabase(
+            Long connectionId,
+            String providerEventId,
+            long sequenceNumber) {
+        if (events.findByConnectionIdAndProviderEventId(connectionId, providerEventId)
+                .isPresent()) {
+            return true;
+        }
+        if (events.findByConnectionIdAndSequenceNumber(connectionId, sequenceNumber)
+                .isPresent()) {
+            throw new DomainException(ErrorCode.REALTIME_EVENT_SEQUENCE_CONFLICT);
+        }
+        return false;
+    }
+
+    private int storeAndApplyEvent(
+            InterviewSession session,
+            InterviewVoiceConnection connection,
+            String providerEventId,
+            RealtimeEventRequest request) {
+        requireEventPayload(request);
+        Instant now = clock.instant();
+        InterviewRealtimeEvent event = InterviewRealtimeEvent.builder()
+                .connection(connection)
+                .providerEventId(providerEventId)
+                .sequenceNumber(request.sequenceNumber())
+                .eventType(request.eventType())
+                .transcriptText(normalize(request.transcriptText()))
+                .detail(normalize(request.detail()))
+                .latencyMs(request.latencyMs())
+                .occurredAt(request.occurredAt())
+                .createdAt(now)
+                .build();
+        events.save(event);
+        int createdTurnCount = applyEvent(session, connection, request, now);
+        event.markProcessed(now);
+
+        return createdTurnCount;
     }
 
     private int applyEvent(
@@ -361,7 +422,7 @@ public class RealtimeInterviewServiceImpl implements RealtimeInterviewService {
             case ASSISTANT_TRANSCRIPT_FINAL -> createTurn(
                     session, InterviewTurnRole.INTERVIEWER, event, now);
             case ASSISTANT_INTERRUPTED -> {
-                // Giữ turn để audit và chỉ đánh dấu phần audio đã bị người dùng ngắt.
+                // đánh dấu phần audio đã bị người dùng ngắt
                 turns.findFirstBySessionIdAndRoleOrderByTurnIndexDesc(
                                 session.getId(), InterviewTurnRole.INTERVIEWER)
                         .ifPresent(InterviewTurn::markInterrupted);

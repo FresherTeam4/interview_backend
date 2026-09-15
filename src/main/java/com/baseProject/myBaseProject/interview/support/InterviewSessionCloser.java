@@ -43,7 +43,7 @@ public class InterviewSessionCloser {
             actor,
             now);
 
-        // Event được publish trong transaction; listener chỉ dispatch scoring sau commit.
+        // gọi event chấm đểm
         events.publishEvent(new InterviewScoringRequestedEvent(session.getId()));
     }
 

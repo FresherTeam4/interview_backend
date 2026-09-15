@@ -35,6 +35,7 @@ final class GeminiLiveSessionSetupFactory {
         // System instruction chỉ nằm trong token để client không thể thay đổi interview plan.
         Map<String, Object> tokenSetup = new LinkedHashMap<>(clientSetup);
         tokenSetup.put("systemInstruction", content(systemInstruction));
+
         return new SessionSetups(tokenSetup, clientSetup);
     }
 

@@ -19,14 +19,14 @@ class RealtimeProviderRegistryTest {
         when(gemini.name()).thenReturn("gemini-live");
         RealtimeProviderRegistry registry = new RealtimeProviderRegistry(List.of(gemini));
 
-        assertThat(registry.provider(" GEMINI-LIVE ")).isSameAs(gemini);
+        assertThat(registry.getProvider(" GEMINI-LIVE ")).isSameAs(gemini);
     }
 
     @Test
     void unknownProviderReturnsConfigurationError() {
         RealtimeProviderRegistry registry = new RealtimeProviderRegistry(List.of());
 
-        assertThatThrownBy(() -> registry.provider("missing"))
+        assertThatThrownBy(() -> registry.getProvider("missing"))
                 .isInstanceOfSatisfying(DomainException.class,
                         exception -> assertThat(exception.getCode())
                                 .isEqualTo(ErrorCode.REALTIME_CONFIG_ERROR));
